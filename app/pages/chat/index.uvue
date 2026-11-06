@@ -1,0 +1,216 @@
+<template>
+ <view class="chat-page" :style="{paddingBottom:bottomInset+'px'}">
+  <view class="chat-top" :style="{paddingTop:statusBarHeight+'px'}">
+  <view id="chat-header" class="chat-header">
+   <ActionButton class="chat-back-button" aria-label="返回" @tap="back"><image class="chat-back-icon" :src="icon('back')" mode="aspectFit" /></ActionButton>
+   <view class="chat-header-avatar"><view class="chat-header-avatar-decoration"><UserAvatar navigable :src="conversation?.iconUrl||''" :user-id="conversation?.peerId||''" :frame-id="conversation?.avatarFrame" :frame-expires-at="conversation?.avatarFrameExpiresAt??undefined" :size="56" /></view></view>
+   <text class="chat-title">{{conversation?.name||'私聊'}}</text>
+  </view>
+  </view>
+  <view v-if="chatError||error" class="chat-error"><text class="chat-error-text">{{error||chatError}}</text><ActionButton class="chat-refresh" @tap="load"><text class="chat-error-text">重试</text></ActionButton></view>
+  <view class="chat-history">
+  <scroll-view class="chat-scroll" direction="vertical" :show-scrollbar="false" :scroll-into-view="scrollTarget" :scroll-with-animation="false" @scrolltoupper="older" @scroll="closeMenu">
+   <ActionButton v-if="cursor" class="chat-more" :disabled="loadingOlder" @tap="older"><text class="chat-hint">{{loadingOlder?'加载中…':'加载更早消息'}}</text></ActionButton>
+   <view class="chat-start"><text v-if="!rows.length" class="chat-hint">发送第一条消息，开始聊天吧</text></view>
+   <view v-for="(message,index) in rows" :key="message.clientId+'-'+message.senderId" :id="'chat-message-'+message.id" class="chat-message-line" :class="highlightId===message.id?(highlightFading?'chat-message-highlight chat-message-highlight-fading':'chat-message-highlight'):''">
+    <view v-if="index===0||message.sentAt-rows[index-1].sentAt>300000" class="chat-time"><text class="chat-hint">{{formatTime(message.sentAt)}}</text></view>
+    <ChatBubble :max-width="viewportWidth*0.652" :viewport-width="viewportWidth" :message="message" :avatar="message.senderId===owner?myAvatar:conversation?.iconUrl||''" :avatar-frame="message.senderId===owner?'':conversation?.avatarFrame" :avatar-frame-expires-at="message.senderId===owner?undefined:conversation?.avatarFrameExpiresAt??undefined" @menu="openMenu" @retry="retry" @open="openMedia" @locate="locateReply" />
+   </view><view id="chat-bottom" class="chat-bottom" />
+  </scroll-view>
+  </view>
+  <view v-if="sendRestriction" class="chat-error"><text class="chat-error-text">{{sendRestriction}}</text></view>
+  <view id="chat-composer" class="chat-composer">
+   <view class="chat-compose-shell">
+    <view v-if="currentReply" id="chat-draft-reference" class="chat-draft-quote"><text class="chat-draft-quote-text">{{chatReplyLabel(currentReply)}}</text><ActionButton class="chat-draft-quote-close" aria-label="取消引用" @tap="replyDraft=null"><image class="chat-draft-close-icon" :src="icon('quote-close')" mode="aspectFit" /></ActionButton></view>
+    <view class="chat-compose-row">
+     <view class="chat-tool chat-voice"><image class="chat-tool-icon" :src="icon('voice')" mode="aspectFit" /></view>
+     <view class="chat-input-shell"><textarea v-model="draft" :focus="inputFocused" @blur="inputFocused=false" :disabled="!!sendRestriction" class="chat-input" placeholder="发消息…" placeholder-class="chat-input-placeholder" placeholder-style="color:#999999" auto-height :maxlength="5000" :show-confirm-bar="false" /></view>
+     <ActionButton class="chat-tool" aria-label="表情" @tap="toggleEmoji"><image class="chat-tool-icon" :src="icon('face')" mode="aspectFit" /></ActionButton>
+     <ActionButton v-if="draft.trim()" class="chat-send" :class="sendRestriction?'chat-send-disabled':''" aria-label="发送" :disabled="!!sendRestriction" @tap="sendText"><text class="chat-send-text">发送</text></ActionButton>
+     <ActionButton v-else class="chat-tool chat-more-tool" aria-label="更多发送方式" @tap="toggleMore"><image class="chat-tool-icon" :src="icon('add')" mode="aspectFit" /></ActionButton>
+    </view>
+   </view>
+  </view>
+  <view v-if="moreOpen||emojiOpen" class="chat-panel">
+   <view v-if="moreOpen" class="chat-tools">
+    <ActionButton class="chat-attachment" aria-label="选择照片" @tap="chooseImage"><view class="chat-attachment-tile"><image class="chat-attachment-icon" :src="icon('attachment-photo')" mode="aspectFit" /></view><text class="chat-attachment-title">照片</text></ActionButton>
+    <ActionButton class="chat-attachment" aria-label="选择视频" @tap="chooseVideo"><view class="chat-attachment-tile"><image class="chat-attachment-icon" :src="icon('attachment-video')" mode="aspectFit" /></view><text class="chat-attachment-title">视频</text></ActionButton>
+    <ActionButton class="chat-attachment" aria-label="拍摄" @tap="takePhoto"><view class="chat-attachment-tile"><image class="chat-attachment-icon" :src="icon('attachment-camera')" mode="aspectFit" /></view><text class="chat-attachment-title">拍摄</text></ActionButton>
+   </view>
+   <scroll-view v-if="emojiOpen" class="chat-emoji-panel" direction="vertical" :show-scrollbar="false"><view v-for="group in emojiGroups" :key="group.id"><text class="chat-emoji-group">{{group.name}}</text><view class="chat-emoji-grid"><ActionButton v-for="emoji in emojis.filter(x=>x.groupId===group.id)" :key="emoji.id" class="chat-emoji" :aria-label="emoji.name" @tap="sendEmoji(emoji.id)"><image class="chat-emoji-image" :src="mediaUrl(emoji.imageUrl)" mode="aspectFit" /></ActionButton></view></view><text v-if="!emojis.length" class="chat-hint">暂无可用表情，可以使用键盘Emoji</text></scroll-view>
+  </view>
+  <view v-if="selected" class="chat-menu-mask" @tap="closeMenu"><view v-if="menuReady" class="chat-menu-anchor" :style="{left:menuLeft+'px',top:menuTop+'px',width:menuWidth+'px'}" @tap.stop="noop"><view id="chat-action-menu" class="chat-menu"><ActionButton class="chat-menu-item" aria-label="删除" @tap="remove"><image class="chat-menu-icon" :src="icon('action-delete')" mode="aspectFit" /><text class="chat-menu-danger">删除</text></ActionButton><ActionButton v-if="canRevoke" class="chat-menu-item" aria-label="撤销" @tap="revoke"><image class="chat-menu-icon" :src="icon('action-revoke')" mode="aspectFit" /><text class="chat-menu-text">撤销</text></ActionButton><ActionButton v-if="canQuote" class="chat-menu-item" aria-label="引用" @tap="quoteSelected"><image class="chat-menu-icon" :src="icon('action-quote')" mode="aspectFit" /><text class="chat-menu-text">引用</text></ActionButton></view><image id="chat-menu-pointer" class="chat-menu-pointer" :class="menuBelow?'chat-menu-pointer-top':'chat-menu-pointer-bottom'" :style="{left:menuPointer+'px'}" :src="icon(menuBelow?'menu-pointer-up':'menu-pointer-down')" mode="scaleToFill" /></view></view>
+ </view>
+</template>
+<script setup lang="uts">
+import { chooseAlbumImages, chooseAlbumVideo } from '@/utils/media-picker'
+import {computed,ref,watch,nextTick,onBeforeUnmount} from 'vue'
+import {useWindowInsets} from '@/composables/useWindowInsets'
+import ActionButton from '@/components/ActionButton.uvue'
+import ChatBubble from '@/components/ChatBubble.uvue'
+import UserAvatar from '@/components/UserAvatar.uvue'
+import {getUserInfo,authRevision} from '@/utils/auth'
+import {chatOwner,chatTime,normalizeChatReplyValue,cloudChatHidden,chatDeleted} from '@/utils/chat-local'
+import {makeChatReply,chatReplyLabel} from '@/utils/chat-reply'
+import {mediaUrl} from '@/utils/media-cache'
+import {uiAsset} from '@/utils/ui-assets'
+import {chatEmojis,chatMessage,chatConversation} from '@/utils/chat-api'
+import { consumeThanks,finishThanks } from '@/utils/social-inbox'
+import {chatConversations,chatMessages,chatRevision,chatError,activeChat,chatRows,refreshChats,loadChatHistory,markChatRead,newChatMessage,sendChatMessage,deleteLocalMessage,revokeChatMessage,syncChats,mergeChatMessage} from '@/utils/chat-state'
+import type {ChatMessage,ChatReply,ChatConversation} from '@/types/chat'
+const {statusBarHeight,bottomInset,viewportWidth}=useWindowInsets()
+const id=ref(''),draft=ref(''),error=ref(''),cursor=ref(''),loadingOlder=ref(false),scrollTarget=ref(''),selected=ref<ChatMessage|null>(null),original=ref(false),moreOpen=ref(false),emojiOpen=ref(false),clock=ref(Date.now())
+const owner=chatOwner(),myAvatar=getUserInfo()?.avatar||''
+const replyDraft=ref<ChatReply|null>(null),inputFocused=ref(false),locating=ref(false),highlightId=ref(''),highlightFading=ref(false)
+const menuReady=ref(false),menuLeft=ref(0),menuTop=ref(0),menuWidth=ref(0),menuPointer=ref(0),menuBelow=ref(false)
+const currentReply=computed(()=>{void chatRevision.value;return replyDraft.value?normalizeChatReplyValue(replyDraft.value,id.value):null})
+const canQuote=computed(()=>!!selected.value&&!selected.value.localState&&!selected.value.revoked&&!selected.value.deleted)
+let menuGeneration=0,locateGeneration=0,historyFlight:Promise<void>|null=null
+let highlightTimer:ReturnType<typeof setTimeout>|null=null,fadeTimer:ReturnType<typeof setTimeout>|null=null
+const openedConversation=ref<ChatConversation|null>(null)
+const conversation=computed(()=>chatConversations.value.find(x=>x.id===id.value)||openedConversation.value)
+const sendRestriction=computed(()=>{const rule=conversation.value?.restriction;if(!rule)return '';if(rule.blocked)return '你的私聊发送功能已被封禁';const until=Math.max(rule.globalMutedUntil,rule.conversationMutedUntil);return until>clock.value?'私聊禁言中，结束时间：'+chatTime(until):''})
+function allowSend(){if(!sendRestriction.value)return true;uni.showToast({title:sendRestriction.value,icon:'none'});return false}
+const rows=computed(()=>{void chatRevision.value;return id.value?chatRows(id.value):[]})
+const emojis=ref<{id:number;name:string;imageUrl:string;groupId:number;groupName:string}[]>([])
+const emojiGroups=computed(()=>[...new Map(emojis.value.map(x=>[x.groupId,{id:x.groupId,name:x.groupName}])).values()])
+const canRevoke=computed(()=>{const m=selected.value;if(!m)return false;const current=rows.value.find(x=>x.id===m.id)||m;return current.senderId===owner&&!current.localState&&!current.revoked&&current.canRevoke&&clock.value<current.revokeUntil})
+let timer:ReturnType<typeof setInterval>|null=null,visible=false,pageReady=false
+const noop=()=>{}
+const icon=(name:string)=>uiAsset('/static/chat-icons/'+name+'.svg')
+function takePhoto(){if(!allowSend())return;moreOpen.value=false;chooseAlbumImages({count:1,sizeType:['original'],sourceType:['camera'],success:result=>{if(!conversation.value)return;original.value=result.original;for(const path of result.tempFilePaths)newChatMessage(conversation.value,'image','',path,result.original);void bottom()}},original.value)}
+let thanksNonce=''
+onLoad(q=>{thanksNonce=String(q?.thanks||'');id.value=String(q?.id||'');if(!/^\d+$/.test(id.value)){error.value='会话不存在';return}chatRows(id.value)})
+// Give cached message images their first native frame before history merging writes local storage.
+onReady(()=>{pageReady=true;if(!/^\d+$/.test(id.value))return;void load();void syncChats();void autoThanks()})
+async function autoThanks(){const intent=consumeThanks(thanksNonce,id.value);thanksNonce='';if(!intent)return;try{const message=newChatMessage(intent.conversation,'text','谢谢你点赞了我的笔记','',false,'',null,true);await bottom();await sendChatMessage(intent.conversation.peerId,message)}finally{finishThanks(intent.notification)}}
+onShow(()=>{visible=true;activeChat.value=id.value;if(pageReady)void syncChats();timer=setInterval(()=>{clock.value=Date.now()},500)})
+onHide(()=>{cancelLocate();closeMenu();inputFocused.value=false;visible=false;if(activeChat.value===id.value)activeChat.value='';if(timer)clearInterval(timer);timer=null;selected.value=null})
+onBeforeUnmount(()=>{cancelLocate();closeMenu();if(timer)clearInterval(timer);if(activeChat.value===id.value)activeChat.value=''})
+watch(authRevision,()=>{if(owner!==chatOwner())uni.reLaunch({url:'/pages/index/index?tab=message'})})
+watch(()=>rows.value.length,async(length,previous)=>{if(length>previous&&!loadingOlder.value&&!locating.value){await bottom();if(visible)void markChatRead(id.value).catch(()=>{})}})
+async function bottom(){if(locating.value)return;scrollTarget.value='';await nextTick();if(!locating.value)scrollTarget.value='chat-bottom'}
+async function load(){error.value='';try{await refreshChats();openedConversation.value=await chatConversation(id.value);cursor.value=await loadChatHistory(id.value);await bottom();await markChatRead(id.value)}catch(e){error.value=e instanceof Error?e.message:'聊天加载失败'}}
+async function loadOlderPage(){if(historyFlight)return historyFlight;if(!cursor.value)return;loadingOlder.value=true;const flight=(async()=>{try{cursor.value=await loadChatHistory(id.value,cursor.value)}finally{loadingOlder.value=false}})();historyFlight=flight;try{await flight}finally{if(historyFlight===flight)historyFlight=null}}
+async function older(){if(locating.value)return;try{await loadOlderPage()}catch(e){toast(e instanceof Error?e.message:'历史消息加载失败，请重试')}}
+function back(){getCurrentPages().length>1?uni.navigateBack():uni.reLaunch({url:'/pages/index/index?tab=message'})}
+function sendText(){if(!allowSend())return;if(!conversation.value||!draft.value.trim())return;const reply=currentReply.value;if(reply&&reply.status!=='available'){toast(chatReplyLabel(reply)+'，请取消引用后发送');return}cancelLocate();const text=draft.value;newChatMessage(conversation.value,'text',text,'',false,'',reply?{...reply}:null);draft.value='';replyDraft.value=null;void bottom()}
+function retry(message:ChatMessage){if(!allowSend())return;if(conversation.value)void sendChatMessage(conversation.value.peerId,message)}
+function toast(title:string){uni.showToast({title,icon:'none'})}
+function closeMenu(){menuGeneration++;selected.value=null;menuReady.value=false}
+interface ChatRect {left:number;top:number;width:number;height:number}
+function measure(elementId:string):Promise<ChatRect|null>{
+ return new Promise(resolve=>{
+  // #ifdef APP
+  const rect=uni.getElementById(elementId)?.getBoundingClientRect();resolve(rect?{left:rect.x,top:rect.y,width:rect.width,height:rect.height}:null)
+  // #endif
+  // #ifndef APP
+  uni.createSelectorQuery().select('#'+elementId).boundingClientRect(value=>resolve(value?value as ChatRect:null)).exec()
+  // #endif
+ })
+}
+async function positionMenu(generation:number){
+ const message=selected.value;if(!message)return;
+ const bubble=await measure('chat-bubble-'+message.id),header=await measure('chat-header'),composer=await measure('chat-composer');
+ if(generation!==menuGeneration||!selected.value||!bubble||!header||!composer){if(generation===menuGeneration)closeMenu();return}
+ const scale=viewportWidth.value/750,edge=12*scale,height=124*scale,gap=12*scale,width=(1+(canRevoke.value?1:0)+(canQuote.value?1:0))*103*scale;
+ const minTop=header.top+header.height+edge,maxBottom=composer.top-edge;
+ if(maxBottom-minTop<height+gap){closeMenu();return}
+ menuWidth.value=width;menuLeft.value=Math.max(edge,Math.min(viewportWidth.value-edge-width,message.senderId===owner?bubble.left+bubble.width-width:bubble.left));
+ const above=bubble.top-gap-height;menuBelow.value=above<minTop;
+ menuTop.value=Math.max(minTop,Math.min(maxBottom-height,menuBelow.value?bubble.top+bubble.height+gap:above));
+ menuPointer.value=Math.max(12*scale,Math.min(width-24*scale,bubble.left+bubble.width/2-menuLeft.value-6*scale));menuReady.value=true
+}
+async function openMenu(message:ChatMessage){
+ closeMenu();selected.value=message;const generation=menuGeneration;await nextTick();await positionMenu(generation);
+ if(!message.localState)try{const latest=await chatMessage(message.id);if(generation!==menuGeneration)return;await mergeChatMessage(latest);if(generation!==menuGeneration)return;if(latest.revoked||latest.deleted){closeMenu();return}selected.value=latest;await positionMenu(generation)}catch{}
+}
+watch(canRevoke,()=>{if(selected.value)void positionMenu(menuGeneration)})
+watch(viewportWidth,closeMenu)
+watch(chatRevision,()=>{const current=selected.value?rows.value.find(x=>x.id===selected.value?.id):null;if(selected.value&&(!current||current.revoked))closeMenu();if(replyDraft.value)replyDraft.value=normalizeChatReplyValue(replyDraft.value,id.value)})
+function remove(){const message=selected.value;closeMenu();if(message)deleteLocalMessage(message)}
+async function revoke(){const message=selected.value;closeMenu();if(message)try{await revokeChatMessage(message)}catch(e){toast(e instanceof Error?e.message:'撤销失败，请重试')}}
+async function quoteSelected(){
+ const message=selected.value;if(!message||!canQuote.value)return;closeMenu();
+ replyDraft.value=makeChatReply(message,message.senderId===owner?(getUserInfo()?.nickname||'我'):(conversation.value?.name||'对方'));
+ emojiOpen.value=false;moreOpen.value=false;inputFocused.value=false;await nextTick();inputFocused.value=true
+}
+function clearHighlight(){if(highlightTimer)clearTimeout(highlightTimer);if(fadeTimer)clearTimeout(fadeTimer);highlightTimer=null;fadeTimer=null;highlightId.value='';highlightFading.value=false}
+function cancelLocate(){locateGeneration++;locating.value=false;clearHighlight()}
+async function locateReply(reply:ChatReply){
+ cancelLocate();const generation=locateGeneration,current=normalizeChatReplyValue(reply,id.value);
+ if(current.status!=='available'){toast(chatReplyLabel(current)+'，无法定位');return}
+ locating.value=true;
+ try{
+  const message=await chatMessage(reply.messageId);if(generation!==locateGeneration)return;
+  if(message.conversationId!==id.value)throw new Error('原消息不属于当前会话');
+  if(message.revoked||message.deleted){await mergeChatMessage(message);if(generation!==locateGeneration)return}
+  if(message.revoked||cloudChatHidden(message)||chatDeleted(id.value).includes(message.id))throw new Error(message.revoked?'原消息已撤销，无法定位':'原消息已删除，无法定位');
+  while(!rows.value.some(x=>x.id===reply.messageId)&&cursor.value){const before=cursor.value;await loadOlderPage();if(generation!==locateGeneration)return;if(cursor.value===before)break}
+  if(!rows.value.some(x=>x.id===reply.messageId))throw new Error('原消息已删除，无法定位');
+  await mergeChatMessage(message);if(generation!==locateGeneration)return;scrollTarget.value='';await nextTick();if(generation!==locateGeneration)return;scrollTarget.value='chat-message-'+reply.messageId;highlightId.value=reply.messageId;highlightFading.value=false;
+  highlightTimer=setTimeout(()=>{highlightFading.value=true;fadeTimer=setTimeout(clearHighlight,300)},1000)
+ }catch(e){if(generation===locateGeneration)toast(e instanceof Error?e.message:'定位失败，请点击重试')}
+ finally{if(generation===locateGeneration)locating.value=false}
+}
+function openMedia(message:ChatMessage){if(message.kind==='product'){if(message.product?.id)uni.navigateTo({url:'/pages/shop/detail?id='+encodeURIComponent(message.product.id)});return}if(message.kind==='post'){if(message.post?.id)uni.navigateTo({url:'/pages/post/index?id='+encodeURIComponent(message.post.id)});return}uni.navigateTo({url:'/pages/chat/media?conversation='+id.value+'&id='+message.id})}
+function chooseImage(){if(!allowSend())return;moreOpen.value=false;chooseAlbumImages({count:9,sizeType:['original'],sourceType:['album','camera'],success:result=>{if(!conversation.value)return;original.value=result.original;for(const path of result.tempFilePaths)newChatMessage(conversation.value,'image','',path,result.original);void bottom()}},original.value)}
+function chooseVideo(){if(!allowSend())return;moreOpen.value=false;chooseAlbumVideo({sourceType:['album','camera'],compressed:false,success:result=>{original.value=result.original;if(conversation.value){const message=newChatMessage(conversation.value,'video','',result.tempFilePath,result.original);message.localWidth=result.width;message.localHeight=result.height;}void bottom()}},original.value)}
+function toggleMore(){const opening=!moreOpen.value;moreOpen.value=opening;emojiOpen.value=false;if(opening){inputFocused.value=false;uni.hideKeyboard()}}
+async function toggleEmoji(){const opening=!emojiOpen.value;emojiOpen.value=opening;moreOpen.value=false;if(opening){inputFocused.value=false;uni.hideKeyboard()}if(opening&&!emojis.value.length)try{emojis.value=await chatEmojis()}catch{}}
+function sendEmoji(emoji:number){if(!allowSend())return;if(conversation.value)newChatMessage(conversation.value,'emoji','','',false,String(emoji));void bottom()}
+function formatTime(value:number):string{const date=new Date(value),today=new Date(),two=(n:number)=>String(n).padStart(2,'0'),time=two(date.getHours())+':'+two(date.getMinutes());today.setHours(0,0,0,0);const days=Math.floor((today.getTime()-new Date(date.getFullYear(),date.getMonth(),date.getDate()).getTime())/86400000);return days===0?time:days>0&&days<7?'星期'+'日一二三四五六'.charAt(date.getDay())+' '+time:two(date.getMonth()+1)+'/'+two(date.getDate())+' '+time}
+onBackPress(()=>{if(selected.value){closeMenu();return true}if(emojiOpen.value||moreOpen.value){emojiOpen.value=false;moreOpen.value=false;return true}return false})
+</script>
+<style scoped>
+/* Match the reference with a white canvas and a single, inset composer. */
+.chat-page{position:fixed;top:0;right:0;bottom:0;left:0;background-color:#fff;display:flex;flex-direction:column;overflow:hidden}
+.chat-top{position:relative;z-index:2;flex-shrink:0;background-color:#fff;overflow:visible}
+.chat-header{height:104rpx;padding:0 25rpx;flex-shrink:0;display:flex;flex-direction:row;align-items:center;background-color:#fff;overflow:visible}
+.chat-back-button{width:42rpx;height:80rpx;padding:0;margin:0;display:flex;align-items:center;justify-content:center;background-color:transparent;border-width:0;flex-shrink:0}
+.chat-back-icon{width:28rpx;height:40rpx}
+.chat-header-avatar{position:relative;width:56rpx;height:56rpx;margin-left:14rpx;flex-shrink:0;overflow:visible}
+.chat-header-avatar-decoration{position:absolute;left:-10rpx;top:-10rpx;overflow:visible}
+.chat-title{flex:1;min-width:0;font-size:28rpx;line-height:40rpx;color:#333;margin-left:20rpx;margin-right:20rpx;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-header-button{width:66rpx;height:80rpx;padding:0;margin:0;display:flex;align-items:center;justify-content:center;background-color:transparent;border-width:0;flex-shrink:0}
+.chat-header-icon{width:44rpx;height:44rpx}
+.chat-history{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.chat-scroll{flex:1;height:0;width:100%;overflow:hidden}
+.chat-start{min-height:26rpx;display:flex;align-items:center;justify-content:center}
+.chat-hint{font-size:24rpx;line-height:34rpx;color:#999}
+.chat-time{padding:18rpx 0 34rpx;display:flex;align-items:center;justify-content:center}
+.chat-bottom{height:20rpx}
+/* Avatar frames extend above the message row; keep the decoration visible. */
+.chat-message-line{background-color:transparent;overflow:visible}
+.chat-message-highlight{background-color:#d9e6f3}
+.chat-message-highlight-fading{background-color:transparent;transition-property:background-color;transition-duration:300ms}
+.chat-more{padding:14rpx;margin:0;background-color:transparent;border-width:0;display:flex;justify-content:center}
+.chat-composer{display:flex;flex-direction:column;padding:16rpx 25rpx 24rpx;background-color:#fff;flex-shrink:0}
+.chat-compose-shell{display:flex;flex-direction:column;background-color:#f5f5f5;border-radius:26rpx;overflow:hidden}
+.chat-compose-row{display:flex;flex-direction:row;align-items:flex-end;min-height:92rpx;padding:0 20rpx}
+.chat-input-shell{flex:1;min-width:0;padding:0 16rpx;display:flex;flex-direction:column}
+.chat-input{width:100%;min-height:92rpx;max-height:220rpx;padding:26rpx 0;font-size:30rpx;line-height:40rpx;color:#333;background-color:transparent}
+.chat-input-placeholder{font-size:30rpx;line-height:40rpx;color:#999}
+.chat-send{padding:0;width:90rpx;height:58rpx;background-color:#0099ff;border-radius:18rpx;margin:0 0 17rpx 14rpx;display:flex;align-items:center;justify-content:center;border-width:0;flex-shrink:0}
+.chat-send-disabled{opacity:.45}
+.chat-send-text{font-size:26rpx;color:#fff}
+.chat-tool{width:66rpx;height:92rpx;display:flex;align-items:center;justify-content:center;padding:0;margin:0;background-color:transparent;border-width:0;flex-shrink:0}
+.chat-tool-icon{width:52rpx;height:52rpx}
+.chat-more-tool{margin-left:14rpx}
+.chat-panel{height:440rpx;overflow:hidden;flex-shrink:0;background-color:#fff}
+.chat-tools{display:flex;flex-direction:row;padding:26rpx 0 0;background-color:#fff;align-items:flex-start}
+.chat-attachment{width:25%;padding:0;margin:0;background-color:transparent;display:flex;flex-direction:column;align-items:center;border-width:0;flex-shrink:0}
+.chat-attachment-tile{width:134rpx;height:134rpx;background-color:#f4f4f4;border-radius:32rpx;display:flex;align-items:center;justify-content:center}
+.chat-attachment-icon{width:54rpx;height:54rpx}
+.chat-attachment-title{font-size:24rpx;line-height:34rpx;color:#999;margin-top:14rpx}
+.chat-emoji-panel{height:440rpx;flex-shrink:0;background-color:#fff;padding:12px}.chat-emoji-group{font-size:12px;color:#8e999e;padding:8px}.chat-emoji-grid{display:flex;flex-direction:row;flex-wrap:wrap}.chat-emoji{width:58px;height:58px;padding:5px;margin:0;background-color:transparent;border-width:0}.chat-emoji-image{width:48px;height:48px}.chat-menu-mask{position:fixed;top:0;left:0;right:0;bottom:0;background-color:transparent;z-index:50}.chat-menu-anchor{position:absolute;height:124rpx;overflow:visible}.chat-menu{height:124rpx;display:flex;flex-direction:row;background-color:#5e5e5e;border-radius:6rpx;overflow:hidden}.chat-menu-item{width:103rpx;height:124rpx;padding:0;margin:0;background-color:transparent;border-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0}.chat-menu-icon{width:28rpx;height:28rpx;margin-bottom:12rpx}.chat-menu-text,.chat-menu-danger{color:#fff;font-size:22rpx;line-height:30rpx}.chat-menu-pointer{position:absolute;width:12rpx;height:8rpx}.chat-menu-pointer-top{top:-8rpx}.chat-menu-pointer-bottom{bottom:-8rpx}.chat-error{display:flex;flex-direction:row;justify-content:center;align-items:center;padding:10px;background-color:#fff0ee}.chat-error-text{font-size:12px;color:#b97870}.chat-refresh{padding:0 8px;margin:0;background-color:transparent;border-width:0}
+
+.chat-draft-quote{display:flex;flex-direction:row;align-items:center;min-width:0;margin:10rpx 20rpx 0;padding:5rpx 12rpx;background-color:#eaeaea;border-radius:8rpx;height:38rpx}.chat-draft-quote-text{flex:1;min-width:0;font-size:22rpx;line-height:28rpx;color:#939398;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.chat-draft-quote-close{width:28rpx;height:28rpx;margin:0 0 0 12rpx;padding:0;background-color:transparent;border-width:0;display:flex;align-items:center;justify-content:center;flex-shrink:0}.chat-draft-close-icon{width:18rpx;height:18rpx}
+/* #ifdef APP */
+.chat-input{padding:22rpx 0}
+/* #endif */
+/* #ifndef APP */
+.chat-scroll, .chat-emoji-panel{scrollbar-width:none}.chat-scroll::-webkit-scrollbar, .chat-emoji-panel::-webkit-scrollbar{display:none;width:0;height:0}
+.chat-page button:after{border:0}.chat-input{box-sizing:border-box;height:92rpx}.chat-input textarea{line-height:40rpx}.chat-input :deep(.uni-textarea-wrapper){min-height:40rpx}
+/* #endif */
+</style>

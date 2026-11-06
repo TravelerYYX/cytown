@@ -1,0 +1,121 @@
+import View from 'android.view.View'
+import ViewGroup from 'android.view.ViewGroup'
+import AccessibilityNodeInfo from 'android.view.accessibility.AccessibilityNodeInfo'
+import AccessibilityEvent from 'android.view.accessibility.AccessibilityEvent'
+import Build from 'android.os.Build'
+import MotionEvent from 'android.view.MotionEvent'
+import KeyEvent from 'android.view.KeyEvent'
+import SystemClock from 'android.os.SystemClock'
+import AccessibilityNodeInfoCompat from 'androidx.core.view.accessibility.AccessibilityNodeInfoCompat'
+import TextView from 'android.widget.TextView'
+import { NativeSemantics, ApplyNativeSemantics, ReleaseNativeSemantics } from '../interface.uts'
+import { semanticsElement } from '../semantics-element.uts'
+
+function activate(host:View):boolean {
+  const activity=UTSAndroid.getUniActivity()
+  if(activity==null)return false
+  const point=new IntArray(2);host.getLocationInWindow(point)
+  const x=point[0].toFloat()+host.getWidth().toFloat()/2, y=point[1].toFloat()+host.getHeight().toFloat()/2,now=SystemClock.uptimeMillis()
+  const down=MotionEvent.obtain(now,now,MotionEvent.ACTION_DOWN,x.toFloat(),y.toFloat(),0)
+  const up=MotionEvent.obtain(now,now+40,MotionEvent.ACTION_UP,x.toFloat(),y.toFloat(),0)
+  activity!.dispatchTouchEvent(down);activity!.dispatchTouchEvent(up);down.recycle();up.recycle()
+  return true
+}
+function visibleText(view:View):string {
+  if(!view.isShown()||view.getImportantForAccessibility()==View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS)return ''
+  if(view instanceof TextView)return (view as TextView).getText().toString()
+  if(view instanceof ViewGroup){const group=view as ViewGroup,parts:string[]=[];for(let index=0;index<group.getChildCount();index++){const text=visibleText(group.getChildAt(index.toInt()));if(text.length>0)parts.push(text)}return parts.join(' ')}
+  return ''
+}
+class SemanticDelegate extends View.AccessibilityDelegate {
+  spec:NativeSemantics
+  original:View.AccessibilityDelegate|null
+  constructor(spec:NativeSemantics,original:View.AccessibilityDelegate|null){super();this.spec=spec;this.original=original}
+  override onInitializeAccessibilityNodeInfo(host:View,info:AccessibilityNodeInfo):void {
+    if(this.original!=null)this.original!.onInitializeAccessibilityNodeInfo(host,info)
+    else super.onInitializeAccessibilityNodeInfo(host,info)
+    if(this.spec.role=='button')info.setClassName('android.widget.Button')
+    else if(this.spec.role=='checkbox')info.setClassName('android.widget.CheckBox')
+    else if(this.spec.role=='dialog')info.setClassName('android.app.Dialog')
+    if(this.spec.label.length>0)info.setContentDescription(this.spec.label)
+    else if(this.spec.role=='button'||this.spec.role=='checkbox'){const label=visibleText(host);if(label.length>0)info.setContentDescription(label)}
+    info.setEnabled(!this.spec.disabled);info.setSelected(this.spec.selected)
+    if(this.spec.checked!=null){info.setCheckable(true);AccessibilityNodeInfoCompat.wrap(info).setChecked(this.spec.checked!)}
+    if(this.spec.role=='button'||this.spec.role=='link'||this.spec.role=='checkbox'){info.setClickable(!this.spec.disabled);if(!this.spec.disabled)info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK)}
+  }
+  override performAccessibilityAction(host:View,action:Int,args:android.os.Bundle|null):boolean {
+    if(this.spec.disabled)return false
+    if(action==AccessibilityNodeInfo.ACTION_CLICK)return activate(host)
+    return this.original!=null?this.original!.performAccessibilityAction(host,action,args):super.performAccessibilityAction(host,action,args)
+  }
+}
+type SavedNode={view:View;importance:Int;focusable:boolean;delegate:View.AccessibilityDelegate|null;description:CharSequence|null}
+type ModalNode={view:View;importance:Int;focusable:boolean;descendants:Int|null;owners:Set<string>}
+const nodes=new Map<string,SavedNode>(),hiddenSiblings=new Map<View,ModalNode>(),modalBranches=new Map<string,View[]>()
+const modalFocus=new Map<string,View>()
+function enforceModalRestrictions(){
+  hiddenSiblings.forEach((entry:ModalNode)=>{const view=entry.view;view.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);view.setFocusable(false);if(view instanceof ViewGroup)(view as ViewGroup).setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS)})
+}
+function restoreModal(id:string){
+  const views=modalBranches.get(id)
+  if(views==null)return
+    for(const view of views!){const entry=hiddenSiblings.get(view);if(entry==null)continue;entry!.owners.delete(id);if(entry!.owners.size==0){view.setImportantForAccessibility(entry!.importance);view.setFocusable(entry!.focusable);if(entry!.descendants!=null&&(view instanceof ViewGroup))(view as ViewGroup).setDescendantFocusability(entry!.descendants!);hiddenSiblings.delete(view)}}
+  modalBranches.delete(id)
+  const previous=modalFocus.get(id);modalFocus.delete(id)
+  if(previous!=null&&previous!.isAttachedToWindow()&&previous!.isShown()&&previous!.isFocusable())previous!.requestFocus()
+}
+function restrictModal(id:string,view:View){
+  if(modalBranches.has(id))return
+  const previous=UTSAndroid.getUniActivity()?.getCurrentFocus()
+  if(previous!=null){modalFocus.set(id,previous!);previous!.clearFocus()}
+  const hidden:View[]=[];let branch=view
+  while(branch.getParent() instanceof ViewGroup){
+    const parent=branch.getParent() as ViewGroup
+    for(let index=0;index<parent.getChildCount();index++){
+      const sibling=parent.getChildAt(index.toInt())
+      if(sibling===branch)continue
+      let entry=hiddenSiblings.get(sibling)
+      if(entry==null){entry={view:sibling,importance:sibling.getImportantForAccessibility(),focusable:sibling.isFocusable(),descendants:sibling instanceof ViewGroup?(sibling as ViewGroup).getDescendantFocusability():null,owners:new Set<string>()};hiddenSiblings.set(sibling,entry!)}
+      entry!.owners.add(id);sibling.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);sibling.setFocusable(false);if(sibling instanceof ViewGroup)(sibling as ViewGroup).setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);hidden.push(sibling)
+    }
+    branch=parent
+  }
+  modalBranches.set(id,hidden)
+  view.post(()=>{if(modalBranches.has(id))view.requestFocus(View.FOCUS_FORWARD)})
+  view.sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)
+}
+export const applyAndroidSemantics:ApplyNativeSemantics=(id:string,spec:NativeSemantics):Promise<boolean>=>new Promise<boolean>(resolve=>{
+  const activity=UTSAndroid.getUniActivity()
+  if(activity==null){resolve(false);return}
+  activity!.runOnUiThread(()=>{
+    const view=semanticsElement(id)?.getAndroidView()
+    // Vapor can expose a newly created View before it is attached to its parent.
+    // Retry then, so a modal does not record an empty ancestor/sibling scope.
+    if(view==null||!view!.isAttachedToWindow()){resolve(false);return}
+    let previous=nodes.get(id)
+    if(previous==null || previous!.view!==view){
+      restoreModal(id)
+      previous={view:view!,importance:view!.getImportantForAccessibility(),focusable:view!.isFocusable(),delegate:Build.VERSION.SDK_INT>=29?view!.getAccessibilityDelegate():null,description:view!.getContentDescription()}
+      nodes.set(id,previous!)
+    }
+    view!.setImportantForAccessibility(spec.hidden?View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS:spec.label.length>0||spec.role.length>0?View.IMPORTANT_FOR_ACCESSIBILITY_YES:previous!.importance)
+    view!.setFocusable(spec.focusable&&!spec.hidden&&!spec.disabled)
+    if(spec.focusable)view!.setOnKeyListener((_host,key,event)=>{
+      if(key!=KeyEvent.KEYCODE_ENTER&&key!=KeyEvent.KEYCODE_DPAD_CENTER&&key!=KeyEvent.KEYCODE_SPACE)return false
+      if(spec.disabled)return true
+      if(event.getAction()==KeyEvent.ACTION_UP)activate(_host)
+      return true
+    })
+    view!.setAccessibilityDelegate(new SemanticDelegate(spec,previous!.delegate))
+    if(spec.modal&&!spec.hidden){if(Build.VERSION.SDK_INT>=28)view!.setAccessibilityPaneTitle(spec.label);restrictModal(id,view!)}else restoreModal(id)
+    enforceModalRestrictions()
+    resolve(true)
+  })
+})
+export const releaseAndroidSemantics:ReleaseNativeSemantics=(id:string):void=>{
+  UTSAndroid.getUniActivity()?.runOnUiThread(()=>{
+    restoreModal(id)
+    const saved=nodes.get(id)
+    if(saved!=null){saved!.view.setImportantForAccessibility(saved!.importance);saved!.view.setFocusable(saved!.focusable);saved!.view.setOnKeyListener(null);saved!.view.setContentDescription(saved!.description);saved!.view.setAccessibilityDelegate(saved!.delegate);nodes.delete(id)}
+  })
+}

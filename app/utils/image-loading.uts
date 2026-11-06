@@ -1,0 +1,11 @@
+// Cache work is optional. A slow cache must eventually yield to the image renderer.
+export const IMAGE_DOWNLOAD_TIMEOUT = 8000
+export const IMAGE_CACHE_TIMEOUT = 10000
+export async function imageDeadline<T>(task: Promise<T>, timeout = IMAGE_CACHE_TIMEOUT): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([task, new Promise<T>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error('图片缓存等待超时')), timeout)
+    })])
+  } finally { clearTimeout(timer) }
+}

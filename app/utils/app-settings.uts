@@ -1,0 +1,63 @@
+import { computed, ref } from 'vue'
+
+export type VideoAutoplayMode = 'all-networks' | 'wifi-only' | 'off'
+export type GifAutoplayMode = 'smart' | 'always' | 'off'
+export type FeedLayout = 'single' | 'waterfall'
+
+export const isFeedLayout = (value: unknown): value is FeedLayout => value === 'single' || value === 'waterfall'
+
+export const SETTINGS_STORAGE_KEYS = {
+  eyeCare: 'settings_eye_care',
+  videoAutoplay: 'settings_video_autoplay',
+  gifAutoplay: 'settings_gif_autoplay',
+  feedLayout: 'settings_feed_layout',
+  defaultFeedLayout: 'settings_default_feed_layout'
+} as const
+
+const readStorage = (key: string): unknown => {
+  try { return uni.getStorageSync(key) } catch { return undefined }
+}
+
+const initialEyeCare = readStorage(SETTINGS_STORAGE_KEYS.eyeCare) === true
+const initialVideo = readStorage(SETTINGS_STORAGE_KEYS.videoAutoplay)
+const initialGif = readStorage(SETTINGS_STORAGE_KEYS.gifAutoplay)
+const initialLayout = readStorage(SETTINGS_STORAGE_KEYS.feedLayout)
+const initialDefaultLayout = readStorage(SETTINGS_STORAGE_KEYS.defaultFeedLayout)
+export const feedLayoutPreference = ref<FeedLayout | null>(isFeedLayout(initialLayout) ? initialLayout : null)
+export const defaultFeedLayout = ref<FeedLayout>(isFeedLayout(initialDefaultLayout) ? initialDefaultLayout : 'single')
+export const feedLayout = computed(() => feedLayoutPreference.value ?? defaultFeedLayout.value)
+
+export function setFeedLayout(layout: FeedLayout): void {
+  if (!isFeedLayout(layout)) return
+  uni.setStorageSync(SETTINGS_STORAGE_KEYS.feedLayout, layout)
+  feedLayoutPreference.value = layout
+}
+
+export function applyDefaultFeedLayout(value: unknown): void {
+  const layout = isFeedLayout(value) ? value : 'single'
+  defaultFeedLayout.value = layout
+  try { uni.setStorageSync(SETTINGS_STORAGE_KEYS.defaultFeedLayout, layout) } catch { /* Keep the in-memory default when storage is unavailable. */ }
+}
+
+export const eyeCareEnabled = ref(initialEyeCare)
+export const videoAutoplayMode = ref<VideoAutoplayMode>(
+  initialVideo === 'all-networks' || initialVideo === 'off' ? initialVideo : 'wifi-only'
+)
+export const gifAutoplayMode = ref<GifAutoplayMode>(
+  initialGif === 'always' || initialGif === 'off' ? initialGif : 'smart'
+)
+
+export function setEyeCare(enabled: boolean): void {
+  eyeCareEnabled.value = enabled
+  uni.setStorageSync(SETTINGS_STORAGE_KEYS.eyeCare, enabled)
+}
+
+export function setVideoAutoplay(mode: VideoAutoplayMode): void {
+  videoAutoplayMode.value = mode
+  uni.setStorageSync(SETTINGS_STORAGE_KEYS.videoAutoplay, mode)
+}
+
+export function setGifAutoplay(mode: GifAutoplayMode): void {
+  gifAutoplayMode.value = mode
+  uni.setStorageSync(SETTINGS_STORAGE_KEYS.gifAutoplay, mode)
+}

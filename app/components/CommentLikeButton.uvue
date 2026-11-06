@@ -1,0 +1,35 @@
+<template>
+  <ActionButton class="comment-like-button" :disabled="disabled || state.busy || comment.deleted" :aria-label="state.reaction === 'like' ? '取消评论点赞' : '评论点赞'" :aria-pressed="state.reaction === 'like'" @tap.stop="like">
+    <InteractionIcon kind="like" variant="feed" :active="state.reaction === 'like'" :play-signal="playback" :enabled="active" :size="size" />
+    <text class="comment-like-count" :class="{'comment-like-count-active':state.reaction==='like'}">{{ formatCount(state.likeCount) }}</text>
+  </ActionButton>
+</template>
+<script setup lang="uts">
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import ActionButton from './ActionButton.uvue'
+import InteractionIcon from './InteractionIcon.uvue'
+import { commentLikeState, performCommentLike } from '@/utils/comment-state'
+import type { CommentResponse } from '@/types/post-api'
+const props = withDefaults(defineProps<{ comment: CommentResponse; active?: boolean; disabled?: boolean; size?: number }>(), { active: true, disabled: false, size: 36 })
+const state = computed(() => commentLikeState(props.comment))
+const playback = ref(0)
+const formatCount = (count: number) => count >= 10000 ? (count / 10000).toFixed(count % 10000 === 0 ? 0 : 1) + '万' : count || ''
+let generation = 0
+watch(() => props.comment.id, () => { generation++; playback.value = 0 })
+watch(() => props.active, () => { generation++ })
+onBeforeUnmount(() => { generation++ })
+async function like() {
+  if (props.disabled || !props.active) return
+  const current = generation, wasActive = state.value.reaction === 'like'
+  const result = await performCommentLike(props.comment)
+  if (current === generation && result?.reaction === 'like' && !wasActive) playback.value++
+}
+</script>
+<style scoped>
+.comment-like-button{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;min-width:66rpx;min-height:48rpx;margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;}
+/* #ifndef APP */
+.comment-like-button::after{border-width:0;}
+/* #endif */
+.comment-like-count{margin-left:7rpx;color:#94999b;font-size:18rpx;line-height:26rpx;}
+.comment-like-count-active{color:#fa9421;}
+</style>

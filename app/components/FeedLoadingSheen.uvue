@@ -1,0 +1,61 @@
+<template>
+  <!-- #ifdef APP -->
+  <view v-bind="a11yAttrs(a11yPrefix+'-sheen',{'aria-hidden':true})" v-if="selected" class="feed-loading-sheen">
+  <!-- #endif -->
+  <!-- #ifndef APP -->
+  <view v-if="selected" class="feed-loading-sheen" aria-hidden="true">
+  <!-- #endif -->
+    <view :id="id" class="feed-loading-light" />
+  </view>
+</template>
+<script setup lang="uts">
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import { computed, getCurrentInstance, inject, nextTick, onBeforeUnmount, watch } from 'vue'
+import { feedRevealKey } from '@/composables/useFeedReveal'
+import { uxMedia } from '@/utils/native-styles'
+const props = withDefaults(defineProps<{ cardId: string; waiting?: boolean; enabled?: boolean }>(), { waiting: false, enabled: true })
+const feed = inject(feedRevealKey, null)
+const id = 'feed-sheen-' + getCurrentInstance()!.uid
+const waiting = computed(() => props.enabled && feed != null && !feed.restoring.value && (props.waiting || feed.phase.value === 'loading' || feed.phase.value === 'preparing'))
+const selected = computed(() => waiting.value && feed?.active() === true && feed.sweepingCard.value === props.cardId)
+watch(() => [props.cardId, waiting.value], (_value, old) => {
+  if (old && old[0] !== props.cardId) feed?.setCardWaiting(old[0] as string, false)
+  feed?.setCardWaiting(props.cardId, waiting.value)
+}, { immediate: true, flush: 'post' })
+let revision = 0
+// #ifdef APP
+let animation: UniAnimation | null = null
+// #endif
+function stop() {
+  revision++
+  // #ifdef APP
+  animation?.cancel(); animation = null
+  // #endif
+}
+watch(selected, async value => {
+  stop()
+  if (!value) return
+  const token = revision
+  await nextTick()
+  if (token !== revision) return
+  // #ifdef APP
+  if (uxMedia('(prefers-reduced-motion: reduce)')) return
+  const element = uni.getElementById(id)
+  const width = element?.getBoundingClientRect().width ?? 0
+  animation = element?.animate([
+    { transform: 'translateX(-'+width+'px)' }, { transform: 'translateX('+width+'px)' }
+  ], { duration: 1500, iterations: 1, easing: 'linear', fill: 'forwards' }) ?? null
+  // #endif
+}, { immediate: true, flush: 'post' })
+onBeforeUnmount(() => { stop(); feed?.setCardWaiting(props.cardId, false) })
+</script>
+<style scoped>
+.feed-loading-sheen { position: absolute; left: 0; right: 0; top: 0; bottom: 0; overflow: hidden; pointer-events: none; z-index: 4; border-radius: 18rpx; }
+.feed-loading-light { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; background-image: linear-gradient(to bottom right, rgba(255,255,255,0) 40%, rgba(255,255,255,0.36) 50%, rgba(255,255,255,0) 60%); }
+/* #ifndef APP */
+.feed-loading-light { animation: feed-card-sweep 1500ms linear forwards; }
+@keyframes feed-card-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .feed-loading-light { animation: none; opacity: 0; } }
+/* #endif */
+</style>

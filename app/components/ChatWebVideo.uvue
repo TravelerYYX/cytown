@@ -1,0 +1,14 @@
+<template><view :id="id" class="chat-web-video" /></template>
+<script setup lang="uts">
+// #ifdef WEB
+import {getCurrentInstance,onMounted,onBeforeUnmount,nextTick,watch} from 'vue'
+import {createChatVideo} from '@/utils/chat-browser-bridge.js'
+const props=defineProps<{source:string;active:boolean}>(),emit=defineEmits<{error:[]}>()
+const id='chat-web-video-'+getCurrentInstance()!.uid
+let controller:ReturnType<typeof createChatVideo>|undefined
+onMounted(async()=>{await nextTick();const host=document.getElementById(id);if(host)controller=createChatVideo(host,props.source,()=>emit('error'))})
+watch(()=>props.active,value=>{if(value)controller?.play();else controller?.pause()})
+onBeforeUnmount(()=>{controller?.destroy();controller=undefined})
+// #endif
+</script>
+<style scoped>.chat-web-video{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%}</style>

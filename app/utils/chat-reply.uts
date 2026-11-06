@@ -1,0 +1,15 @@
+import type {ChatMessage,ChatReply} from '@/types/chat'
+
+export function chatReplySummary(message:ChatMessage):string {
+ return message.kind==='text'?Array.from(message.content).slice(0,200).join(''):message.kind==='post'?'[帖子]'+(message.post?.title||''):message.kind==='image'?'[图片]':message.kind==='video'?'[视频]':'[表情]'
+}
+export function makeChatReply(message:ChatMessage,senderName:string):ChatReply {
+ return {messageId:message.id,senderId:message.senderId,senderName,sentAt:message.sentAt,kind:message.kind,summary:chatReplySummary(message),status:'available'}
+}
+export function chatReplyLabel(reply:ChatReply|null|undefined):string {
+ if(!reply)return '';
+ return reply.status==='revoked'?'原消息已撤销':reply.status==='local-deleted'?'原消息已在本设备删除':reply.status==='deleted'?'原消息已删除':reply.summary
+}
+export function chatReplyTime(value:number):string {
+ if(!value)return '';const d=new Date(value);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')
+}

@@ -1,0 +1,16 @@
+<template>
+  <!-- #ifndef APP -->
+  <view class="chat-loading" :aria-label="label" :style="{width:size+'px',height:size+'px',marginRight:centered?'0px':'8px'}"><image class="chat-loading-strip" src="/static/chat-sending.png" :style="{width:(size*24)+'px',height:size+'px',transform:'translateX('+(-frame*size)+'px)'}" mode="scaleToFill" /></view>
+  <!-- #endif -->
+  <!-- #ifdef APP -->
+  <view class="chat-loading" :style="{width:size+'px',height:size+'px',marginRight:centered?'0px':'8px'}"><image class="chat-loading-strip" src="/static/chat-sending.png" :style="{width:(size*24)+'px',height:size+'px',transform:'translateX('+(-frame*size)+'px)'}" mode="scaleToFill" /></view>
+  <!-- #endif -->
+</template>
+<script setup lang="uts">
+import {ref,onMounted,onBeforeUnmount} from 'vue'
+withDefaults(defineProps<{size?:number;centered?:boolean;label?:string}>(),{size:14,centered:false,label:'发送中'})
+const frame=ref(0);let timer:ReturnType<typeof setInterval>|null=null
+onMounted(()=>{timer=setInterval(()=>{frame.value=(frame.value+1)%24},42)})
+onBeforeUnmount(()=>{if(timer)clearInterval(timer)})
+</script>
+<style scoped>.chat-loading{width:14px;height:14px;overflow:hidden;flex-shrink:0;margin-right:8px}.chat-loading-strip{width:336px;height:14px;flex-shrink:0}</style>

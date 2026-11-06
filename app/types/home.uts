@@ -1,0 +1,118 @@
+export type MainTabKey = 'home' | 'follow' | 'message' | 'mine'
+export type TabItemKey = MainTabKey | 'publish'
+export type HomeTabMode = 'home' | 'top'
+export type IconName = 'search' | 'menu' | 'settings' | 'scan' | 'edit' | 'plus' | 'back' | 'chevron' | 'chevron-round' | 'more' | 'comment' | 'like' | 'share' | 'heart' | 'bell' | 'play' | 'mute' | 'check' | 'compass' | 'home' | 'mine' | 'top' | 'shop' | 'creator' | 'sparkle' | 'toolbox' | 'calendar' | 'book' | 'version' | 'trophy' | 'map' | 'close' | 'draft' | 'grid' | 'topic' | 'image' | 'smile' | 'at' | 'text-tool' | 'video'
+export type PublishMode = 'image' | 'video' | 'post'
+export type DetailIconName = 'stack' | 'favorite' | 'dislike' | 'dropdown' | 'pause' | 'fullscreen' | 'eye' | 'eye-off'
+export type NavigationKind = 'search' | 'feature' | 'post' | 'author' | 'conversation' | 'publish' | 'settings'
+export interface NavigationIntent { kind: NavigationKind; title: string; postId?: string; anchor?: 'comments'; view?: 'media'; mediaIndex?: number }
+export interface GameTab { id: string; name: string }
+export interface Channel { id: string | number; name: string; showAllPosts?: boolean }
+export interface FeatureEntry { id: number; name: string; iconUrl: string; targetType?: 'link' | 'app'; linkUrl: string; openMode: 'inapp' | 'browser'; showTopbar: boolean }
+export interface NewsItem { postId: number; title: string }
+export interface HomeNews { enabled: boolean; interval: number; emptyText: string; items: NewsItem[] }
+export interface HeaderEntry { name: string; iconUrl: string; targetType: 'link' | 'app'; linkUrl: string; openMode: 'inapp' | 'browser'; showTopbar: boolean; enabled: boolean }
+export interface HomeConfig { channels: Channel[]; entries: FeatureEntry[]; headerEntry?: HeaderEntry | null; news: HomeNews; defaultFeedLayout?: import('@/utils/app-settings').FeedLayout }
+export interface Author {
+  id: string
+  nickname: string
+  level?: number
+  /** 作者头像相对路径（API 拼接用），空则前端用默认头像兜底 */
+  avatar?: string
+  avatarFrameExpiresAt?:number|null; avatarFrame?: string
+  verify?: 'official' | 'creator'
+  time?: string
+}
+export interface VideoQuality { height: number; width: number; actualHeight: number; bitrate: number; url: string }
+export interface MediaSkeletonSpec {
+  previewUrl?: string
+  originalUrl?: string
+  hlsUrl?: string
+  qualities?: VideoQuality[]
+  resourceVersion?: string
+  status?: 'processing' | 'ready' | 'failed'
+  errorMessage?: string
+  id?: number
+  assetId?: number
+  url?: string
+  type: 'image' | 'video'
+  layout: 'portrait' | 'wide' | 'square'
+  aspectRatio: number
+  duration?: string
+  durationMs?: number
+  coverUrl?: string
+}
+export interface RepostSummary { id:string; authorNickname:string; label:string; coverUrl:string; available:boolean }
+export interface Post {
+  repostOfPostId?:string|null
+  repost?:RepostSummary|null
+  id: string
+  /** 0 审核中，1 已发布；首页公开列表通常只有 1。 */
+  pinned?: boolean
+  status?: number
+  author: Author
+  title: string
+  mode?: PublishMode
+  channelId?: number
+  channelName?: string
+  authorPublicUid?: string
+  content?: string
+  date?: string
+  createTime?: string
+  game?: string
+  gameId?: string
+  media: MediaSkeletonSpec[]
+  tags?: string[]
+  contentBlocks?: unknown[]
+  allowDownload?: boolean
+  downloadWatermark?: boolean
+  original?: boolean
+  commentCount: number
+  likeCount: number
+  detail?: {
+    following?: boolean
+    followedBy?: boolean
+    liked?: boolean
+    favorited?: boolean
+    bio?: string
+    favoriteCount?: number
+    shareCount?: number
+    collection?: string
+    permission?: string
+    poll?: PollView | null
+  }
+}
+export interface PollView { id: number; question: string; endsAt?: string; totalVotes: number; selectedOptionId?: number; options: { id: number; text: string; voteCount: number }[] }
+export interface MineProfile {
+  nickname: string
+  uid: string
+  ip: string
+  signature: string
+  fans: number
+  following: number
+  likes: number
+}
+export interface GameRoleCard {
+  id: string
+  roleName: string
+  server: string
+  stats: { label: string; value: string }[]
+}
+export interface MineEntry { id: number; title: string; description: string; iconUrl: string; targetType?: 'link' | 'app'; linkUrl: string; openMode: 'inapp' | 'browser'; showTopbar: boolean }
+export interface MessageCategory { id: number; name: string; iconUrl: string }
+export interface NoticeSummaryCategory extends MessageCategory { unreadCount:number; latestTitle:string; latestTime:string }
+export interface NoticeSummary { unreadCount:number; categories:NoticeSummaryCategory[] }
+export interface NoticeListItem { publicationId:number; unread:boolean; id: number; categoryId: number; categoryName: string; title: string; status: number; publishTime: string; createTime: string }
+export interface NoticeBlock { type: 'text' | 'image'; text?: string; url?: string }
+export interface NoticeDetail { publicationId:number; id: number; categoryId: number; categoryName: string; title: string; blocks: NoticeBlock[]; postId: number | null; publishTime: string }
+export interface Conversation {
+  id: string
+  name: string
+  iconUrl?: string
+  isTop: boolean
+  isOfficial: boolean
+  lastMsg: string
+  time: string
+  unread: number
+}
+export interface ViewProps { active: boolean; statusBarHeight: number; viewportWidth: number }

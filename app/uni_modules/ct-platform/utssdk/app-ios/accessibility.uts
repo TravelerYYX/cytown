@@ -1,0 +1,63 @@
+import { UIView, UILabel, UIAccessibilityElement, UIAccessibilityTraits } from 'UIKit'
+import { DispatchQueue } from 'Dispatch'
+import { NativeSemantics, ApplyNativeSemantics, ReleaseNativeSemantics } from '../interface.uts'
+import { semanticsElement } from '../semantics-element.uts'
+function visibleText(view:UIView):string {
+  if(view.isHidden||view.accessibilityElementsHidden)return ''
+  if(view instanceof UILabel)return (view as UILabel).text??''
+  const parts:string[]=[];for(const child of view.subviews){const value=visibleText(child);if(value.length>0)parts.push(value)}return parts.join(' ')
+}
+class SemanticElement extends UIAccessibilityElement {
+  nodeId:string
+  ownerView:UIView
+  spec:NativeSemantics
+  explicitLabel:string|null=null
+  constructor(owner:UIView,id:string,spec:NativeSemantics){super(accessibilityContainer = owner);this.nodeId=id;this.ownerView=owner;this.spec=spec}
+  override get accessibilityLabel():string|null{return this.spec.label.length>0?this.spec.label:this.explicitLabel??visibleText(this.ownerView)}
+  override set accessibilityLabel(value:string|null){this.explicitLabel=value}
+  override accessibilityActivate():boolean {
+    if(this.spec.disabled||this.spec.hidden)return false
+    const element=semanticsElement(this.nodeId)
+    if(element==null)return false
+    element!.dispatchEvent(new UniEvent('click',{bubbles:true,cancelable:true}))
+    return true
+  }
+}
+type SavedNode={view:UIView;label:string|null;hidden:boolean;modal:boolean;element:boolean;traits:UIAccessibilityTraits;elements:any[]|null;proxy:SemanticElement|null;spec:NativeSemantics}
+const nodes=new Map<string,SavedNode>()
+function updateGroups(){
+  nodes.forEach((saved:SavedNode)=>{
+    if(saved.proxy==null)return
+    const children:any[]=[saved.proxy!]
+    function visit(view:UIView){for(const child of view.subviews){let interactive=false;nodes.forEach((entry:SavedNode)=>{if(entry.view===child&&entry.proxy!=null&&!entry.spec.hidden)interactive=true});if(interactive)children.push(child);else visit(child)}}
+    visit(saved.view);saved.view.accessibilityElements=children
+  })
+}
+export const applyIOSSemantics:ApplyNativeSemantics=(id:string,spec:NativeSemantics):Promise<boolean>=>new Promise<boolean>(resolve=>{
+  DispatchQueue.main.async(()=>{
+    const view=semanticsElement(id)?.getIOSView()
+    if(view==null){resolve(false);return}
+    let saved=nodes.get(id)
+    if(saved==null||saved!.view!==view){saved={view:view!,label:view!.accessibilityLabel,hidden:view!.accessibilityElementsHidden,modal:view!.accessibilityViewIsModal,element:view!.isAccessibilityElement,traits:view!.accessibilityTraits,elements:view!.accessibilityElements,proxy:null,spec};nodes.set(id,saved!)}
+    saved!.spec=spec
+    view!.accessibilityElementsHidden=spec.hidden;view!.accessibilityViewIsModal=spec.modal
+    view!.isAccessibilityElement=!spec.hidden&&(spec.label.length>0||spec.focusable||saved!.element)
+    view!.accessibilityLabel=spec.label.length>0?spec.label:saved!.label
+    let traits=saved!.traits
+    if(spec.role=='button'||spec.role=='checkbox')traits=traits.union(UIAccessibilityTraits.button)
+    if(spec.role=='link')traits=traits.union(UIAccessibilityTraits.link)
+    if(spec.selected||spec.checked==true)traits=traits.union(UIAccessibilityTraits.selected)
+    if(spec.disabled)traits=traits.union(UIAccessibilityTraits.notEnabled)
+    view!.accessibilityTraits=traits
+    if(spec.role=='button'||spec.role=='checkbox'||spec.role=='link'){
+      if(saved!.proxy==null)saved!.proxy=new SemanticElement(view!,id,spec)
+      saved!.proxy!.spec=spec;saved!.proxy!.accessibilityTraits=traits;saved!.proxy!.accessibilityFrameInContainerSpace=view!.bounds
+      view!.isAccessibilityElement=false
+    }
+    updateGroups()
+    resolve(true)
+  })
+})
+export const releaseIOSSemantics:ReleaseNativeSemantics=(id:string):void=>{
+  DispatchQueue.main.async(()=>{const saved=nodes.get(id);if(saved==null)return;saved!.view.accessibilityLabel=saved!.label;saved!.view.accessibilityElementsHidden=saved!.hidden;saved!.view.accessibilityViewIsModal=saved!.modal;saved!.view.isAccessibilityElement=saved!.element;saved!.view.accessibilityTraits=saved!.traits;saved!.view.accessibilityElements=saved!.elements;nodes.delete(id);updateGroups()})
+}

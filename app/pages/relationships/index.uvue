@@ -1,0 +1,149 @@
+<template>
+  <view class="relationships-page" :class="[uxNative?'ux1':'',uxNative?'ux2':'']">
+    <view class="relationship-header" :style="{ paddingTop: statusBarHeight + 'px' }" :class="[uxNative?'ux1':'',uxNative?'ux3':'']">
+      <view class="relationship-nav" :class="[uxNative?'ux1':'',uxNative?'ux4':'']"><ActionButton aria-label="返回" @tap="back" :class="[uxNative?'ux5':'',uxNative?'ux6':'']"><AppIcon name="back" :size="40" /></ActionButton><text :class="[uxNative?'ux7':'',uxNative?'ux8':'',uxNative?'ux9':'']">我的{{ kind === 'followers' ? '粉丝' : '关注' }}</text><view class="nav-spacer"  :class="[uxNative?'ux1':'',uxNative?'ux10':'']"/></view>
+      <view class="relationship-tabs" :class="[uxNative?'ux1':'',uxNative?'ux11':'']"><ActionButton :aria-label="&quot;粉丝&quot;" :class="[{active:kind==='followers'},uxNative?'ux5':'',uxNative?'ux27':'',uxNative&amp;&amp;!!(kind==='followers')?'ux28':'']" @tap="kind = 'followers'" :style="uxLayout(uxNodePrefix+'-g1000',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;70rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'"><text :class="[uxNative?'ux7':'',uxNative?'ux36':'',uxNative&amp;&amp;!!(kind==='followers')?'ux37':'',uxNative?'ux9':'']">粉丝</text></ActionButton><ActionButton :aria-label="&quot;关注&quot;" :class="[{active:kind==='following'},uxNative?'ux5':'',uxNative?'ux27':'',uxNative&amp;&amp;!!(kind==='following')?'ux28':'']" @tap="kind = 'following'" :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;70rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1001'"><text :class="[uxNative?'ux7':'',uxNative?'ux36':'',uxNative&amp;&amp;!!(kind==='following')?'ux37':'',uxNative?'ux9':'']">关注</text></ActionButton></view>
+    </view>
+    <PaneScroll class="relationship-scroll" :lower-threshold="100" refresher-enabled :refresher-triggered="refreshing" @refresherrefresh="refresh" @scrolltolower="loadMore" :class="[uxNative?'ux18':'']">
+      <view v-for="(user, __uxIndex0) in records" :key="user.userId" class="relationship-row" :class="[uxNative?'ux1':'',uxNative?'ux19':'']">
+        <UserAvatar navigable :src="user.avatar" :user-id="user.userId" :frame-id="user.avatarFrame" :frame-expires-at="user.avatarFrameExpiresAt ?? undefined" />
+        <view class="relationship-copy" :class="[uxNative?'ux1':'',uxNative?'ux21':'']" :style="uxLayout(uxNodePrefix+'-g1003'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;60rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1003'+'-'+[__uxIndex0].join('-')"><UserName :user-id="user.userId" :nickname="user.nickname" :level="user.level" /><text class="relationship-signature" :class="[uxNative?'ux7':'',uxNative?'ux9':'',uxNative?'ux23':'',uxNative?'ux25':'']">{{ user.signature || '这个人很懒，什么都没写' }}</text></view>
+        <FollowButton :user-id="user.userId" :following="user.following" :followed-by="user.followedBy" @follow="relationChanged"  :style="uxLayout(uxNodePrefix+'-g1006'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;60rpx&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1006'+'-'+[__uxIndex0].join('-')"/>
+      </view>
+      <EmptyState v-if="loggedIn && !loading && !error && !records.length" />
+      <view v-else class="relationship-tip" :class="[uxNative?'ux1':'',uxNative?'ux26':'']"><text :class="[uxNative?'ux7':'',uxNative?'ux40':'',uxNative?'ux9':'']">{{ !loggedIn ? '登录后查看名单' : loading ? '加载中…' : error || (hasMore ? '上拉加载更多' : '已经到底了') }}</text><ActionButton :aria-label="&quot;重试&quot;" v-if="error && !loading" @tap="loadMore" :class="[uxNative?'ux5':'',uxNative?'ux41':'']"><text :class="[uxNative?'ux7':'',uxNative?'ux40':'',uxNative?'ux42':'',uxNative?'ux9':'']">重试</text></ActionButton><ActionButton :aria-label="&quot;登录&quot;" v-if="!loggedIn" @tap="login" :class="[uxNative?'ux5':'',uxNative?'ux41':'']"><text :class="[uxNative?'ux7':'',uxNative?'ux40':'',uxNative?'ux42':'',uxNative?'ux9':'']">登录</text></ActionButton></view>
+    </PaneScroll>
+    <EyeCareOverlay />
+  </view>
+</template>
+<script setup lang="uts">
+import EmptyState from '@/components/EmptyState.uvue'
+import UserAvatar from '@/components/UserAvatar.uvue'
+import UserName from '@/components/UserName.uvue'
+
+import LevelBadge from '@/components/LevelBadge.uvue'
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, ref, watch } from 'vue'
+
+import AppIcon from '@/components/AppIcon.uvue'
+import PaneScroll from '@/components/PaneScroll.uvue'
+import EyeCareOverlay from '@/components/EyeCareOverlay.uvue'
+import FollowButton from '@/components/FollowButton.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { authRevision, avatarSrc, isLoggedIn } from '@/utils/auth'
+import { ensureInteractionLogin, fetchRelationships } from '@/utils/interactions'
+import type { UserRelationship } from '@/types/auth'
+const { statusBarHeight } = useWindowInsets()
+const kind = ref<'followers' | 'following'>('followers')
+const records = ref<UserRelationship[]>([]), loading = ref(false), error = ref(''), hasMore = ref(true), refreshing = ref(false)
+const loggedIn = computed(() => { void authRevision.value; return isLoggedIn() })
+let page = 1, generation = 0, initialized = false
+function reset() { generation++; records.value = []; loading.value = false; error.value = ''; page = 1; hasMore.value = true }
+async function loadMore() {
+  if (loading.value || !hasMore.value || !loggedIn.value) return
+  const revision = generation; loading.value = true; error.value = ''
+  try {
+    const result = await fetchRelationships(kind.value, page)
+    if (revision !== generation) return
+    const existing = new Set(records.value.map(user => user.userId))
+    records.value.push(...result.records.filter(user => !existing.has(user.userId)))
+    page++; hasMore.value = page <= result.pages
+  } catch (e) { if (revision === generation) error.value = e instanceof Error ? e.message : '名单加载失败' }
+  finally { if (revision === generation) loading.value = false }
+}
+async function refresh() { if (refreshing.value) return; refreshing.value = true; reset(); try { await loadMore() } finally { refreshing.value = false } }
+function relationChanged() { if (kind.value === 'following') void refresh() }
+watch(kind, () => { if (initialized) { reset(); void loadMore() } })
+watch(authRevision, () => { if (initialized) { reset(); void loadMore() } })
+function login() { ensureInteractionLogin() }
+function back() { getCurrentPages().length > 1 ? uni.navigateBack() : uni.reLaunch({ url: '/pages/index/index' }) }
+onLoad(query => { kind.value = query?.type === 'following' ? 'following' : 'followers'; initialized = true })
+onShow(() => { if (initialized) { reset(); void loadMore() } })
+onUnload(() => { generation++ })
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.relationships-page { position: fixed; inset: 0; display: flex; flex-direction: column; background: #fff; padding-bottom: env(safe-area-inset-bottom); }
+.relationship-header { flex-shrink: 0; border-bottom: 1rpx solid #eee; }
+.relationship-nav { height: 92rpx; display: flex; align-items: center; justify-content: space-between; padding: 0 28rpx; font-size: 30rpx; font-weight: 600; flex-direction: row; }
+.relationship-nav button, .nav-spacer { width: 44rpx; padding: 0; margin: 0; background: transparent; }
+.relationship-tabs { display: flex; justify-content: center; gap: 70rpx; flex-direction: row; }
+.relationship-tabs button { margin: 0; padding: 22rpx 12rpx; background: transparent; font-size: 27rpx; color: #8d9499; border-bottom: 4rpx solid transparent; }
+.relationship-tabs button.active { color: #37b9df; border-bottom-color: #37b9df; }
+.relationship-scroll { height: 0; flex: 1; min-height: 0; }
+.relationship-row { display: flex; align-items: center; gap: 16rpx; padding: 28rpx 30rpx; border-bottom: 1rpx solid #f4f4f4; flex-direction: row; }
+.relationship-avatar { width: 86rpx; height: 86rpx; flex-shrink: 0; border-radius: 50%; }
+.relationship-copy { flex: 1; min-width: 0; }
+.relationship-name { display: flex; align-items: center; gap: 10rpx; color: #303436; font-size: 26rpx; flex-direction: row; }
+.relationship-name > text:first-child, .relationship-signature { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.relationship-level { flex-shrink: 0; color: #e6af26; font-size: 18rpx; }
+.relationship-signature { display: block; margin-top: 10rpx; font-size: 21rpx; color: #a1a7ab; }
+.relationship-tip { padding: 40rpx; color: #a1a7ab; font-size: 24rpx; text-align: center; }
+.relationship-tip button { margin-top: 20rpx; font-size: 24rpx; color: #37b9df; background: transparent; }
+button::after { border: 0; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux7{color:var(--text-main);font-size:26rpx;}
+.ux8{font-size:30rpx;font-weight:600;}
+
+
+
+
+
+
+
+.ux36{font-size:27rpx;color:#8d9499;}
+.ux37{color:#37b9df;}
+.ux39{color:#303436;font-size:26rpx;}
+.ux40{color:#a1a7ab;font-size:24rpx;text-align:center;}
+.ux42{font-size:24rpx;color:#37b9df;}
+.ux1{}
+.ux9{}
+.ux5{}
+
+
+
+
+
+
+.ux2{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;background-color:#fff;padding-bottom:env(safe-area-inset-bottom);}
+.ux3{flex-shrink:0;border-bottom:1rpx solid #eee;}
+.ux4{height:92rpx;display:flex;flex-direction:row;align-items:center;justify-content:space-between;padding:0 28rpx;font-size:30rpx;font-weight:600;}
+.ux10{width:44rpx;padding:0;margin:0;background-color:transparent;}
+.ux11{display:flex;flex-direction:row;justify-content:center;}
+.ux18{height:0;flex:1;min-height:0;}
+.ux19{display:flex;flex-direction:row;align-items:center;padding:28rpx 30rpx;border-bottom:1rpx solid #f4f4f4;}
+.ux20{width:86rpx;height:86rpx;flex-shrink:0;border-radius:50%;}
+.ux21{flex:1;min-width:0;}
+.ux22{display:flex;flex-direction:row;align-items:center;color:#303436;font-size:26rpx;}
+.ux23{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.ux24{flex-shrink:0;color:#e6af26;font-size:18rpx;}
+.ux25{display:flex;flex-direction:column;margin-top:10rpx;font-size:21rpx;color:#a1a7ab;}
+.ux26{padding:40rpx;color:#a1a7ab;font-size:24rpx;text-align:center;}
+.ux6{width:44rpx;padding:0;margin:0;background-color:transparent;}
+.ux27{margin:0;padding:22rpx 12rpx;background-color:transparent;font-size:27rpx;color:#8d9499;border-bottom:4rpx solid transparent;}
+.ux41{margin-top:20rpx;font-size:24rpx;color:#37b9df;background-color:transparent;}
+.ux28{color:#37b9df;border-bottom-color:#37b9df;}
+.ux38{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+/* #endif */
+</style>

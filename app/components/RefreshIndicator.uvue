@@ -1,0 +1,81 @@
+<template>
+  <!-- #ifdef APP -->
+<view :id="String(a11yAttrs(a11yPrefix+'-0',{&quot;role&quot;:&quot;status&quot;,&quot;aria-label&quot;:active ? '正在刷新' : '下拉刷新'}).id)" class="refresh-indicator" :class="[{dragging},uxNative?'ux0':'',uxNative?'ux7':'',uxNative&amp;&amp;!!dragging?'ux9':'']" :style="{ height: height + 'px' }"  >
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :role="&quot;status&quot;" :aria-label="active ? '正在刷新' : '下拉刷新'" class="refresh-indicator" :class="[{dragging},uxNative?'ux0':'',uxNative?'ux7':'',uxNative&amp;&amp;!!dragging?'ux9':'']" :style="{ height: height + 'px' }"  >
+<!-- #endif -->
+    <image v-if="showCharacter" class="refresh-character" src="/static/images/mihoyo_refresh_loading.gif" mode="aspectFit"  :class="[uxNative?'ux8':'']"/>
+  </view>
+</template>
+<script setup lang="uts">
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+const props = withDefaults(defineProps<{ height: number; dragging?: boolean; active?: boolean }>(), { dragging: false, active: false })
+// #ifndef APP
+const showCharacter = computed(() => props.height > 0)
+// #endif
+// #ifdef APP
+const showCharacter = ref(props.height > 0)
+let motion: UniAnimation | null = null
+let motionRevision = 0
+watch(() => [props.height, props.dragging], () => {
+  const revision = ++motionRevision
+  const element = uni.getElementById(a11yPrefix+'-0')
+  const previousHeight = element?.getBoundingClientRect().height ?? 0
+  motion?.cancel(); motion = null
+  if (props.height > 0) showCharacter.value = true
+  if (props.dragging || element == null || Math.abs(previousHeight-props.height) < .5) {
+    if (props.height <= 0) showCharacter.value = false
+    return
+  }
+  const target = props.height
+  void nextTick().then(() => {
+    if (revision !== motionRevision) return
+    // CSS height transitions in 5.26 can keep this node at zero during dragging.
+    // Element animation runs only after release; dragging follows the finger.
+    motion = element.animate([{height:previousHeight+'px'},{height:target+'px'}], {duration:300,easing:'ease',fill:'backwards'})
+    if (motion != null) motion.onfinish = () => {
+      if (revision !== motionRevision) return
+      motion?.cancel(); motion = null
+      if (props.height <= 0) showCharacter.value = false
+    }
+    else if (props.height <= 0) showCharacter.value = false
+  })
+})
+onBeforeUnmount(() => { motionRevision++; motion?.cancel(); motion = null })
+// #endif
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.refresh-indicator { display: flex; align-items: center; justify-content: center; width: 100%; flex-shrink: 0; overflow: hidden; background: #f7f7f7; transition: height .3s ease; flex-direction: row; }
+.refresh-indicator.dragging { transition: none; }
+.refresh-character { width: 150rpx; height: 150rpx; flex-shrink: 0; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+
+.ux0{}
+
+
+
+
+
+
+.ux7{display:flex;flex-direction:row;align-items:center;justify-content:center;width:100%;flex-shrink:0;overflow:hidden;background-color:#f7f7f7;}
+.ux8{width:150rpx;height:150rpx;flex-shrink:0;}
+.ux9{}
+/* #endif */
+</style>

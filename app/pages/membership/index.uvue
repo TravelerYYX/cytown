@@ -1,0 +1,133 @@
+<template>
+ <view class="member-page products-page">
+ <MembershipHeader><ActionButton id="member-subscription" aria-label="我的订阅" class="subscription-link" @tap="openSubscription"><text class="member-ink subscription-link-label">我的订阅</text></ActionButton></MembershipHeader>
+ <view v-if="config?.notice && noticeVisible" class="member-notice"><image class="notice-symbol" :src="asset('notice')" mode="aspectFit" /><text class="notice-copy">{{config?.notice}}</text><ActionButton class="notice-close" @tap="noticeVisible=false"><image class="notice-close-icon" :src="asset('close')" /></ActionButton></view>
+ <text class="member-heading" :class="{'compact-heading':compact}">与你一起，探索次元町</text>
+ <view v-if="error" class="member-error"><text>{{error}}</text><ActionButton @tap="load"><text>重新加载</text></ActionButton></view>
+ <text v-if="loading" class="member-empty">会员套餐加载中…</text>
+ <text v-else-if="!plans.length" class="member-empty">暂无可展示的会员套餐</text>
+ <template v-if="current">
+ <scroll-view direction="horizontal" class="dynamic-tiers" :show-scrollbar="false"><view class="dynamic-tier-row"><ActionButton v-for="(plan,index) in plans" :key="plan.id" class="dynamic-tier" :class="{'dynamic-tier-active':activeIndex===index}" @tap="activeIndex=index"><text class="member-ink tier-label">{{plan.name}}</text></ActionButton></view></scroll-view>
+ <scroll-view class="benefits-card" direction="vertical" :show-scrollbar="false"><view class="benefits-content" :class="{'compact-benefits':compact}">
+ <view class="score-heading"><image class="score-art" :src="asset('score')" mode="scaleToFill" /><text class="score-title">{{current.name}}</text></view>
+ <view v-for="(benefit,i) in current.benefits" :key="i" class="benefit-row"><image class="benefit-icon" :src="asset('check')" mode="aspectFit" /><text class="benefit-label">{{benefit}}</text></view>
+ <view v-if="current.badgeUrl || current.description" class="member-plan-badge"><image v-if="current.badgeUrl" :src="memberMedia(current.badgeUrl)" class="plan-badge" mode="aspectFit" /><text v-if="current.description" class="plan-description">{{current.description}}</text></view>
+ <view v-if="current.experience" class="benefit-row"><text class="benefit-label">每次购买赠送 {{current.experience}} 经验</text></view><view v-if="current.coins" class="benefit-row"><text class="benefit-label">每次购买赠送 {{current.coins}} 次元币</text></view><view class="benefits-spacer" />
+ </view></scroll-view>
+ <view class="checkout" :class="{'compact-checkout':compact}" :style="{paddingBottom:bottomInset+'px'}">
+ <view class="period-row"><view class="period-option period-selected" :class="{'compact-period':compact}"><text class="member-ink period-label">一个月</text><view class="period-amount"><text class="member-ink period-value">¥{{(current.priceFen/100).toFixed(2)}}</text><text class="period-unit">/ 月</text></view><text class="period-note">单次购买，不自动续费</text></view></view>
+ <ActionButton id="member-subscribe" aria-label="购买一个月会员" class="subscribe-button" :class="{'compact-subscribe':compact}" :disabled="!canBuy||paying" @tap="subscribe"><text class="subscribe-label">{{canBuy?'订阅':'已停止购买'}}</text></ActionButton>
+ <view v-if="config?.contact" class="contact-line"><text class="checkout-note">会员反馈联系：{{config?.contact}}</text></view>
+ <view class="agreement-line"><ActionButton id="member-agreement" aria-label="同意次元町付费服务协议" class="agreement-toggle" role="checkbox" :aria-checked="agreed" @tap="agreed=!agreed"><view class="agreement-circle" :class="{'agreement-checked':agreed}"><text v-if="agreed" class="agreement-tick">✓</text></view><text class="checkout-note">我已阅读并同意</text></ActionButton><ActionButton class="agreement-link" @tap="showAgreement"><text class="member-ink checkout-note">次元町付费服务协议</text></ActionButton></view><view class="checkout-spacer" />
+ </view></template>
+ <view v-if="sheet && current" class="payment-mask" @tap="closeSheet"><view class="payment-sheet" :style="{paddingBottom:(bottomInset+24)+'px'}" @tap.stop><view class="payment-handle"/><text class="payment-title">选择支付方式</text><text class="payment-plan">{{current.name}} · 一个月会员</text><text class="payment-amount">¥{{(current.priceFen/100).toFixed(2)}}</text><view class="alipay-choice"><view class="alipay-logo"><text class="alipay-mark">支</text></view><text class="alipay-name">支付宝</text><text class="alipay-selected">✓</text></view><text class="payment-note">支付结果以服务端确认为准</text><ActionButton id="member-pay" aria-label="立即支付宝支付" class="subscribe-button" :disabled="paying" @tap="pay"><text class="subscribe-label">{{paying?'正在发起支付…':'立即支付'}}</text></ActionButton><ActionButton id="member-payment-cancel" aria-label="取消支付" class="payment-cancel-button" :disabled="paying" @tap="closeSheet"><text class="payment-cancel">取消</text></ActionButton></view></view>
+ </view>
+</template>
+<script setup lang="uts">
+import ActionButton from '@/components/ActionButton.uvue'
+import MembershipHeader from '@/components/MembershipHeader.uvue'
+import {useWindowInsets} from '@/composables/useWindowInsets'
+import {uiAsset} from '@/utils/ui-assets'
+import {setStatusBar} from '@/utils/platform'
+import {isLoggedIn} from '@/utils/auth'
+import {fetchMemberConfig,createMemberOrder,launchMemberPayment,memberChannel,memberMedia} from '@/utils/membership-api'
+import type {MemberConfig} from '@/utils/membership-api'
+const {bottomInset}=useWindowInsets()
+const config=ref<MemberConfig|null>(null),activeIndex=ref(0),agreed=ref(false),noticeVisible=ref(true),compact=ref(false),sheet=ref(false),paying=ref(false),loading=ref(true),error=ref('')
+const plans=computed(()=>config.value?.plans||[])
+const current=computed(()=>plans.value[activeIndex.value])
+const canBuy=computed(()=>!!config.value?.selling&&!!config.value?.agreement&&!!current.value?.selling&&!current.value?.archived)
+const asset=(name:string):string=>uiAsset('/static/images/membership/'+name+'.svg')
+let requestKey=''
+async function load(){loading.value=true;error.value='';try{const c=await fetchMemberConfig();config.value=c;if(activeIndex.value>=c.plans.length)activeIndex.value=0}catch(e){error.value=(e as Error).message}finally{loading.value=false}}
+function measure(){const info=uni.getWindowInfo();compact.value=info.windowHeight/info.windowWidth<1.8}
+onReady(measure);onResize(measure);onShow(()=>{setStatusBar('dark');load()})
+function openSubscription(){uni.navigateTo({url:'/pages/membership/subscription'})}
+function showAgreement(){uni.showModal({title:'次元町付费服务协议',content:config.value?.agreement||'服务协议尚未配置，暂不可购买',showCancel:false})}
+function subscribe(){if(!isLoggedIn()){uni.navigateTo({url:'/pages/login/index'});return}if(!canBuy.value)return;if(!agreed.value){uni.showToast({title:'请先阅读并勾选付费服务协议',icon:'none'});return}requestKey='member-'+Date.now()+'-'+Math.random().toString(36).slice(2);sheet.value=true}
+function closeSheet(){if(!paying.value)sheet.value=false}
+async function pay(){if(paying.value||!current.value||!config.value)return;paying.value=true;try{const data=await createMemberOrder(current.value.id,config.value.version,memberChannel(),requestKey);await launchMemberPayment(data);sheet.value=false}catch(e){uni.showToast({title:(e as Error).message,icon:'none'})}finally{paying.value=false}}
+</script>
+<style scoped>
+.products-page { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; flex-direction: column; overflow: hidden; background-color: #f6f6f6; }
+.member-ink { color: #191919; }
+.subscription-link, .notice-close, .tier-button, .period-option, .subscribe-button, .agreement-toggle, .agreement-link { display: flex; flex-direction: row; align-items: center; justify-content: center; padding: 0; margin: 0; border-width: 0; background-color: transparent; }
+.subscription-link { min-width: 167rpx; height: 92rpx; padding: 0 22rpx; border: 1rpx solid #fff; border-radius: 46rpx; background-color: #f8f8f8; }
+.subscription-link-label { font-size: 30rpx; line-height: 42rpx; }
+.member-notice { height: 84rpx; margin: 25rpx 42rpx 0; flex-shrink: 0; flex-direction: row; align-items: center; border-radius: 32rpx; background-color: #ededed; padding-left: 29rpx; padding-right: 14rpx; }
+.notice-symbol { width: 35rpx; height: 35rpx; flex-shrink: 0; margin-right: 22rpx; }
+.notice-copy { flex: 1; min-width: 0; color: #242424; font-size: 28rpx; line-height: 40rpx; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.notice-close { width: 55rpx; height: 62rpx; flex-shrink: 0; }
+.notice-close-icon { width: 32rpx; height: 32rpx; }
+.member-heading { flex-shrink: 0; margin: 36rpx 0 76rpx; font-size: 42rpx; line-height: 54rpx; font-family: serif; color: #191919; text-align: center; }
+.tier-control { position: relative; display: flex; flex-direction: row; height: 75rpx; margin: 0 42rpx 33rpx; padding: 4rpx 0; border-radius: 38rpx; background-color: #eaeaea; flex-shrink: 0; }
+.tier-highlight { position: absolute; top: 4rpx; left: 4rpx; width: 129rpx; height: 67rpx; border-radius: 34rpx; background-color: #fff; pointer-events: none; }
+.tier-button { width: 20%; height: 67rpx; flex-shrink: 0; border-radius: 34rpx; }
+.tier-label { font-size: 26rpx; line-height: 38rpx; }
+.tier-motion { transition-property: transform; transition-duration: 380ms; transition-timing-function: cubic-bezier(.14,.75,.22,1); }
+.benefits-card { flex: 1; height: 0; margin: 0 42rpx; border: 1rpx solid #efefef; border-radius: 36rpx; background-color: #fff; }
+.benefits-content { padding-top: 69rpx; opacity: 1; transition-property: opacity; transition-duration: 380ms; transition-timing-function: ease-out; }
+.benefits-entering { opacity: .5; transition-duration: 0ms; }
+.benefits-spacer { height: 65rpx; }
+.score-heading { position: relative; height: 84rpx; margin-left: 50rpx; margin-bottom: 35rpx; flex-direction: row; align-items: center; }
+.score-art { position: absolute; top: 0; left: 0; right: 0; width: 100%; height: 84rpx; }
+.score-title { color: #191919; font-family: serif; font-size: 61rpx; line-height: 76rpx; }
+.demo-tag { margin-left: 13rpx; padding: 4rpx 8rpx; border-radius: 8rpx; background-color: #f0f0f0; color: #686868; font-size: 17rpx; line-height: 23rpx; }
+.benefit-row { display: flex; flex-direction: row; align-items: center; min-height: 58rpx; padding: 0 38rpx 0 50rpx; }
+.benefit-icon { width: 30rpx; height: 30rpx; margin-right: 21rpx; flex-shrink: 0; }
+.benefit-label { flex: 1; color: #676767; font-size: 28rpx; line-height: 43rpx; }
+.member-plan-badge { display: flex; flex-direction: column; align-items: center; margin: 24rpx 45rpx 28rpx; }
+.plan-badge { width: 180rpx; height: 64rpx; }
+.plan-description { margin-top: 12rpx; color: #777; font-size: 24rpx; line-height: 36rpx; text-align: center; }
+.checkout { position: relative; flex-shrink: 0; margin-top: -20rpx; padding: 41rpx 42rpx 0; border-top-left-radius: 68rpx; border-top-right-radius: 68rpx; background-color: #fff; }
+.period-row { display: flex; flex-direction: row; }
+.period-option { flex: 1; min-width: 0; height: 188rpx; padding: 18rpx 33rpx; flex-direction: column; align-items: flex-start; justify-content: center; border: 2rpx solid #dbdbdb; border-radius: 33rpx; transition-property: border-color; transition-duration: 180ms; transition-timing-function: ease-out; }
+.period-year { margin-left: 17rpx; }
+.period-selected { border-color: #191919; }
+.period-caption, .period-amount { display: flex; flex-direction: row; align-items: center; }
+.period-label { font-size: 31rpx; line-height: 44rpx; }
+.discount-label { margin-left: 11rpx; padding: 4rpx 8rpx; border-radius: 9rpx; color: #2789e5; background-color: #e7f1fd; font-size: 20rpx; line-height: 31rpx; }
+.period-amount { align-items: flex-end; }
+.period-value { margin-top: 9rpx; font-size: 43rpx; line-height: 55rpx; }
+.period-unit { margin-left: 10rpx; margin-bottom: 6rpx; color: #858585; font-size: 24rpx; line-height: 33rpx; }
+.period-note { margin-top: 5rpx; color: #858585; font-size: 22rpx; line-height: 32rpx; }
+.original-amount { margin-left: 10rpx; margin-bottom: 6rpx; color: #656565; font-size: 24rpx; line-height: 33rpx; text-decoration-line: line-through; }
+.subscribe-button { height: 92rpx; margin-top: 33rpx; border-radius: 46rpx; background-color: #191919; }
+.subscribe-label { color: #fff; font-size: 32rpx; line-height: 46rpx; }
+.demo-note { margin-top: 10rpx; text-align: center; color: #686868; font-size: 20rpx; line-height: 28rpx; }
+.contact-line, .agreement-line { display: flex; flex-direction: row; align-items: center; justify-content: center; }
+.contact-line { margin-top: 25rpx; min-height: 36rpx; }
+.checkout-note, .contact-address { font-size: 22rpx; line-height: 34rpx; }
+.checkout-note { color: #858585; }
+.member-ink.checkout-note { color: #191919; }
+.contact-address { margin-left: 8rpx; }
+.agreement-line { min-height: 44rpx; margin-top: 3rpx; }
+.agreement-toggle, .agreement-link { min-height: 44rpx; }
+.agreement-link { margin-left: 5rpx; }
+.agreement-circle { width: 25rpx; height: 25rpx; margin-right: 13rpx; border-radius: 13rpx; border: 2rpx solid #929292; align-items: center; justify-content: center; }
+.agreement-checked { background-color: #191919; border-color: #191919; }
+.agreement-tick { color: #fff; font-size: 19rpx; line-height: 23rpx; }
+.checkout-spacer { height: 21rpx; }
+.compact-heading { margin-top: 20rpx; margin-bottom: 27rpx; }
+.compact-tiers { margin-bottom: 18rpx; }
+.compact-benefits { padding-top: 32rpx; }
+.compact-score { margin-bottom: 16rpx; }
+.compact-checkout { padding-top: 22rpx; }
+.compact-period { height: 170rpx; padding-top: 12rpx; padding-bottom: 12rpx; }
+.compact-subscribe { margin-top: 19rpx; height: 76rpx; }
+.compact-contact { margin-top: 13rpx; }
+/* #ifndef APP */
+.dynamic-tier::after,.payment-cancel-button::after{content:none}.payment-cancel-button{border-width:0;background-color:transparent}
+.subscription-link { background-image: linear-gradient(145deg, #ededed, #fbfbfb); }
+.benefits-card { overflow: hidden; }
+.checkout { box-shadow: 0 -14rpx 42rpx rgba(0,0,0,.045); }
+.member-notice, .score-heading, .agreement-circle { display: flex; }
+.subscription-link::after, .notice-close::after, .tier-button::after, .period-option::after, .subscribe-button::after, .agreement-toggle::after, .agreement-link::after { content: none; }
+.demo-note { display: block; }
+@media (prefers-reduced-motion: reduce) {
+  .tier-motion, .period-option { transition-duration: 0ms; }
+}
+/* #endif */
+
+.dynamic-tiers{height:83rpx;margin:0 42rpx 30rpx;width:666rpx;flex-shrink:0;background-color:#eaeaea;border-radius:40rpx}.dynamic-tier-row{display:flex;flex-direction:row;padding:5rpx}.dynamic-tier{min-width:126rpx;height:70rpx;border-radius:36rpx;align-items:center;justify-content:center;padding:0 18rpx;flex-shrink:0;background-color:transparent}.dynamic-tier-active{background-color:#fff}.member-empty,.member-error{padding:30rpx;text-align:center;color:#777;font-size:28rpx}.payment-mask{position:fixed;top:0;right:0;bottom:0;left:0;background-color:rgba(0,0,0,.4);z-index:100;display:flex;justify-content:flex-end;flex-direction:column}.payment-sheet{padding:18rpx 34rpx 24rpx;background-color:#f6f6f6;border-top-left-radius:38rpx;border-top-right-radius:38rpx;display:flex;flex-direction:column}.payment-handle{width:68rpx;height:8rpx;border-radius:4rpx;background-color:#ccc;align-self:center;margin-bottom:50rpx}.payment-title,.payment-plan,.payment-amount,.payment-note,.payment-cancel{text-align:center;color:#191919}.payment-title{font-size:32rpx}.payment-plan{font-size:24rpx;margin-top:24rpx;color:#777}.payment-amount{font-size:62rpx;margin:24rpx 0 60rpx}.alipay-choice{display:flex;flex-direction:row;align-items:center;padding:30rpx;background-color:#fff;border-radius:28rpx}.alipay-logo{width:72rpx;height:72rpx;background-color:#1677ff;border-radius:16rpx;align-items:center;justify-content:center}.alipay-mark{color:#fff;font-size:54rpx}.alipay-name{font-size:32rpx;flex:1;margin-left:30rpx}.alipay-selected{color:#1677ff;font-size:38rpx}.payment-note{color:#999;font-size:22rpx;margin-top:25rpx}.payment-cancel{padding:24rpx;font-size:26rpx}
+</style>

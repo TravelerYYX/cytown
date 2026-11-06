@@ -1,0 +1,159 @@
+import { computed, ref } from 'vue'
+import { API_BASE_URL } from '@/config/env'
+// #ifdef APP-ANDROID
+import { getInstalledUpdateVersion, getUpdateSnapshot, startUpdateDownload, installDownloadedUpdate, setUpdateForeground, takeUpdateNotification } from '@/uni_modules/ct-platform'
+// #endif
+
+export type UpdateRelease = { id:number;versionName:string;versionCode:number;notes:string;forceUpdate:boolean;packageUrl:string;packageName:string;sizeBytes:number;sha256:string }
+export type UpdateDownload = { versionCode?:number;phase?:string;downloaded?:number;sizeBytes?:number;percent?:string;progress?:number;message?:string;attempted?:boolean;notificationsEnabled?:boolean }
+export const updateRelease = ref<UpdateRelease|null>(null)
+export const updateDownload = ref<UpdateDownload>({})
+export const updateChecking = ref(false)
+export const updateActionBusy = ref(false)
+export const hasAppUpdate = computed(() => updateRelease.value != null)
+export const updateIsDownloading = computed(() => ['queued','downloading','verifying'].includes(updateDownload.value.phase || ''))
+export const updateIsReady = computed(() => updateDownload.value.phase === 'ready')
+export const updateProgress = computed(() => updateDownload.value.progress || 0)
+export const updatePercent = computed(() => updateDownload.value.percent || '0.0')
+export function updateSize(bytes:number):string { return (bytes/1024/1024).toFixed(2)+' MB' }
+let flight:Promise<void>|null=null
+let launched=false
+let foreground=false
+let timer:ReturnType<typeof setInterval>|null=null
+let opening=false
+let dialogOwner:UniPage|null=null
+let lastDialogAttempt=0
+let promptPending=false
+const CACHE='ct.android.update.release.v1'
+function toast(message:string):void { uni.showToast({title:message,icon:'none'}) }
+
+export function openUpdateDialog():void {
+  // #ifdef APP-ANDROID
+  if(!updateRelease.value || !foreground || opening)return
+  const pages=getCurrentPages()
+  if(pages.length===0)return
+  const parent=pages[pages.length-1]
+  if(parent.getDialogPages().some(page=>page.route==='pages/app-update/index')){dialogOwner=parent;return}
+  if(dialogOwner!=null){
+    const old=dialogOwner!.getDialogPages().find(page=>page.route==='pages/app-update/index')
+    if(old!=null)uni.closeDialogPage({dialogPage:old})
+  }
+  if(Date.now()-lastDialogAttempt<700)return
+  lastDialogAttempt=Date.now();opening=true;dialogOwner=parent
+  uni.openDialogPage({url:'/pages/app-update/index',parentPage:parent,disableEscBack:true,success:()=>{promptPending=false},complete:()=>{opening=false}})
+  // #endif
+}
+export function closeUpdateDialog():void {
+  // #ifdef APP-ANDROID
+  if(updateRelease.value?.forceUpdate)return
+  promptPending=false
+  lastDialogAttempt=0
+  if(dialogOwner!=null){const page=dialogOwner!.getDialogPages().find(p=>p.route==='pages/app-update/index');if(page!=null)uni.closeDialogPage({dialogPage:page})}
+  dialogOwner=null
+  // #endif
+}
+function closeAllUpdateDialogs():void {
+  // #ifdef APP-ANDROID
+  for(const page of getCurrentPages())for(const dialog of page.getDialogPages())if(dialog.route==='pages/app-update/index')uni.closeDialogPage({dialogPage:dialog})
+  dialogOwner=null
+  // #endif
+}
+function fetchUpdate(versionCode:number):Promise<{hasUpdate:boolean;release:UpdateRelease|null}> {
+  // Independent public request: cold-start failures must not show auth or network toasts.
+  return new Promise((resolve,reject)=>uni.request({
+    url:API_BASE_URL+'/app/update/check?versionCode='+versionCode,timeout:15000,
+    success(response){
+      try {
+        if(response.statusCode!==200)throw new Error('更新服务暂不可用')
+        const body=(typeof response.data==='string'?JSON.parse(response.data):response.data) as {code:string;msg:string;data:{hasUpdate:boolean;release:UpdateRelease|null}}
+        if(body.code!=='0000')throw new Error(body.msg||'检查更新失败')
+        resolve(body.data)
+      }catch(e){reject(e)}
+    },fail(){reject(new Error('检查更新失败，请检查网络后重试'))}
+  }))
+}
+export async function checkAppUpdate(manual=false):Promise<void> {
+  // #ifdef APP-ANDROID
+  if(flight!=null){
+    try{await flight;if(manual){if(updateRelease.value)openUpdateDialog();else toast('当前已是最新版本')}}
+    catch(e){if(manual)toast(e instanceof Error?e.message:'检查更新失败，请重试')}
+    return
+  }
+  updateChecking.value=true
+  flight=(async()=>{
+    const result=await fetchUpdate(getInstalledUpdateVersion())
+    if(result.hasUpdate && result.release!=null){
+      const r=result.release!
+      if(r.versionCode<=getInstalledUpdateVersion() || !r.packageUrl || !r.sha256)throw new Error('更新信息无效')
+      updateRelease.value=r;promptPending=true;uni.setStorageSync(CACHE,JSON.stringify(r));syncDownload();openUpdateDialog()
+    }else{
+      updateRelease.value=null;uni.removeStorageSync(CACHE);closeAllUpdateDialogs()
+      if(manual)toast('当前已是最新版本')
+    }
+  })()
+  try{await flight}catch(e){if(manual)toast(e instanceof Error?e.message:'检查更新失败，请重试')}
+  finally{flight=null;updateChecking.value=false}
+  // #endif
+  // #ifndef APP-ANDROID
+  if(manual)toast('应用内更新仅支持 Android 客户端')
+  // #endif
+}
+function syncDownload():void {
+  // #ifdef APP-ANDROID
+  const state=JSON.parse(getUpdateSnapshot()) as UpdateDownload
+  const release=updateRelease.value
+  updateDownload.value=release!=null && state.versionCode===release.versionCode?state:{}
+  if(foreground && (promptPending || release?.forceUpdate))openUpdateDialog()
+  if(foreground && state.phase==='ready' && !state.attempted && release!=null && state.versionCode===release.versionCode){
+    const message=installDownloadedUpdate()
+    updateDownload.value=JSON.parse(getUpdateSnapshot()) as UpdateDownload
+    if(message)toast(message)
+  }
+  // #endif
+}
+export function launchAppUpdate():void {
+  // #ifdef APP-ANDROID
+  if(launched)return
+  launched=true
+  try{
+    const cached=uni.getStorageSync(CACHE)
+    if(typeof cached==='string' && cached){
+      const r=JSON.parse(cached) as UpdateRelease
+      const task=JSON.parse(getUpdateSnapshot()) as UpdateDownload
+      if(r.versionCode>getInstalledUpdateVersion() && (r.forceUpdate || task.versionCode===r.versionCode))updateRelease.value=r
+    }
+  }catch(_){}
+  void checkAppUpdate()
+  // #endif
+}
+export function showAppUpdate():void {
+  // #ifdef APP-ANDROID
+  foreground=true;setUpdateForeground(true)
+  const clicked=takeUpdateNotification()
+  syncDownload()
+  if(clicked || promptPending || updateRelease.value?.forceUpdate)openUpdateDialog()
+  if(timer==null)timer=setInterval(syncDownload,500)
+  // #endif
+}
+export function hideAppUpdate():void {
+  // #ifdef APP-ANDROID
+  foreground=false;setUpdateForeground(false)
+  if(timer!=null){clearInterval(timer!);timer=null}
+  // #endif
+}
+export async function beginAppUpdate():Promise<void> {
+  // #ifdef APP-ANDROID
+  if(updateActionBusy.value || updateIsDownloading.value)return
+  const r=updateRelease.value;if(r==null)return
+  updateActionBusy.value=true
+  try{
+    let message=''
+    if(updateIsReady.value)message=installDownloadedUpdate()
+    else{
+      const url=/^https?:\/\//.test(r.packageUrl)?r.packageUrl:API_BASE_URL+r.packageUrl
+      message=startUpdateDownload(JSON.stringify({versionCode:r.versionCode,versionName:r.versionName,packageName:r.packageName,sha256:r.sha256,sizeBytes:r.sizeBytes,url}))
+    }
+    syncDownload();if(message)toast(message)
+  }finally{updateActionBusy.value=false}
+  // #endif
+}

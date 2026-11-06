@@ -1,0 +1,33 @@
+import { ref } from 'vue'
+// #ifdef WEB
+import { enabled,read,subscribe,captureScroll,restoreScroll } from './post-preview-browser.js'
+// #endif
+export const postPreviewMode=ref(false)
+// #ifdef WEB
+postPreviewMode.value=enabled
+// #endif
+export function previewRead<T>(resource:string,postId:string,params:Record<string,unknown>={}):Promise<T>{
+ // #ifdef WEB
+ return read(resource,postId,params) as Promise<T>
+ // #endif
+ // #ifndef WEB
+ return Promise.reject(new Error('仅网页支持后台预览'))
+ // #endif
+}
+export function onPreviewRefresh(listener:()=>void):()=>void {
+ // #ifdef WEB
+ if(postPreviewMode.value)return subscribe(listener)
+ // #endif
+ return ()=>{}
+}
+export function capturePreviewScroll():number {
+ // #ifdef WEB
+ if(postPreviewMode.value)return captureScroll()
+ // #endif
+ return 0
+}
+export function restorePreviewScroll(id:number):void {
+ // #ifdef WEB
+ if(id)restoreScroll(id)
+ // #endif
+}

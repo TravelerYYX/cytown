@@ -1,0 +1,54 @@
+// One album entry point for all callers. Camera-only requests retain the camera flow.
+// #ifdef APP-ANDROID
+import { openMediaAlbum } from '@/uni_modules/ct-platform'
+// #endif
+export type AlbumFile = {path:string;size:number;width:number;height:number;duration:number}
+type AlbumImageFile = {path:string;size:number}
+type AlbumCrop = {width:number;height:number;quality?:number}
+export type AlbumImageResult = {tempFilePaths:string[];tempFiles:AlbumImageFile[];original:boolean}
+export type AlbumVideoResult = {tempFilePath:string;size:number;width:number;height:number;duration:number;original:boolean}
+type AlbumError = {errMsg:string}
+type ImageOptions = {count?:number;sizeType?:string[];sourceType?:string[];crop?:AlbumCrop;confirmText?:string;success?:(result:AlbumImageResult)=>void;fail?:(error:AlbumError)=>void}
+type VideoOptions = {sourceType?:string[];compressed?:boolean;confirmText?:string;success?:(result:AlbumVideoResult)=>void;fail?:(error:AlbumError)=>void}
+type AlbumResponse = {files?:AlbumFile[];original?:boolean;action?:string;cancelled?:boolean;error?:string}
+export function chooseAlbumImages(options:ImageOptions,original=true):void {
+  const cameraOnly=options.sourceType?.length===1&&options.sourceType[0]==='camera'
+  // #ifdef APP-ANDROID
+  if(!cameraOnly){
+    void openMediaAlbum(JSON.stringify({kind:'image',count:options.crop?1:options.count??9,original,camera:options.sourceType?.includes('camera')??false,crop:options.crop?.width??0,quality:options.crop?.quality??85,confirmText:options.confirmText??'发送'})).then(value=>{
+      const result=JSON.parse(value) as AlbumResponse
+      if(result.action==='camera'){chooseAlbumImages({...options,sourceType:['camera']},original);return}
+      if(result.cancelled){options.fail?.({errMsg:'chooseImage:fail cancel'});return}
+      if(result.error){pickerFailure(result.error,options.fail);return}
+      const files=result.files??[]
+      if(!files.length){options.fail?.({errMsg:'chooseImage:fail empty result'});return}
+      options.success?.({tempFilePaths:files.map(file=>file.path),tempFiles:files.map(file=>({path:file.path,size:file.size})),original:result.original??original})
+    },error=>pickerFailure(error instanceof Error?error.message:'相册打开失败',options.fail))
+    return
+  }
+  // #endif
+  uni.chooseImage({count:options.count,sizeType:options.sizeType,sourceType:options.sourceType,crop:options.crop,success:result=>{
+    options.success?.({tempFilePaths:result.tempFilePaths,tempFiles:result.tempFiles as AlbumImageFile[],original})
+  },fail:error=>options.fail?.({errMsg:error.errMsg})})
+}
+export function chooseAlbumVideo(options:VideoOptions,original=true):void {
+  const cameraOnly=options.sourceType?.length===1&&options.sourceType[0]==='camera'
+  // #ifdef APP-ANDROID
+  if(!cameraOnly){
+    void openMediaAlbum(JSON.stringify({kind:'video',count:1,original,camera:options.sourceType?.includes('camera')??false,confirmText:options.confirmText??'发送'})).then(value=>{
+      const result=JSON.parse(value) as AlbumResponse
+      if(result.action==='camera'){chooseAlbumVideo({...options,sourceType:['camera']},original);return}
+      if(result.cancelled){options.fail?.({errMsg:'chooseVideo:fail cancel'});return}
+      if(result.error){pickerFailure(result.error,options.fail);return}
+      const file=result.files?.[0]
+      if(!file){options.fail?.({errMsg:'chooseVideo:fail empty result'});return}
+      options.success?.({tempFilePath:file.path,size:file.size,width:file.width,height:file.height,duration:file.duration,original:result.original??original})
+    },error=>pickerFailure(error instanceof Error?error.message:'相册打开失败',options.fail))
+    return
+  }
+  // #endif
+  uni.chooseVideo({sourceType:options.sourceType,compressed:options.compressed,success:result=>options.success?.({tempFilePath:result.tempFilePath,size:result.size,width:result.width,height:result.height,duration:result.duration,original}),fail:error=>options.fail?.({errMsg:error.errMsg})})
+}
+function pickerFailure(message:string,fail:((error:AlbumError)=>void)|undefined):void {
+  uni.showToast({title:message,icon:'none'});fail?.({errMsg:message})
+}

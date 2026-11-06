@@ -1,0 +1,11 @@
+import type { HomeConfig } from '@/types/home'
+import { GET } from './request'
+import { applyDefaultFeedLayout } from './app-settings'
+export const DEFAULT_NEWS_EMPTY_TEXT = '暂无资讯，敬请期待'
+let pending: Promise<HomeConfig> | undefined
+export function fetchHomeConfig(): Promise<HomeConfig> {
+  return pending ||= GET<HomeConfig>('/app/home/config').then(config => {
+    applyDefaultFeedLayout(config.defaultFeedLayout)
+    return config
+  }).finally(() => { pending = undefined })
+}

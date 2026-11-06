@@ -1,0 +1,52 @@
+<template>
+  <view :id="'user-avatar-'+userId+'-'+instanceId" class="user-avatar" :style="{ width: outerSize + 'rpx', height: outerSize + 'rpx' }" @tap="openProfile">
+    <image class="user-avatar-photo" :src="uiAsset(source)" mode="aspectFill" :style="{ width: size + 'rpx', height: size + 'rpx', left: inset + 'rpx', top: inset + 'rpx', borderRadius: frameUrl || radius == null ? size / 2 + 'rpx' : radius + 'rpx' }" @load="$emit('load')" @error="failed = true; $emit('error')" />
+    <image v-if="frameUrl" class="user-avatar-frame" :src="frameUrl" mode="aspectFit" :style="{ width: outerSize + 'rpx', height: outerSize + 'rpx' }" />
+    <slot />
+  </view>
+</template>
+<script setup lang="uts">
+import { computed, ref, watch, onMounted, onUnmounted, getCurrentInstance } from 'vue'
+import { DEFAULT_AVATAR, avatarSrc } from '@/utils/auth'
+import { avatarFrameUrl, useAvatarFrame,loadAvatarFrames } from '@/utils/avatar-frames'
+import {getUserInfo,authRevision} from '@/utils/auth'
+import { uiAsset } from '@/utils/ui-assets'
+import { probeImageInfo } from '@/utils/image-info'
+import { openUserProfile } from '@/utils/navigation'
+const props = withDefaults(defineProps<{ src?: string; userId?: string; frameId?: string; frameExpiresAt?:number; size?: number; radius?: number; preview?: boolean; navigable?: boolean }>(), { src: '', userId: '', frameId: '', size: 56, preview: false, navigable: false })
+function openProfile(event: UniPointerEvent) { if (props.navigable && !props.preview) { event.stopPropagation(); openUserProfile(props.userId) } }
+const emit = defineEmits<{ (e: 'load'): void; (e: 'error'): void }>()
+const instanceId = getCurrentInstance()!.uid
+const failed = ref(false)
+watch(() => props.src, () => { failed.value = false })
+const source = computed(() => failed.value || !props.src ? DEFAULT_AVATAR : props.src.startsWith('/static/') ? props.src : avatarSrc(props.src))
+// A native memory-cache hit can precede a recycled image's load listener.
+// Confirm decoding separately so the parent never keeps its author mask forever.
+// #ifdef APP
+let avatarRevision = 0
+function verifyNativeAvatar() {
+  const current = ++avatarRevision, expected = source.value
+  probeImageInfo(uiAsset(expected), () => { if (current === avatarRevision && source.value === expected) emit('load') }, () => { if (current === avatarRevision && source.value === expected) { failed.value = true; emit('error') } })
+}
+onMounted(verifyNativeAvatar)
+watch(source, verifyNativeAvatar, { flush: 'post' })
+onUnmounted(() => { avatarRevision++ })
+// #endif
+const savedFrame = useAvatarFrame(() => props.userId, () => props.frameId)
+const expiry=computed(()=>{authRevision.value;const user=getUserInfo();return !props.preview&&user?.userId===props.userId?user?.avatarFrameExpiresAt:props.frameExpiresAt})
+const tick=ref(Date.now());let expiryTimer:ReturnType<typeof setTimeout>|null=null
+function scheduleExpiry(){if(expiryTimer!=null)clearTimeout(expiryTimer);tick.value=Date.now();const end=expiry.value;if(end!=null&&end>tick.value)expiryTimer=setTimeout(scheduleExpiry,Math.min(2147483647,end-tick.value+20))}
+watch(expiry,scheduleExpiry,{immediate:true})
+onMounted(()=>{void loadAvatarFrames().catch(()=>{})})
+onUnmounted(()=>{if(expiryTimer!=null)clearTimeout(expiryTimer)})
+// Frames fit a circular photo; a requested square radius applies only without a frame.
+const frameUrl = computed(() => {const end=expiry.value;return !props.preview&&end!=null&&end<=tick.value?'':avatarFrameUrl(props.preview ? props.frameId : savedFrame.value)})
+// Reserve the decoration's footprint even when hidden so switching does not move the nickname.
+const outerSize = computed(() => Math.round(props.size * 1.36))
+const inset = computed(() => (outerSize.value - props.size) / 2)
+</script>
+<style scoped>
+.user-avatar { position: relative; flex-shrink: 0; overflow: visible; }
+.user-avatar-photo { position: absolute; border-radius: 50%; background-color: #eef2f5; }
+.user-avatar-frame { position: absolute; left: 0; top: 0; pointer-events: none; }
+</style>

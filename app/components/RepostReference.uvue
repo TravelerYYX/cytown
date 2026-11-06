@@ -1,0 +1,16 @@
+<template><view class="repost-reference" @tap.stop="open"><image v-if="source.coverUrl" class="repost-cover" :src="resourceUrl(source.coverUrl)" mode="aspectFill"/><view class="repost-copy"><text v-if="source.authorNickname" class="repost-author">@{{source.authorNickname}}</text><text class="repost-label" :max-lines="2">{{source.label}}</text></view><image class="repost-arrow" :src="uiAsset('/static/icons/social/chevron.svg')" mode="aspectFit"/></view></template>
+<script setup lang="uts">
+import { mediaUrl as resourceUrl } from '@/utils/media-cache'
+import { uiAsset } from '@/utils/ui-assets'
+import type { RepostSummary } from '@/types/home'
+const props=defineProps<{source:RepostSummary;readonly?:boolean}>()
+function open(){if(props.readonly)return;if(!props.source.available){uni.showToast({title:'原帖不存在或已下架',icon:'none'});return}uni.navigateTo({url:'/pages/post/index?id='+encodeURIComponent(props.source.id)})}
+</script>
+<style scoped>
+.repost-reference{display:flex;flex-direction:row;align-items:center;background-color:#f6f7f9;border-radius:14rpx;padding:18rpx;margin:16rpx 0;width:100%;}
+.repost-cover{width:90rpx;height:90rpx;border-radius:10rpx;margin-right:16rpx;flex-shrink:0;}
+.repost-copy{flex:1;min-width:0;display:flex;flex-direction:column;}
+.repost-author{font-size:22rpx;line-height:32rpx;color:#293244;font-weight:600;}
+.repost-label{font-size:22rpx;line-height:34rpx;color:#969ba7;overflow:hidden;}
+.repost-arrow{width:13rpx;height:22rpx;margin-left:12rpx;flex-shrink:0;}
+</style>

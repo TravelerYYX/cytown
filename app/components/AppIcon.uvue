@@ -1,0 +1,40 @@
+<template>
+  <!-- #ifdef APP -->
+  <image :id="a11yPrefix" class="app-icon" :src="source" :style="{width:size+'rpx',height:size+'rpx'}" mode="aspectFit" :class="[uxNative?'ux0':'']" @load="imageLoaded" />
+  <!-- #endif -->
+  <!-- #ifndef APP -->
+  <image class="app-icon" :src="source" :style="{width:size+'rpx',height:size+'rpx'}" mode="aspectFit" aria-hidden="true" />
+  <!-- #endif -->
+</template>
+<script setup lang="uts">
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs, refresh:a11yRefresh } = useNativeSemantics()
+function imageLoaded(){a11yAttrs(a11yPrefix,{'aria-hidden':true});a11yRefresh(a11yPrefix)}
+import { uiAsset } from '@/utils/ui-assets'
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed } from 'vue'
+import { ICON_DIRECTORY } from '@/config/assets'
+import type { DetailIconName, IconName } from '@/types/home'
+const props = withDefaults(defineProps<{ name: IconName | DetailIconName; size?: number; tone?: 'dark' | 'muted' | 'white' | 'cyan' }>(), { size: 40, tone: 'dark' })
+const source = computed(() => uiAsset(ICON_DIRECTORY + props.name + '-' + props.tone + '.svg'))
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.app-icon { display: block; flex-shrink: 0; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+
+.ux0{display:flex;flex-direction:column;flex-shrink:0;}
+/* #endif */
+</style>

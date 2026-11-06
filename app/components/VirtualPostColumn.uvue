@@ -1,0 +1,142 @@
+<template>
+  <view :id="hostId" class="virtual-post-column" :data-loaded-count="posts.length"   :class="[uxNative?'ux0':'',uxNative?'ux1':'']">
+    <view class="virtual-spacer" :style="{ height: topSpace + 'px' }"    :class="[uxNative?'ux0':'',uxNative?'ux2':'']"/>
+    <view v-for="(post, __uxIndex0) in rendered" :id="rowId(post.id)" :key="post.id" class="virtual-post-row" :data-virtual-id="post.id"   :class="[uxNative?'ux0':'',uxNative?'ux3':'']">
+      <WaterfallPostCard v-if="variant === 'waterfall'" :post="post" :visible="active" :load-priority="priority(post)"  />
+      <FollowPostCard v-else-if="variant === 'follow'" :post="post" :visible="active" :load-priority="priority(post)" />
+      <PostCard v-else :manage-post="managePosts" @post-menu="emit('postMenu', $event)" :post="post" :variant="variant" :visible="active" :load-priority="priority(post)"  />
+    </view>
+    <view class="virtual-spacer" :style="{ height: bottomSpace + 'px' }"    :class="[uxNative?'ux0':'',uxNative?'ux2':'']"/>
+  </view>
+</template>
+<script setup lang="uts">
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, getCurrentInstance, inject, nextTick, onMounted, onBeforeUnmount, provide, ref, watch } from 'vue'
+import { paneScrollKey, postLayoutKey, firstAfter } from '@/utils/scroll-context'
+import { rectById } from '@/utils/element-geometry'
+import PostCard from './PostCard.uvue'
+import FollowPostCard from './FollowPostCard.uvue'
+import WaterfallPostCard from './WaterfallPostCard.uvue'
+import { waterfallPostHeight } from '@/utils/waterfall-layout'
+import { getFeedMedia } from '@/utils/media-layout'
+import { followPostHeight } from '@/utils/follow-layout'
+import type { Post } from '@/types/home'
+const emit = defineEmits<{ postMenu: [post: Post] }>()
+const props = withDefaults(defineProps<{ managePosts?: boolean; posts: Post[]; variant?: 'home' | 'follow' | 'mine' | 'waterfall'; active?: boolean; viewportWidth: number }>(), { variant: 'home', active: true })
+const hostId = 'virtual-column-' + getCurrentInstance()!.uid
+type PostWindow = { start: number; end: number }
+const range = ref<PostWindow>({ start: 0, end: 16 })
+const visibleRange = ref<PostWindow>({ start: 0, end: 8 })
+const indices = computed(() => { const result = new Map<string, number>(); props.posts.forEach((post, index) => result.set(post.id, index)); return result })
+const priority = (post: Post) => { const i = indices.value.get(post.id)!; return i >= visibleRange.value.start && i < visibleRange.value.end ? 10 : 1 }
+const measured = ref<Record<string, number>>({})
+const version = ref(0)
+function estimate(post: Post) {
+  if (props.variant === 'waterfall') return waterfallPostHeight(post)
+  if (props.variant === 'follow') return followPostHeight(post)
+  if (props.variant === 'mine') {
+    const title = Math.max(1, Math.ceil(Array.from(post.title || '').length / 24)) * 41.667
+    const first = post.media[0]
+    const media = !first ? 0 : 20.833 + (post.media.length > 1 ? 339.583 : (first.aspectRatio < 1 ? 430.556 : 686.112) / (first.aspectRatio > 0 ? first.aspectRatio : 1))
+    return 16 + 33.333 + 16.667 + title + (post.content ? 77.777 : 0) + media + (post.tags?.length ? 55.555 : 0) + 20.833 + 44.444 + 18.75 + 13.889
+  }
+  const chars = Array.from(post.title || '').length
+  const title = Math.max(1, Math.ceil(chars / 24)) * 44
+  const media = getFeedMedia(post.media).items
+  const mediaHeight = media.length ? Math.max(...media.map(m => (media.length > 1 ? 221 : m.layout === 'portrait' || m.layout === 'square' ? 221 : m.type === 'video' ? 450 : 410) / (m.aspectRatio > 0 ? m.aspectRatio : 1))) + 16 : 0
+  return 146 + title + (post.content ? 90 : 0) + mediaHeight + (post.tags?.length ? 50 : 0)
+}
+const rows = computed(() => props.posts.map(post => ({ id: post.id, height: measured.value[post.id] ?? estimate(post) * props.viewportWidth / 750 })))
+const offsets = computed(() => { const values = [0]; for (const row of rows.value) values.push(values[values.length - 1]! + row.height); return values })
+const start = computed(() => Math.min(range.value.start, props.posts.length))
+const end = computed(() => Math.min(range.value.end, props.posts.length))
+const topSpace = computed(() => offsets.value[start.value] || 0)
+const bottomSpace = computed(() => (offsets.value[props.posts.length] || 0) - (offsets.value[end.value] || 0))
+const rendered = computed(() => props.posts.slice(start.value, end.value))
+watch(() => props.viewportWidth, () => { measured.value = {} })
+watch(() => [props.posts.map(post => post.id).join('\u0000'), props.viewportWidth, props.variant], () => { version.value++ }, { flush: 'sync' })
+watch(() => props.posts.map(p => p.id), ids => {
+  const allowed = new Set(ids)
+  const next: Record<string, number> = {}
+  for (const id of Object.keys(measured.value)) if (allowed.has(id)) next[id] = measured.value[id]!
+  measured.value = next
+  if (range.value.start >= ids.length || (ids.length > 0 && range.value.end <= range.value.start)) range.value = { start: 0, end: 16 }
+})
+function receive(value: { version?: number; start: number; end: number; visibleStart?: number; visibleEnd?: number; heights: Record<string, number> }) {
+  if (!props.active || value.version !== version.value) return
+  if (range.value.start !== value.start || range.value.end !== value.end) range.value = { start: value.start, end: value.end }
+  visibleRange.value = { start: value.visibleStart ?? value.start, end: value.visibleEnd ?? value.end }
+  if (Object.keys(value.heights).length) measured.value = { ...measured.value, ...value.heights }
+}
+const pane = inject(paneScrollKey)
+const instance = getCurrentInstance()!.proxy
+const rowId = (id: string) => hostId + '-row-' + encodeURIComponent(id)!.replace(/%/g, '_')
+let origin = 0, scheduled = false, disposed = false, measuring = false
+function updateWindow() {
+  if (!pane || !props.active || disposed) return
+  const viewport = pane.snapshot()
+  if (!viewport.height) return
+  const top = viewport.top - origin
+  const next: PostWindow = { start: Math.min(props.posts.length, firstAfter(offsets.value, Math.max(0, top - 2 * viewport.height))), end: Math.min(props.posts.length, firstAfter(offsets.value, Math.max(0, top + 3 * viewport.height)) + 1) }
+  const changed = next.start !== range.value.start || next.end !== range.value.end
+  if (changed) range.value = next
+  const visibleStart = firstAfter(offsets.value, Math.max(0, top)), visibleEnd = Math.min(props.posts.length, firstAfter(offsets.value, Math.max(0, top + viewport.height)) + 1)
+  if (visibleStart !== visibleRange.value.start || visibleEnd !== visibleRange.value.end) visibleRange.value = { start: visibleStart, end: visibleEnd }
+  if (changed) scheduleMeasure()
+}
+async function measureRows() {
+  if (!pane || !props.active || disposed || measuring) return
+  measuring = true
+  try {
+    await nextTick()
+    const token = version.value, viewport = pane.snapshot(), root = await rectById(hostId, instance)
+    if (!root || !root.height || disposed || !props.active) return
+    origin = root.top - viewport.viewportTop + viewport.top
+    const snapshot = rendered.value.slice(), bounds = await Promise.all(snapshot.map(post => rectById(rowId(post.id), instance)))
+    if (token !== version.value || disposed || !props.active) return
+    const changes: Record<string, number> = {}
+    snapshot.forEach((post, index) => { const rect = bounds[index], position = indices.value.get(post.id)!; if (rect && rect.height > 0 && Math.abs(rows.value[position]!.height - rect.height) > .75) changes[post.id] = rect.height })
+    if (Object.keys(changes).length) { pane.preserveLayout(() => { measured.value = { ...measured.value, ...changes } }); pane.invalidate() }
+    updateWindow()
+  } finally { measuring = false }
+}
+function scheduleMeasure() { if (!scheduled && !disposed) { scheduled = true; void nextTick().then(() => { scheduled = false; return measureRows() }) } }
+provide(postLayoutKey, scheduleMeasure)
+const unsubscribe = pane?.subscribe(updateWindow)
+const unregisterAnchor = pane?.registerAnchor({
+  visible(scrollTop) { if (!props.active || !props.posts.length) return null; const index = firstAfter(offsets.value, Math.max(0, scrollTop - origin)); const post = props.posts[index]; return post ? { key: post.id, top: origin + offsets.value[index]! } : null },
+  position(key) { const index = indices.value.get(key); return index == null ? null : origin + offsets.value[index]! }
+})
+watch(() => [props.active, props.viewportWidth, version.value], scheduleMeasure, { flush: 'post' })
+onMounted(scheduleMeasure)
+onBeforeUnmount(() => { disposed = true; unsubscribe?.(); unregisterAnchor?.() })
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+
+
+.virtual-post-column { min-width: 0; overflow-anchor: none; }
+.virtual-post-row { overflow: hidden; }
+.virtual-spacer { width: 1px; pointer-events: none; }
+
+
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+
+.ux0{}
+.ux1{min-width:0;}
+.ux3{overflow:hidden;}
+.ux2{width:1px;pointer-events:none;}
+/* #endif */
+</style>

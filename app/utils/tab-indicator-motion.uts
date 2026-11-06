@@ -1,0 +1,27 @@
+export const TAB_INDICATOR_DURATION = 240
+export const TAB_INDICATOR_STEPS = 16
+export type IndicatorPose = { x: number; scale: number }
+
+// Precompute the easing once. A single linear native animation then drives both
+// translation and contraction without a second easing stop at the midpoint.
+export function indicatorPose(from: IndicatorPose, to: number, progress: number): IndicatorPose {
+  const t = Math.max(0, Math.min(1, progress))
+  const travel = 1 - Math.pow(1 - t, 3)
+  const scale = t < .5
+    ? from.scale + (.42 - from.scale) * (1 - Math.cos(t * Math.PI * 2)) / 2
+    : .42 + .58 * (1 - Math.cos((t - .5) * Math.PI * 2)) / 2
+  return { x: from.x + (to - from.x) * travel, scale }
+}
+
+// Match interpolation between submitted keyframes when interrupting a motion.
+export function sampleIndicatorPose(from: IndicatorPose, to: number, progress: number): IndicatorPose {
+  const frame = Math.max(0, Math.min(1, progress)) * TAB_INDICATOR_STEPS
+  const lower = Math.floor(frame), fraction = frame - lower
+  const a = indicatorPose(from, to, lower / TAB_INDICATOR_STEPS)
+  const b = indicatorPose(from, to, Math.min(lower + 1, TAB_INDICATOR_STEPS) / TAB_INDICATOR_STEPS)
+  return { x: a.x + (b.x - a.x) * fraction, scale: a.scale + (b.scale - a.scale) * fraction }
+}
+
+export function indicatorTransform(pose: IndicatorPose): string {
+  return 'translateX(' + pose.x + 'px) scaleX(' + pose.scale + ')'
+}

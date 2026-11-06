@@ -1,0 +1,495 @@
+<template>
+  <view class="ct-search-page" :style="{paddingTop: top + 'px', paddingBottom: bottom + 'px'}">
+    <view class="ct-search-header">
+      <view class="ct-search-field">
+        <ActionButton class="ct-search-scope" :aria-label="scopeLabel" @tap="chooseChannel">
+          <image class="ct-search-logo" src="/static/app-package/icons/72x72.png" mode="aspectFill" />
+          <AppIcon name="dropdown" :size="17" />
+        </ActionButton>
+        <AppIcon name="search" tone="muted" :size="32" />
+        <input class="ct-search-input" :value="draft" :placeholder="hint" :maxlength="100"
+          confirm-type="search" @input="onInput" @confirm="submit(draft || hint)" />
+        <ActionButton v-if="draft" class="ct-search-clear" aria-label="清除关键词" @tap="clearQuery">
+          <AppIcon name="close" tone="white" :size="18" />
+        </ActionButton>
+      </view>
+      <ActionButton class="ct-search-cancel" @tap="uni.navigateBack()"><text class="ct-search-text">取消</text></ActionButton>
+    </view>
+
+    <scroll-view v-if="stage === 'home'" class="ct-search-scroll" direction="vertical">
+      <view v-if="history.length" class="ct-search-history">
+        <view class="ct-search-heading">
+          <image class="ct-search-section-icon" :src="searchIcon('history')" mode="aspectFit" />
+          <text class="ct-search-title ct-search-heading-label">历史搜索</text>
+          <ActionButton @tap="clearHistory"><text class="ct-search-muted">清空</text></ActionButton>
+        </view>
+        <view class="ct-search-chips">
+          <ActionButton v-for="term in visibleHistory" :key="term" class="ct-search-chip" @tap="submit(term)">
+            <text class="ct-search-chip-text">{{ term }}</text>
+          </ActionButton>
+          <ActionButton v-if="history.length > 5" class="ct-search-chip" :aria-label="expanded ? '收起历史' : '展开历史'" @tap="expanded = !expanded">
+            <view :style="{transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)'}"><AppIcon name="dropdown" tone="muted" :size="22" /></view>
+          </ActionButton>
+        </view>
+      </view>
+      <view class="ct-search-divider" />
+      <ChannelTabs :tabs="channels" :active="channelId" :tab-font="27" @change="selectChannel" />
+      <view class="ct-search-discover">
+        <view class="ct-search-heading">
+          <image class="ct-search-section-icon" :src="searchIcon('trending')" mode="aspectFit" />
+          <text class="ct-search-title ct-search-heading-label">热搜</text>
+        </view>
+        <view v-if="trending.length" class="ct-search-trending">
+          <ActionButton v-for="term in trending" :key="term" class="ct-search-trend" @tap="submit(term)">
+            <text class="ct-search-text">{{ term }}</text><image class="ct-search-hot" :src="searchIcon('fire')" mode="aspectFit" />
+          </ActionButton>
+        </view>
+        <text v-else class="ct-search-muted">{{ discoverFailed ? '热搜暂不可用' : '暂无热搜' }}</text>
+        <view class="ct-search-heading ct-search-recommend-title">
+          <image class="ct-search-section-icon" :src="searchIcon('recommend')" mode="aspectFit" />
+          <text class="ct-search-title ct-search-heading-label">推荐</text>
+        </view>
+        <view v-if="recommendations.length" class="ct-search-banners">
+          <ActionButton v-for="(post, index) in recommendations" :key="post.id" class="ct-search-banner" :aria-label="post.title" @tap="openPost(post)">
+            <image class="ct-search-banner-image" :src="recommendationImage(post, index)" mode="aspectFill" />
+            <text v-if="!mediaPreviewSource(post.media[0])" class="ct-search-banner-caption">{{ post.title }}</text>
+          </ActionButton>
+        </view>
+        <text v-else class="ct-search-muted">暂无推荐</text>
+        <ActionButton v-if="discoverFailed" @tap="loadDiscovery"><text class="ct-search-link">重新加载</text></ActionButton>
+      </view>
+    </scroll-view>
+
+    <scroll-view v-else-if="stage === 'suggestions'" class="ct-search-scroll ct-search-suggestions" direction="vertical">
+      <ActionButton v-for="term in suggestionRows" :key="term" class="ct-search-suggestion" @tap="submit(term)">
+        <text class="ct-search-text"><text v-for="(part, index) in highlighted(term, draft.trim())" :key="index" :class="part.match ? 'ct-search-link' : 'ct-search-plain'">{{ part.text }}</text></text>
+      </ActionButton>
+      <text v-if="suggestionLoading" class="ct-search-state">正在查找联想词…</text>
+      <ActionButton v-if="suggestionFailed" @tap="queueSuggestions"><text class="ct-search-state ct-search-link">联想加载失败，点击重试</text></ActionButton>
+    </scroll-view>
+
+    <view v-else class="ct-search-results">
+      <ChannelTabs :tabs="resultTabs" :active="activeTab" :tab-width="118" :tab-font="32" @change="switchTab" />
+      <scroll-view :key="resultScrollKey" :scroll-into-view="resultScrollTarget" class="ct-search-scroll" direction="vertical" :lower-threshold="120" @scrolltolower="loadResults(false)">
+        <!-- #ifdef APP -->
+        <view :id="resultScrollTarget" class="ct-search-scroll-anchor" />
+        <!-- #endif -->
+        <view :id="motionId" class="ct-search-results-body">
+          <view v-if="activeTab !== 'user'" class="ct-search-heading ct-search-result-heading">
+            <text class="ct-search-title ct-search-result-label">{{ resultHeading }}</text>
+            <ActionButton v-if="activeTab === 'all'" class="ct-search-sort" aria-label="切换帖子排序" @tap="chooseSort">
+              <text class="ct-search-muted ct-search-sort-label">{{ sort === 'hot' ? '最热' : '最新' }}</text><AppIcon name="dropdown" :size="16" />
+            </ActionButton>
+          </view>
+          <ActionButton v-for="user in users" :key="user.id" class="ct-search-user" @tap="openUserProfile(user.id)">
+            <image class="ct-search-avatar" :src="avatarSrc(user.avatar)" mode="aspectFill" />
+            <view class="ct-search-user-text">
+              <text class="ct-search-text"><text v-for="(part, index) in highlighted(user.nickname, submitted)" :key="index" :class="part.match ? 'ct-search-link' : 'ct-search-plain'">{{ part.text }}</text></text>
+              <text class="ct-search-muted">UID {{ user.publicUid || '—' }}</text>
+              <text v-if="user.signature" class="ct-search-muted">{{ user.signature }}</text>
+            </view>
+          </ActionButton>
+          <view v-for="post in posts" :key="post.id" class="ct-search-post">
+            <view class="ct-search-author-row">
+              <ActionButton class="ct-search-author" @tap="openUserProfile(post.author.id)">
+                <image class="ct-search-avatar" :src="avatarSrc(post.author.avatar)" mode="aspectFill" />
+                <text class="ct-search-author-name">{{ post.author.nickname }}</text>
+                <text v-if="post.author.level" class="ct-search-level">{{ post.author.level }}</text>
+              </ActionButton>
+              <text class="ct-search-meta">{{ (post.date ?? '') + (post.channelName ? '·' + post.channelName : '') }}</text>
+            </view>
+            <ActionButton class="ct-search-post-body" :aria-label="post.title" @tap="openPost(post)">
+              <text class="ct-search-post-title"><text v-for="(part, index) in highlighted(post.title, submitted)" :key="index" class="ct-search-title-part" :class="part.match ? 'ct-search-link' : ''">{{ part.text }}</text></text>
+              <text v-if="post.content" class="ct-search-summary"><text v-for="(part, index) in highlighted(summary(post.content ?? ''), submitted)" :key="index" class="ct-search-summary-part" :class="part.match ? 'ct-search-link' : ''">{{ part.text }}</text></text>
+              <view v-if="previewMedia(post).length" class="ct-search-media-row">
+                <view v-for="(item, index) in previewMedia(post)" :key="index" class="ct-search-media-slot" :class="{'ct-search-media-wide': item.type === 'video'}">
+                  <image v-if="mediaPreviewSource(item)" class="ct-search-media" :src="mediaUrl(mediaPreviewSource(item))" mode="aspectFill" />
+                  <view v-if="item.type === 'video'" class="ct-search-play"><AppIcon name="play" tone="white" :size="28" /></view>
+                </view>
+              </view>
+              <view class="ct-search-footer">
+                <text v-if="post.tags?.length" class="ct-search-tag">{{ post.tags?.[0] }}</text>
+                <view class="ct-search-counts">
+                  <AppIcon name="comment" tone="muted" :size="34" /><text class="ct-search-meta ct-search-count">{{ post.commentCount }}</text>
+                  <AppIcon name="like" tone="muted" :size="34" /><text class="ct-search-meta ct-search-count">{{ post.likeCount }}</text>
+                </view>
+              </view>
+            </ActionButton>
+          </view>
+          <text v-if="loading" class="ct-search-state">正在搜索…</text>
+          <ActionButton v-else-if="failed" @tap="loadResults(false)"><text class="ct-search-state ct-search-link">加载失败，点击重试</text></ActionButton>
+          <text v-else-if="!posts.length && !users.length" class="ct-search-state">暂无匹配结果</text>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { computed, getCurrentInstance, nextTick, ref } from 'vue'
+import ActionButton from '@/components/ActionButton.uvue'
+import AppIcon from '@/components/AppIcon.uvue'
+import ChannelTabs from '@/components/ChannelTabs.uvue'
+import { avatarSrc } from '@/utils/auth'
+import { fetchHomeConfig } from '@/utils/home-config-api'
+import { mediaUrl } from '@/utils/media-cache'
+import { mediaPreviewSource } from '@/utils/media-layout'
+import { openDestination, openUserProfile } from '@/utils/navigation'
+import { fetchSearchPosts, toPost } from '@/utils/post-api'
+import { GET } from '@/utils/request'
+import { uiAsset } from '@/utils/ui-assets'
+import type { Channel, Post } from '@/types/home'
+import type { Page, PostResponse } from '@/types/post-api'
+
+interface SearchUser { id: string; publicUid: string | null; nickname: string; avatar?: string; signature?: string }
+interface HighlightPart { text: string; match: boolean }
+
+const HISTORY_KEY = 'ct-search-history'
+const windowInfo = uni.getWindowInfo()
+const top = windowInfo.statusBarHeight ?? 0
+const bottom = windowInfo.safeAreaInsets?.bottom ?? 0
+const motionId = 'search-result-' + getCurrentInstance()!.uid
+const hint = ref('搜索次元町')
+const draft = ref('')
+const submitted = ref('')
+const stage = ref('home')
+const history = ref<string[]>([])
+const expanded = ref(false)
+const visibleHistory = computed(() => expanded.value ? history.value : history.value.slice(0, 5))
+const channels = ref<Channel[]>([])
+const channelId = ref('')
+const scopeLabel = computed(() => '选择搜索频道，当前：' + (channels.value.find(tab => tab.id === channelId.value)?.name ?? '全站'))
+const trending = ref<string[]>([])
+const recommendations = ref<Post[]>([])
+const discoverFailed = ref(false)
+const suggestions = ref<string[]>([])
+const suggestionLoading = ref(false)
+const suggestionFailed = ref(false)
+const suggestionRows = computed(() => {
+  const keyword = draft.value.trim()
+  if (suggestions.value.length === 0) return keyword ? [keyword] : []
+  return [suggestions.value[0], keyword, ...suggestions.value.slice(1)]
+})
+const resultTabs: Channel[] = [
+  {id:'all',name:'综合'}, {id:'image',name:'图片'}, {id:'video',name:'视频'},
+  {id:'post',name:'帖子'}, {id:'user',name:'用户'}, {id:'official',name:'官方'}
+]
+const activeTab = ref('all')
+const sort = ref('hot')
+const resultHeading = computed(() => activeTab.value === 'all' || activeTab.value === 'post' ? '相关帖子' :
+  '相关' + (resultTabs.find(tab => tab.id === activeTab.value)?.name ?? '') + (activeTab.value === 'official' ? '帖子' : ''))
+const posts = ref<Post[]>([])
+const users = ref<SearchUser[]>([])
+const loading = ref(false)
+const failed = ref(false)
+const more = ref(true)
+const resultView = ref(0)
+const resultScrollKey = computed(() => {
+  // #ifdef APP
+  return 0
+  // #endif
+  // #ifndef APP
+  return resultView.value
+  // #endif
+})
+const resultScrollTarget = computed(() => {
+  // #ifdef APP
+  return motionId + '-top-' + resultView.value
+  // #endif
+  // #ifndef APP
+  return ''
+  // #endif
+})
+let pageNum = 1
+let resultVersion = 0
+let suggestionVersion = 0
+let suggestionTimer = 0
+let discoveryVersion = 0
+
+onLoad(options => {
+  if (typeof options?.hint === 'string' && options.hint.trim()) hint.value = options.hint.slice(0, 100)
+  const saved = uni.getStorageSync(HISTORY_KEY)
+  if (Array.isArray(saved)) history.value = (saved as string[]).filter(term => typeof term === 'string' && !!term.trim()).slice(0, 30)
+  void loadDiscovery()
+})
+onUnload(() => {
+  discoveryVersion++
+  resultVersion++
+  invalidateSuggestions()
+})
+
+async function loadDiscovery() {
+  const version = ++discoveryVersion
+  discoverFailed.value = false
+  await Promise.all([loadHome(version), loadTrending(version)])
+}
+async function loadHome(version: number) {
+  try {
+    const config = await fetchHomeConfig()
+    if (version !== discoveryVersion) return
+    channels.value = config.channels.map(tab => ({ ...tab, id: String(tab.id) }))
+    if (!channels.value.some(tab => tab.id === channelId.value)) channelId.value = String(channels.value[0]?.id ?? '')
+    const cards: Post[] = []
+    for (const item of config.news?.items ?? []) {
+      if (cards.length === 2 || version !== discoveryVersion) break
+      const raw = await GET<PostResponse>('/app/post/' + encodeURIComponent(String(item.postId)), undefined, true)
+        .catch(() => null)
+      if (raw && !cards.some(card => card.id === raw.id)) cards.push(toPost(raw))
+    }
+    if (version === discoveryVersion) recommendations.value = cards
+  } catch {
+    if (version === discoveryVersion) discoverFailed.value = true
+  }
+}
+async function loadTrending(version: number) {
+  try {
+    const terms = await GET<string[]>('/app/search/trending', undefined, true)
+    if (version === discoveryVersion) trending.value = terms
+  } catch {
+    if (version === discoveryVersion) discoverFailed.value = true
+  }
+}
+function searchParams(keyword: string): Record<string, unknown> {
+  return channelId.value ? {keyword, channelId: channelId.value} : {keyword}
+}
+function chooseChannel() {
+  if (!channels.value.length) return
+  uni.showActionSheet({itemList: channels.value.map(tab => tab.name), success: event => {
+    const tab = channels.value[event.tapIndex]
+    if (tab) selectChannel(tab)
+  }})
+}
+function selectChannel(tab: Channel) {
+  if (channelId.value === String(tab.id)) return
+  channelId.value = String(tab.id)
+  if (stage.value === 'suggestions') queueSuggestions()
+  if (stage.value === 'results' && activeTab.value !== 'user') void loadResults(true)
+}
+function clearHistory() {
+  history.value = []
+  expanded.value = false
+  uni.removeStorageSync(HISTORY_KEY)
+}
+function invalidateSuggestions() {
+  suggestionVersion++
+  clearTimeout(suggestionTimer)
+  suggestionLoading.value = false
+}
+function clearQuery() {
+  resultVersion++
+  invalidateSuggestions()
+  draft.value = ''
+  submitted.value = ''
+  stage.value = 'home'
+}
+function onInput(event: UniInputEvent) {
+  const value = event.detail.value
+  if (value === draft.value) return
+  draft.value = value
+  if (!value.trim()) { clearQuery(); return }
+  resultVersion++
+  stage.value = 'suggestions'
+  queueSuggestions()
+}
+function queueSuggestions() {
+  invalidateSuggestions()
+  suggestions.value = []
+  suggestionFailed.value = false
+  suggestionLoading.value = true
+  const version = suggestionVersion
+  suggestionTimer = setTimeout(() => { void loadSuggestions(version) }, 220)
+}
+async function loadSuggestions(version: number) {
+  try {
+    const terms = await GET<string[]>('/app/search/suggestions', searchParams(draft.value.trim()), true)
+    if (version === suggestionVersion) suggestions.value = terms
+  } catch {
+    if (version === suggestionVersion) suggestionFailed.value = true
+  } finally {
+    if (version === suggestionVersion) suggestionLoading.value = false
+  }
+}
+function submit(value: string) {
+  const term = value.trim()
+  if (!term) return
+  invalidateSuggestions()
+  uni.hideKeyboard()
+  history.value = [term, ...history.value.filter(item => item !== term)].slice(0, 30)
+  uni.setStorageSync(HISTORY_KEY, history.value)
+  draft.value = term
+  submitted.value = term
+  activeTab.value = 'all'
+  sort.value = 'hot'
+  stage.value = 'results'
+  void loadResults(true)
+}
+function chooseSort() {
+  uni.showActionSheet({itemList: ['最热','最新'], success: event => {
+    const value = event.tapIndex === 0 ? 'hot' : 'latest'
+    if (sort.value === value) return
+    sort.value = value
+    void loadResults(true)
+  }})
+}
+function switchTab(tab: Channel) {
+  const next = String(tab.id)
+  if (next === activeTab.value) return
+  // #ifdef WEB
+  const direction = resultTabs.findIndex(item => item.id === next) > resultTabs.findIndex(item => item.id === activeTab.value) ? 1 : -1
+  // #endif
+  activeTab.value = next
+  void loadResults(true)
+  // #ifdef WEB
+  const view = resultView.value
+  nextTick(() => {
+    if (view !== resultView.value || stage.value !== 'results') return
+    const element = uni.getElementById(motionId)
+    element?.animate([{transform:'translateX(' + (direction * 18) + 'px)',opacity:0.45},{transform:'translateX(0px)',opacity:1}],
+      {duration:240,easing:'ease-out'})
+  })
+  // #endif
+}
+async function loadResults(reset: boolean) {
+  if (reset) {
+    resultVersion++
+    resultView.value++
+    pageNum = 1
+    more.value = true
+    posts.value = []
+    users.value = []
+    loading.value = false
+  }
+  if (loading.value || !more.value || stage.value !== 'results') return
+  const version = resultVersion
+  const current = pageNum
+  loading.value = true
+  failed.value = false
+  try {
+    if (activeTab.value === 'user') {
+      const page = await GET<Page<SearchUser>>('/app/search/users', {keyword:submitted.value,pageNum:current,pageSize:10}, true)
+      if (version !== resultVersion) return
+      users.value = [...users.value, ...page.records]
+      more.value = current * 10 < page.total && page.records.length > 0
+    } else {
+      const page = await fetchSearchPosts({...searchParams(submitted.value),type:activeTab.value,sort:sort.value,pageNum:current,pageSize:10})
+      if (version !== resultVersion) return
+      posts.value = [...posts.value, ...page.records.map(item => toPost(item))]
+      more.value = current * 10 < page.total && page.records.length > 0
+    }
+    pageNum++
+  } catch {
+    if (version === resultVersion) failed.value = true
+  } finally {
+    if (version === resultVersion) loading.value = false
+  }
+}
+function highlighted(value: string, keyword: string): HighlightPart[] {
+  if (!keyword) return [{text:value,match:false}]
+  const parts: HighlightPart[] = []
+  const lower = value.toLowerCase()
+  const term = keyword.toLowerCase()
+  let cursor = 0
+  let index = lower.indexOf(term)
+  while (index >= 0) {
+    if (index > cursor) parts.push({text:value.slice(cursor,index),match:false})
+    cursor = index + term.length
+    parts.push({text:value.slice(index,cursor),match:true})
+    index = lower.indexOf(term,cursor)
+  }
+  if (cursor < value.length) parts.push({text:value.slice(cursor),match:false})
+  return parts
+}
+function summary(value: string): string {
+  const plain = value.replace(/\s+/g, ' ').trim()
+  return plain.length > 125 ? plain.slice(0, 125) + '…' : plain
+}
+function previewMedia(post: Post) { return post.media.slice(0, post.media[0]?.type === 'video' ? 1 : 3) }
+function recommendationImage(post: Post, index: number): string {
+  const cover = mediaPreviewSource(post.media[0])
+  return cover ? mediaUrl(cover) : '/static/images/search-recommend-' + (index + 1) + '.png'
+}
+function searchIcon(name: string): string { return uiAsset('/static/icons/search-' + name + '.svg') }
+function openPost(post: Post) { openDestination({kind:'post', title:post.title,postId:post.id}) }
+</script>
+<style>
+.ct-search-page { flex: 1; height: 100%; display: flex; flex-direction: column; background-color: #fff; }
+.ct-search-header { display: flex; flex-direction: row; align-items: center; padding: 10rpx 33rpx 12rpx; background-color: #fff; }
+.ct-search-field { flex: 1; height: 67rpx; display: flex; flex-direction: row; align-items: center; padding: 0 16rpx 0 8rpx; border: 1rpx solid #eceef1; border-radius: 17rpx; }
+.ct-search-scope { display: flex; flex-direction: row; align-items: center; flex-shrink: 0; padding-right: 20rpx; margin-right: 17rpx; border-right: 2rpx solid #d9dfe7; }
+.ct-search-logo { width: 47rpx; height: 47rpx; margin-right: 8rpx; border-radius: 10rpx; }
+.ct-search-input { flex: 1; min-width: 0; height: 62rpx; margin-left: 12rpx; font-size: 25rpx; color: #262e40; }
+.ct-search-clear { width: 30rpx; height: 30rpx; margin-left: 8rpx; border-radius: 15rpx; background-color: #bfc1c4; align-items: center; justify-content: center; }
+.ct-search-cancel { flex-shrink: 0; margin-left: 32rpx; }
+.ct-search-scroll { flex: 1; height: 0; }
+.ct-search-scroll-anchor { height: 1px; }
+.ct-search-results { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-top: 15rpx; }
+.ct-search-results-body { padding: 0 33rpx; }
+.ct-search-history { padding: 30rpx 33rpx 32rpx; }
+.ct-search-heading { display: flex; flex-direction: row; align-items: center; }
+.ct-search-heading-label { flex: 1; margin-left: 11rpx; }
+.ct-search-title { font-size: 26rpx; font-weight: 700; color: #262e40; }
+.ct-search-text, .ct-search-plain { font-size: 24rpx; color: #262e40; }
+.ct-search-muted { font-size: 20rpx; color: #737b88; }
+
+.ct-search-chips { display: flex; flex-direction: row; flex-wrap: wrap; margin-top: 24rpx; }
+.ct-search-chip { max-width: 205rpx; min-width: 66rpx; height: 54rpx; align-items: center; justify-content: center; padding: 0 19rpx; margin-right: 14rpx; margin-bottom: 3rpx; border-radius: 9rpx; background-color: #f4f5fa; }
+.ct-search-chip-text { font-size: 22rpx; color: #262e40; text-overflow: ellipsis; }
+.ct-search-divider { height: 16rpx; margin-top: 10rpx; background-color: #f4f5f8; }
+.ct-search-discover { padding: 61rpx 33rpx 40rpx; }
+.ct-search-trending { display: flex; flex-direction: row; flex-wrap: wrap; margin-top: 13rpx; }
+.ct-search-trend { width: 50%; height: 60rpx; display: flex; flex-direction: row; align-items: center; }
+.ct-search-section-icon { width: 24rpx; height: 24rpx; flex-shrink: 0; }
+.ct-search-hot { width: 22rpx; height: 22rpx; margin-left: 8rpx; flex-shrink: 0; }
+.ct-search-recommend-title { margin-top: 39rpx; margin-bottom: 24rpx; }
+.ct-search-banners { display: flex; flex-direction: row; }
+.ct-search-banner { position: relative; width: 47%; height: 150rpx; margin-right: 24rpx; border-radius: 16rpx; overflow: hidden; background-color: #f4f5fa; }
+.ct-search-banner-image { width: 100%; height: 150rpx; }
+.ct-search-banner-caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 9rpx 12rpx; background-color: rgba(17,28,55,.65); color: #fff; font-size: 20rpx; text-overflow: ellipsis; }
+.ct-search-suggestion { margin: 0 33rpx; }
+.ct-search-suggestion { display: flex; flex-direction: row; align-items: center; height: 88rpx; border-bottom: 1rpx solid #f0f1f3; }
+.ct-search-result-heading { padding-top: 32rpx; padding-bottom: 5rpx; }
+.ct-search-result-label { flex: 1; }
+.ct-search-sort { display: flex; flex-direction: row; align-items: center; }
+.ct-search-sort-label { margin-right: 12rpx; }
+.ct-search-post, .ct-search-user { padding: 27rpx 0 34rpx; border-bottom: 2rpx solid #f0f1f3; }
+.ct-search-author-row, .ct-search-author, .ct-search-user { display: flex; flex-direction: row; align-items: center; }
+.ct-search-author { flex: 1; min-width: 0; }
+.ct-search-avatar { width: 45rpx; height: 45rpx; flex-shrink: 0; border-radius: 23rpx; margin-right: 17rpx; background-color: #f4f5fa; }
+.ct-search-author-name { font-size: 23rpx; color: #262e40; font-weight: 700; }
+.ct-search-level { width: 25rpx; height: 25rpx; margin-left: 10rpx; border-radius: 13rpx; background-color: #20a6ec; color: #fff; text-align: center; font-size: 17rpx; line-height: 25rpx; }
+.ct-search-meta { font-size: 18rpx; color: #717885; }
+.ct-search-user-text { flex: 1; display: flex; flex-direction: column; }
+.ct-search-post-body { width: 100%; display: flex; flex-direction: column; align-items: stretch; text-align: left; }
+.ct-search-post-title { margin-top: 27rpx; font-size: 27rpx; color: #262e40; }
+.ct-search-summary { margin-top: 13rpx; color: #5c6576; font-size: 23rpx; line-height: 34rpx; max-height: 68rpx; overflow: hidden; text-overflow: ellipsis; }
+.ct-search-title-part { font-size: 27rpx; color: #262e40; }
+.ct-search-summary-part { font-size: 23rpx; color: #5c6576; }
+.ct-search-link { color: #179fe3; }
+.ct-search-media-row { display: flex; flex-direction: row; margin-top: 23rpx; }
+.ct-search-media-slot { position: relative; width: 32.5%; height: 146rpx; margin-right: 5rpx; border-radius: 14rpx; overflow: hidden; background-color: #f4f5fa; }
+.ct-search-media-wide { width: 55%; }
+.ct-search-media { width: 100%; height: 100%; }
+.ct-search-play { position: absolute; right: 10rpx; bottom: 10rpx; width: 42rpx; height: 42rpx; border-radius: 21rpx; background-color: rgba(0,0,0,.5); align-items: center; justify-content: center; }
+.ct-search-footer { display: flex; flex-direction: row; align-items: center; margin-top: 22rpx; }
+.ct-search-tag { background-color: #f4f5fa; color: #737b88; font-size: 19rpx; padding: 5rpx 13rpx; border-radius: 6rpx; }
+.ct-search-counts { flex: 1; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; }
+.ct-search-count { margin-left: 6rpx; margin-right: 13rpx; }
+.ct-search-state { display: flex; justify-content: center; text-align: center; padding: 36rpx 0; font-size: 22rpx; color: #737b88; }
+/* #ifdef APP-ANDROID */
+.ct-search-trend, .ct-search-suggestion, .ct-search-author { justify-content: flex-start; }
+/* #endif */
+/* #ifndef APP */
+.ct-search-page { height: 100vh; box-sizing: border-box; }
+.ct-search-page uni-button { border: 0; padding: 0; background: transparent; line-height: normal; }
+.ct-search-page uni-button::after { border: 0; }
+.ct-search-page uni-button.ct-search-scope { padding-right: 20rpx; border-right: 2rpx solid #d9dfe7; }
+.ct-search-page uni-button.ct-search-clear { background: #bfc1c4; }
+.ct-search-page uni-button.ct-search-chip { padding: 0 19rpx; background: #f4f5fa; }
+.ct-search-page uni-button.ct-search-suggestion { width: auto; border-radius: 0; border-bottom: 1rpx solid #f0f1f3; }
+.ct-search-page uni-button.ct-search-user { width: 100%; border-bottom: 2rpx solid #f0f1f3; padding: 27rpx 0 34rpx; text-align: left; }
+.ct-search-page uni-button.ct-search-banner { background: #f4f5fa; }
+.ct-search-page uni-button.ct-search-chip, .ct-search-page uni-button.ct-search-clear { display: flex; }
+.ct-search-summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.ct-search-chip-text, .ct-search-banner-caption { overflow: hidden; white-space: nowrap; }
+/* #endif */
+</style>

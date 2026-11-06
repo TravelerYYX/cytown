@@ -1,0 +1,11 @@
+<template>
+  <text class="native-stat-line" :style="{fontSize:labelSize+'rpx',color:labelColor}"><text class="native-stat-value" :style="{fontSize:valueSize+'rpx'}">{{ value }}</text><text class="native-stat-gap">　</text><text :style="{fontSize:labelSize+'rpx',color:labelColor}">{{ label }}</text></text>
+</template>
+<script setup lang="uts">
+withDefaults(defineProps<{value:string|number;label:string;labelSize?:number;valueSize?:number;labelColor?:string}>(),{labelSize:20,valueSize:26,labelColor:'rgba(255,255,255,.8)'})
+</script>
+<style>
+.native-stat-line{white-space:nowrap;line-height:32rpx;flex-shrink:0;}
+.native-stat-value{font-size:26rpx;color:#ffffff;}
+.native-stat-gap{font-size:8rpx;}
+</style>

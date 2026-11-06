@@ -1,0 +1,49 @@
+-- P2 用户体系；MySQL 8。新表与 admin_user/post 均软关联。
+SET NAMES utf8mb4;
+CREATE TABLE IF NOT EXISTS app_user (
+ id BIGINT NOT NULL AUTO_INCREMENT COMMENT '用户ID',
+ qq_number VARCHAR(11) NOT NULL COMMENT 'QQ号',
+ email VARCHAR(50) NOT NULL COMMENT 'QQ邮箱',
+ nickname VARCHAR(50) NOT NULL COMMENT '昵称',
+ avatar VARCHAR(255) NOT NULL DEFAULT '' COMMENT '头像相对URL',
+ level INT NOT NULL DEFAULT 1 COMMENT '等级',
+ status TINYINT NOT NULL DEFAULT 0 COMMENT '0正常 1禁用',
+ last_login_time DATETIME NULL COMMENT '最后登录时间',
+ create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间',
+ update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+ PRIMARY KEY(id), UNIQUE KEY uk_qq(qq_number),
+ KEY idx_status_create(status,create_time DESC),
+ CONSTRAINT chk_user_status CHECK(status IN (0,1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='APP用户';
+CREATE TABLE IF NOT EXISTS verify_code (
+ id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+ email VARCHAR(50) NOT NULL COMMENT '目标邮箱',
+ code VARCHAR(6) NOT NULL COMMENT '6位数字验证码',
+ expire_time DATETIME NOT NULL COMMENT '过期时间',
+ used BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否已使用',
+ create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+ PRIMARY KEY(id), KEY idx_email_create(email,create_time DESC),
+ CONSTRAINT chk_code_used CHECK(used IN (0,1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='邮箱验证码';
+CREATE TABLE IF NOT EXISTS user_like (
+ id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+ user_id BIGINT NOT NULL COMMENT '用户ID',
+ post_id BIGINT NOT NULL COMMENT '帖子ID',
+ create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+ PRIMARY KEY(id), UNIQUE KEY uk_user_post(user_id,post_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户点赞';
+CREATE TABLE IF NOT EXISTS user_favorite (
+ id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+ user_id BIGINT NOT NULL COMMENT '用户ID',
+ post_id BIGINT NOT NULL COMMENT '帖子ID',
+ create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+ PRIMARY KEY(id), UNIQUE KEY uk_user_post(user_id,post_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户收藏';
+CREATE TABLE IF NOT EXISTS user_follow (
+ id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+ follower_id BIGINT NOT NULL COMMENT '关注者',
+ followee_id BIGINT NOT NULL COMMENT '被关注者',
+ create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+ PRIMARY KEY(id), UNIQUE KEY uk_pair(follower_id,followee_id),
+ CONSTRAINT chk_follow_self CHECK(follower_id <> followee_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户关注（P2预留）';

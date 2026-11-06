@@ -1,0 +1,50 @@
+<template>
+  <view class="product-chat-card" :style="{width:width+'px'}">
+    <image class="product-chat-cover" :style="{height:width+'px'}" :src="mediaUrl(product.coverUrl)" mode="aspectFill" />
+    <view class="product-chat-body">
+      <text class="product-chat-heading" :max-lines="1">{{product.name}}</text>
+      <view class="product-chat-shop">
+        <image class="product-chat-shop-icon" :src="shopIcon" mode="aspectFit" />
+        <text class="product-chat-shop-name">次元町商铺</text>
+      </view>
+      <view class="product-chat-summary">
+        <image class="product-chat-thumbnail" :src="mediaUrl(product.coverUrl)" mode="aspectFill" />
+        <view class="product-chat-summary-text">
+          <text class="product-chat-title" :max-lines="1">{{product.name}}</text>
+          <text class="product-chat-type">个性头像框</text>
+          <view class="product-chat-prices">
+            <text class="product-chat-price">¥{{shopYuan(product.priceFen)}}</text>
+            <text class="product-chat-sold">已售{{product.soldCount}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { mediaUrl } from '@/utils/media-cache'
+import { shopYuan } from '@/utils/shop-api'
+import type { ChatProductCard } from '@/types/chat'
+
+defineProps<{ product: ChatProductCard; width: number }>()
+const shopIcon = mediaUrl('/uploads/shop/mine-shop-mono.png')
+</script>
+
+<style scoped>
+.product-chat-card { display:flex; flex-direction:column; border-radius:21rpx; overflow:hidden; background-color:#f2f2f2; }
+.product-chat-cover { width:100%; background-color:#eee; }
+.product-chat-body { display:flex; flex-direction:column; padding:18rpx 23rpx 21rpx; }
+.product-chat-heading { color:#303030; font-size:28rpx; line-height:38rpx; font-weight:600; overflow:hidden; text-overflow:ellipsis; }
+.product-chat-shop { display:flex; flex-direction:row; align-items:center; margin-top:12rpx; margin-bottom:16rpx; }
+.product-chat-shop-icon { width:36rpx; height:36rpx; border-radius:18rpx; flex-shrink:0; }
+.product-chat-shop-name { color:#606060; font-size:23rpx; margin-left:13rpx; }
+.product-chat-summary { display:flex; flex-direction:row; align-items:center; border-top-width:1rpx; border-top-style:solid; border-top-color:#e2e2e2; padding-top:16rpx; }
+.product-chat-thumbnail { width:117rpx; height:117rpx; border-radius:13rpx; flex-shrink:0; overflow:hidden; }
+.product-chat-summary-text { flex:1; min-width:0; display:flex; flex-direction:column; margin-left:16rpx; }
+.product-chat-title { color:#303030; font-size:27rpx; line-height:36rpx; overflow:hidden; text-overflow:ellipsis; }
+.product-chat-type { color:#a66b37; font-size:23rpx; line-height:34rpx; }
+.product-chat-prices { display:flex; flex-direction:row; align-items:center; }
+.product-chat-price { color:#303030; font-size:26rpx; font-weight:600; }
+.product-chat-sold { color:#888; font-size:18rpx; margin-left:9rpx; }
+</style>

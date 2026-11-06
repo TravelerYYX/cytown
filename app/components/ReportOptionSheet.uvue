@@ -1,0 +1,48 @@
+<template>
+  <view v-if="rendered" class="report-picker-layer">
+    <view class="report-picker-mask" :style="{opacity:entered?0.60:0}" @tap="emit('close')" />
+    <view class="report-picker" :style="{transform:entered?'translateY(0%)':'translateY(100%)',paddingBottom:bottomPadding+'px'}">
+      <view class="report-picker-handle" />
+      <text class="report-picker-title">{{title}}</text>
+      <scroll-view class="report-picker-scroll" direction="vertical" :show-scrollbar="false" :style="{height:listHeight+'px'}">
+        <view class="report-picker-options">
+          <ActionButton v-for="(option,index) in options" :key="option.id" class="report-picker-option" :aria-label="option.name" @tap="emit('select',option.id)">
+            <text class="report-picker-label">{{option.name}}</text><AppIcon v-if="option.id===modelValue" name="check" tone="cyan" :size="38" />
+            <view v-if="Number(index)<options.length-1" class="report-picker-divider" />
+          </ActionButton>
+          <text v-if="!options.length" class="report-picker-empty">{{loading?'加载中…':'暂无可用选项'}}</text>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</template>
+<script setup lang="uts">
+import { computed } from 'vue'
+import ActionButton from './ActionButton.uvue'
+import AppIcon from './AppIcon.uvue'
+import { usePublishSheetMotion } from '@/composables/usePublishSheetMotion'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import type { ReportOption } from '@/utils/report-api'
+const props=defineProps<{visible:boolean;title:string;options:ReportOption[];modelValue:string;loading:boolean}>()
+const emit=defineEmits<{close:[];select:[id:string]}>()
+const {rendered,entered}=usePublishSheetMotion(()=>props.visible)
+const {bottomInset,viewportWidth}=useWindowInsets()
+const bottomPadding=computed(()=>Math.max(bottomInset.value,70*viewportWidth.value/750))
+const listHeight=computed(()=>Math.min(Math.max(1,props.options.length)*106*viewportWidth.value/750,uni.getWindowInfo().windowHeight*0.68))
+</script>
+<style scoped>
+.report-picker-layer{position:fixed;top:0;right:0;bottom:0;left:0;z-index:760;}
+.report-picker-mask{position:absolute;top:0;right:0;bottom:0;left:0;background-color:#000;transition-property:opacity;transition-duration:320ms;transition-timing-function:cubic-bezier(.16,1,.3,1);}
+.report-picker{position:absolute;bottom:0;left:0;right:0;display:flex;flex-direction:column;border-radius:42rpx 42rpx 0 0;background-color:#f5f6fa;padding:17rpx 33rpx 0;transition-property:transform;transition-duration:320ms;transition-timing-function:cubic-bezier(.16,1,.3,1);}
+.report-picker-handle{align-self:center;width:62rpx;height:8rpx;border-radius:4rpx;background-color:#dfe3ef;}
+.report-picker-title{margin:35rpx 18rpx 26rpx;color:#606879;font-size:24rpx;line-height:32rpx;}
+.report-picker-scroll{border-radius:26rpx;background-color:#fff;overflow:hidden;}
+.report-picker-options{display:flex;flex-direction:column;border-radius:26rpx;overflow:hidden;background-color:#fff;}
+.report-picker-option{position:relative;display:flex;flex-direction:row;align-items:center;justify-content:space-between;flex-shrink:0;width:100%;height:106rpx;margin:0;padding:0 26rpx;border-width:0;border-radius:0;background-color:#fff;}
+.report-picker-label{font-size:25rpx;line-height:36rpx;color:#283145;}
+.report-picker-divider{position:absolute;left:25rpx;right:0;bottom:0;height:2rpx;background-color:#f0f0f2;}
+.report-picker-empty{padding:35rpx;font-size:24rpx;color:#9297a2;}
+/* #ifndef APP */
+.report-picker,.report-picker-option{box-sizing:border-box;}.report-picker-option::after{border:0;}
+/* #endif */
+</style>

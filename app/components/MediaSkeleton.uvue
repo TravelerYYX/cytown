@@ -1,0 +1,108 @@
+<template>
+  <!-- #ifdef APP -->
+<view :id="String(a11yAttrs(a11yPrefix+'-0',{&quot;aria-label&quot;:media.type === 'video' ? '视频封面占位' : '帖子图片占位'}).id)" class="media-skeleton" :class="[media.layout,uxNative?'ux0':'',uxNative?'ux7':'',{'gallery-first':gallery &amp;&amp; galleryIndex===0,'gallery-last':gallery &amp;&amp; galleryIndex===1}]" :style="{ paddingBottom: (100 / ratio) + '%' }"  @tap="$emit('open')">
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :aria-label="media.type === 'video' ? '视频封面占位' : '帖子图片占位'" class="media-skeleton" :class="[media.layout,uxNative?'ux0':'',uxNative?'ux7':'',{'gallery-first':gallery &amp;&amp; galleryIndex===0,'gallery-last':gallery &amp;&amp; galleryIndex===1}]" :style="{ paddingBottom: (100 / ratio) + '%' }"  @tap="$emit('open')">
+<!-- #endif -->
+    <CachedImage v-if="source" class="media-fill" :priority="priority" :src="source" :version="media.resourceVersion" variant="cover" mode="aspectFill" @load="loaded" @error="$emit('error')"  :class="[uxNative?'ux8':'']"/>
+    <view v-else class="media-fill"  :class="[uxNative?'ux0':'',uxNative?'ux8':'']"/>
+    <FeedVideoLayer v-if="media.type === 'video' &amp;&amp; autoplayIdentity" :media="media" :identity="autoplayIdentity" :visible="visible" @open="$emit('open')" />
+    <template v-if="media.type === 'video' && controls" :style="uxLayout(uxNodePrefix+'-g1000',[{on:true,declarations:{__index:String(0+(source?1:0)+1)}}],{})" :id="uxNodePrefix+'-g1000'">
+      <view class="video-mute" :class="[uxNative?'ux0':'',uxNative?'ux9':'']"><AppIcon name="mute" tone="muted" :size="32" /></view>
+      <text v-if="media.duration" class="duration" :class="[uxNative?'ux14':'',uxNative?'ux18':'',uxNative?'ux10':'']">{{ media.duration }}</text>
+      <view class="video-track" :class="[uxNative?'ux0':'',uxNative?'ux11':'']"><view class="video-progress"  :class="[uxNative?'ux0':'',uxNative?'ux12':'']"/></view>
+    </template>
+    <!-- #ifdef APP -->
+<view :id="String(a11yAttrs(a11yPrefix+'-1',{&quot;aria-label&quot;:'共' + (countTotal || count) + '张图片'}).id)" v-if="count && (countPrefix || count > 1)" class="media-count"  :class="[uxNative?'ux0':'',uxNative?'ux13':'',{'gallery-count':gallery}]">
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :aria-label="'共' + (countTotal || count) + '张图片'" v-if="count && (countPrefix || count > 1)" class="media-count"  :class="[uxNative?'ux0':'',uxNative?'ux13':'',{'gallery-count':gallery}]">
+<!-- #endif -->
+      <image v-if="gallery" class="reference-stack-icon" :src="uiAsset('/static/icons/reference-stack.svg')" mode="aspectFit" /><AppIcon v-else name="stack" tone="white" :size="26"  :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;7rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;20rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1001'"/><text :class="[uxNative?'ux14':'',uxNative?'ux19':'',uxNative?'ux18':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;7rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;20rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1002'">{{ countPrefix }}{{ count }}</text>
+    </view>
+  </view>
+</template>
+<script setup lang="uts">
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import FeedVideoLayer from './FeedVideoLayer.uvue'
+import AppIcon from './AppIcon.uvue'
+import { uiAsset } from '@/utils/ui-assets'
+import CachedImage from './CachedImage.uvue'
+import type { MediaSkeletonSpec } from '@/types/home'
+import { computed, inject, ref, watch } from 'vue'
+import { postLayoutKey } from '@/utils/scroll-context'
+import { mediaAspectRatio, rememberMediaRatio, mediaPreviewSource } from '@/utils/media-layout'
+import { mediaUrl } from '@/utils/media-cache'
+const props=withDefaults(defineProps<{ media: MediaSkeletonSpec; autoplayIdentity?: string; visible?: boolean; count?: number; controls?: boolean; priority?: number; gallery?: boolean; galleryIndex?: number; countPrefix?: string; countTotal?: number }>(), { visible: true, controls: true, priority: 0, gallery: false, galleryIndex: 0, countPrefix: '', countTotal: 0 })
+const source=computed(()=>mediaUrl(mediaPreviewSource(props.media)))
+const decoded = ref(1)
+const invalidateLayout = inject(postLayoutKey, () => {})
+const ratio = computed(() => mediaAspectRatio(props.media, decoded.value))
+watch(() => [source.value, props.media.resourceVersion], () => { decoded.value = 1 })
+function loaded(event: { detail: { width: number; height: number } }) {
+  emit('load')
+  const ratio = event.detail.width / event.detail.height
+  if (Number.isFinite(ratio) && ratio > 0) { decoded.value = ratio; rememberMediaRatio(props.media, ratio); invalidateLayout() }
+}
+const emit = defineEmits<{ (e: 'open'): void; (e: 'load'): void; (e: 'error'): void }>()
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.media-skeleton { position: relative; width: 100%; height: 0; border-radius: 16rpx; overflow: hidden; background: #e6e6e6; }
+.media-fill { position: absolute; inset: 0; width:100%; height:100%; background: #e6e6e6; }
+.video-mute { position: absolute; left: 16rpx; bottom: 16rpx; }
+.duration { position: absolute; right: 18rpx; bottom: 18rpx; font-size: 20rpx; color: #777; }
+.video-track { position: absolute; left: 0; right: 0; bottom: 0; height: 4rpx; background: #c5c5c5; }
+.video-progress { width: 6%; height: 100%; background: #969696; }
+.media-count { position: absolute; right: 10rpx; bottom: 10rpx; display: flex; align-items: center; gap: 7rpx; padding: 5rpx 10rpx; border-radius: 22rpx; background: rgba(0, 0, 0, .72); color: #fff; font-size: 20rpx; line-height: 1.2; flex-direction: row; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux14{color:var(--text-main);font-size:26rpx;}
+
+
+
+.ux19{color:#fff;font-size:20rpx;line-height:24rpx;}
+.ux0{}
+.ux18{}
+
+
+
+
+
+
+.ux7{position:relative;width:100%;height:0;border-radius:16rpx;overflow:hidden;background-color:#e6e6e6;}
+.ux8{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;background-color:#e6e6e6;}
+.ux9{position:absolute;left:16rpx;bottom:16rpx;}
+.ux10{position:absolute;right:18rpx;bottom:18rpx;font-size:20rpx;color:#777;}
+.ux11{position:absolute;left:0;right:0;bottom:0;height:4rpx;background-color:#c5c5c5;}
+.ux12{width:6%;height:100%;background-color:#969696;}
+.ux13{position:absolute;right:10rpx;bottom:10rpx;display:flex;flex-direction:row;align-items:center;padding:5rpx 10rpx;border-radius:22rpx;background-color:rgba(0, 0, 0, .72);color:#fff;font-size:20rpx;line-height:24rpx;}
+/* #endif */
+</style>
+
+<style scoped>
+.gallery-first { border-radius: 16.667rpx 0 0 16.667rpx; }
+.gallery-last { border-radius: 0 16.667rpx 16.667rpx 0; }
+.gallery-count { right: 6.944rpx; bottom: 6.944rpx; padding: 3.472rpx 8.333rpx; border-radius: 5.556rpx; background-color: rgba(0, 0, 0, .5); }
+</style>
+
+<style scoped>
+.reference-stack-icon { width: 26rpx; height: 26rpx; flex-shrink: 0; }
+</style>

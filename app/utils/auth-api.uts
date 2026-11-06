@@ -1,0 +1,23 @@
+import type { AppLoginResult, AppUserInfo, InteractionResult, SystemAvatarGroup, TagCategory, UpdateTagItem } from '@/types/auth'
+import { GET, POST, upload } from './request'
+export const sendCode = (qqNumber: string) => POST<void>('/app/auth/sendCode', { qqNumber })
+export const login = (qqNumber: string, code: string) => POST<AppLoginResult>('/app/auth/login', { qqNumber, code })
+export const loginByPassword = (qqNumber: string, password: string) => POST<AppLoginResult>('/app/auth/loginByPassword', { qqNumber, password })
+export const logoutSession = () => POST<void>('/app/auth/logout')
+export const fetchMe = () => GET<AppUserInfo>('/app/user/me')
+export const setPassword = (password: string) => POST<void>('/app/user/password/set', { password })
+export const updatePassword = (oldPassword: string, newPassword: string) => POST<void>('/app/user/password/update', { oldPassword, newPassword })
+export const updateNickname = (nickname: string) => POST<AppUserInfo>('/app/user/updateNickname', { nickname })
+export const updateGender = (gender: number) => POST<AppUserInfo>('/app/user/updateGender', { gender })
+export const updateSignature = (signature: string) => POST<AppUserInfo>('/app/user/updateSignature', { signature })
+export const updateCardBackground = (background: string) => POST<AppUserInfo>('/app/user/updateCardBackground', { background })
+export const updateAvatarFrame = (frameId: string) => POST<AppUserInfo>('/app/user/updateAvatarFrame', { frameId })
+export const updateAvatar = (filePath: string) => upload<AppUserInfo>('/app/user/updateAvatar', filePath)
+export const selectSystemAvatar = (avatarId: string) => POST<AppUserInfo>('/app/user/selectSystemAvatar', { avatarId })
+export const fetchSystemAvatars = () => GET<SystemAvatarGroup>('/app/user/systemAvatars')
+export const fetchTagLibrary = () => GET<TagCategory[]>('/app/user/tags')
+export const updateTags = (items: UpdateTagItem[]) => POST<AppUserInfo>('/app/user/updateTags', { items })
+export const toggleLike = (postId: string) => POST<InteractionResult>('/app/interaction/toggleLike', { postId })
+export const toggleFavorite = (postId: string) => POST<InteractionResult>('/app/interaction/toggleFavorite', { postId })
+
+export const toggleFollow = (userId: string) => POST<InteractionResult>('/app/interaction/toggleFollow', { userId })

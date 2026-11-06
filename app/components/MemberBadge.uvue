@@ -1,0 +1,14 @@
+<template><image v-if="badge" :src="badge" mode="aspectFit" class="member-identity-badge" :style="{width:Math.round(size*2.8)+'rpx',height:Math.round(size*1.25)+'rpx',marginLeft:Math.round(size*.25)+'rpx'}" /></template>
+<script setup lang="uts">
+import {computed,ref,watch,onMounted,onUnmounted} from 'vue'
+import {memberBadges,requestMemberBadge,memberMedia} from '@/utils/membership-api'
+const props=withDefaults(defineProps<{userId?:string;size?:number}>(),{size:28})
+const tick=ref(Date.now());let timer=0,expiryTimer=0
+const badge=computed(()=>{const m=memberBadges.value[props.userId||''];return m?.active&&(m.expiresAt||0)>tick.value?memberMedia(m.plan?.badgeUrl):''})
+watch(()=>props.userId,()=>requestMemberBadge(props.userId),{immediate:true})
+function schedule(){clearTimeout(expiryTimer);tick.value=Date.now();const end=memberBadges.value[props.userId||'']?.expiresAt;if(end!=null&&end>Date.now())expiryTimer=setTimeout(schedule,Math.min(2147483647,end-Date.now()+20))}
+watch(()=>memberBadges.value[props.userId||'']?.expiresAt,schedule,{immediate:true})
+onMounted(()=>{timer=setInterval(()=>{tick.value=Date.now();requestMemberBadge(props.userId)},60000)})
+onUnmounted(()=>{clearInterval(timer);clearTimeout(expiryTimer)})
+</script>
+<style scoped>.member-identity-badge{flex-shrink:0}</style>

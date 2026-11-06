@@ -1,0 +1,124 @@
+<template>
+  <view class="shop-screen">
+    <view class="shop-header" :style="{paddingTop:statusBarHeight+'px'}">
+      <ActionButton class="shop-back" aria-label="返回" @tap="back"><AppIcon name="back" :size="39" /></ActionButton>
+      <view class="shop-search">
+        <AppIcon name="search" tone="muted" :size="32" />
+        <input class="shop-input" v-model="search" placeholder="搜索商品" maxlength="80" confirm-type="search" @confirm="reload" />
+        <ActionButton v-if="search" class="search-clear" aria-label="清空搜索" @tap="clear"><text class="search-cross">×</text></ActionButton>
+      </view>
+    </view>
+    <scroll-view class="shop-scroll" direction="vertical" :show-scrollbar="false" :lower-threshold="160" @scrolltolower="nextPage">
+      <view class="shop-grid" :style="{paddingBottom:Math.max(bottomInset,16)+'px'}">
+        <view v-for="(row, index) in rows" :key="index" class="shop-row">
+          <ActionButton v-for="item in row" :key="item.id" class="shop-card" :style="{width:tile+'px'}" :aria-label="item.name" @tap="open(item.id)">
+            <image class="shop-cover" :style="{height:tile+'px'}" :src="mediaUrl(item.coverUrl)" mode="aspectFill" />
+            <view class="shop-copy">
+              <text class="shop-name" :max-lines="2">【头像框】{{item.name}}</text>
+              <view class="shop-price"><text class="price-sign">¥</text><text class="price-value">{{shopYuan(item.priceFen)}}</text></view>
+            </view>
+          </ActionButton>
+        </view>
+        <ActionButton v-if="error" class="shop-message" @tap="retry"><text class="shop-message-text">{{error}}，点击重试</text></ActionButton>
+        <view v-else-if="loading || !items.length" class="shop-message"><text class="shop-message-text">{{loading ? '商品加载中…' : '没有找到商品'}}</text></view>
+      </view>
+    </scroll-view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { computed, ref, watch } from 'vue'
+import ActionButton from '@/components/ActionButton.uvue'
+import AppIcon from '@/components/AppIcon.uvue'
+import { mediaUrl } from '@/utils/media-cache'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { setStatusBar } from '@/utils/platform'
+import { shopList, shopYuan } from '@/utils/shop-api'
+import type { ChatProductCard } from '@/types/chat'
+
+const { statusBarHeight, bottomInset } = useWindowInsets()
+const width = ref(uni.getWindowInfo().windowWidth)
+const tile = computed(() => (width.value - width.value * 0.105) / 2)
+const search = ref('')
+const items = ref<ChatProductCard[]>([])
+const loading = ref(false)
+const error = ref('')
+const rows = computed(() => {
+  const result: ChatProductCard[][] = []
+  for (let i = 0; i < items.value.length; i += 2) result.push(items.value.slice(i, i + 2))
+  return result
+})
+let page = 0
+let more = true
+let revision = 0
+let timer: ReturnType<typeof setTimeout> | undefined
+async function nextPage() {
+  if (loading.value || !more || error.value) return
+  const current = revision
+  loading.value = true
+  try {
+    const result = await shopList(search.value.trim(), page + 1)
+    if (current !== revision) return
+    items.value = [...items.value, ...result.records]
+    more = result.more
+    page++
+  } catch (e) {
+    if (current === revision) error.value = e instanceof Error ? e.message : '商品加载失败'
+  } finally {
+    if (current === revision) loading.value = false
+  }
+}
+function reload() {
+  clearTimeout(timer)
+  revision++
+  page = 0
+  more = true
+  error.value = ''
+  items.value = []
+  loading.value = false
+  void nextPage()
+}
+function retry() { error.value = ''; void nextPage() }
+function clear() { search.value = '' }
+function back() {
+  if (getCurrentPages().length > 1) uni.navigateBack()
+  else uni.reLaunch({url:'/pages/index/index?tab=mine'})
+}
+function open(id: string) { uni.navigateTo({url:'/pages/shop/detail?id='+encodeURIComponent(id)}) }
+watch(search, () => {
+  clearTimeout(timer)
+  revision++
+  timer = setTimeout(reload, 260)
+})
+onShow(() => setStatusBar('dark'))
+onLoad(reload)
+onResize(() => { width.value = uni.getWindowInfo().windowWidth })
+onUnload(() => { revision++; clearTimeout(timer) })
+</script>
+
+<style scoped>
+.shop-screen { flex:1; display:flex; flex-direction:column; background-color:#eef0f1; }
+.shop-header { display:flex; flex-direction:row; align-items:center; background-color:#fff; padding-left:23rpx; padding-right:32rpx; padding-bottom:16rpx; }
+.shop-back { background-color:transparent; padding:0; width:60rpx; height:92rpx; display:flex; align-items:center; justify-content:center; margin-right:12rpx; }
+.shop-search { flex:1; height:59rpx; border-radius:30rpx; background-color:#f3f4f5; display:flex; flex-direction:row; align-items:center; padding-left:22rpx; padding-right:15rpx; }
+.shop-input { flex:1; height:58rpx; min-width:0; font-size:25rpx; color:#27292b; margin-left:12rpx; }
+.search-clear { background-color:transparent; padding:0; display:flex; align-items:center; justify-content:center; width:44rpx; height:46rpx; }
+.search-cross { color:#93999d; font-size:33rpx; }
+.shop-scroll { flex:1; min-height:0; }
+.shop-grid { display:flex; flex-direction:column; padding:32rpx 32rpx 0; }
+.shop-row { display:flex; flex-direction:row; margin-bottom:17rpx; }
+.shop-card { padding:0; display:flex; flex-direction:column; align-items:stretch; overflow:hidden; border-radius:11rpx; background-color:#fff; margin-right:16rpx; }
+.shop-cover { width:100%; background-color:#e5e8e9; }
+.shop-copy { display:flex; flex-direction:column; min-height:193rpx; padding:20rpx 18rpx 23rpx; }
+.shop-name { color:#252628; font-size:28rpx; line-height:39rpx; height:78rpx; overflow:hidden; text-overflow:ellipsis; }
+.shop-price { display:flex; flex-direction:row; align-items:flex-end; margin-top:19rpx; }
+.price-sign { color:#212426; font-size:24rpx; font-weight:800; line-height:40rpx; }
+.price-value { color:#212426; font-size:38rpx; font-weight:800; font-style:italic; line-height:45rpx; }
+.shop-message { display:flex; align-items:center; justify-content:center; padding:36rpx 10rpx; }
+.shop-message-text { color:#777e83; font-size:24rpx; }
+/* #ifdef WEB */
+.shop-screen { height:100vh; }
+.shop-back,.search-clear,.shop-card,.shop-message { border:0; box-shadow:none; }
+.shop-back::after,.search-clear::after,.shop-card::after,.shop-message::after { border:0; }
+/* #endif */
+</style>

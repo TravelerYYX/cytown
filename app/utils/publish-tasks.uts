@@ -1,0 +1,231 @@
+import { reactive, ref, watch } from 'vue'
+import type { Asset, PollDraft, RichBlock, RichRun, Topic } from '@/types/publish'
+import type { PublishMode } from '@/types/home'
+import { authRevision, getSessionGeneration, getUserInfo, isLoggedIn } from './auth'
+import { deleteDraft, saveDraft, submitPost } from './publish-api'
+import { upload } from './request'
+import type { UploadControl } from './request'
+
+export interface PublishEditor {
+  repostOfPostId?:string; repost?:import('@/types/home').RepostSummary
+  mode: PublishMode; title: string; content: string; postText: string; assets: Asset[]
+  postBlocks: RichBlock[]; inlineRuns: RichRun[]; selectedTopics: Topic[]; channelId: number | null
+  creator: { allowDownload: boolean; downloadWatermark: boolean; original: boolean }
+  poll: PollDraft; activeColorId?: number
+}
+export interface PublishSession {
+  key: string; owner: string; generation: number; data: PublishEditor; draftId?: number; revision?: number
+  saving: boolean; submitted: boolean; deleting?: boolean; phase: string; error: string; createdAt: number; postId: string; postStatus: number
+}
+interface MediaTransfer { session: string; id: number; path: string; state: string; sent: number; total: number; attempt: number; samples: {time:number;bytes:number}[] }
+export interface PublishUploadStats { visible: boolean; progress: number; speed: string; label: string; failed: boolean }
+const sessions = reactive<PublishSession[]>([])
+const transfers = reactive<MediaTransfer[]>([])
+const controls = new Map<string, UploadControl>()
+const byteUpdates = new Map<string, {sent:number;total:number;samples:{time:number;bytes:number}[]}>()
+const saves = new Map<string, Promise<void>>()
+const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const submitting = new Set<string>()
+export const publishRevision = ref(0)
+export const publishClock = ref(Date.now())
+let current: PublishSession | undefined, sequence = 0, nextMediaId = -1, pumping = false
+let clockTimer: ReturnType<typeof setInterval> | undefined
+const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+function valid(session: PublishSession) { return session.phase !== 'deleted' && isLoggedIn() && session.owner === getUserInfo()?.userId && session.generation === getSessionGeneration() }
+function emptyEditor(): PublishEditor { return {mode:'image',title:'',content:'',postText:'',assets:[],postBlocks:[],inlineRuns:[],selectedTopics:[],channelId:null,creator:{allowDownload:true,downloadWatermark:false,original:false},poll:{question:'',options:['','']}} }
+export function getPublishEditor(draftId?: number): PublishSession {
+  if(draftId){const existing=sessions.find(s=>valid(s)&&!s.submitted&&s.draftId===draftId);if(existing){current=existing;return existing}}
+  if (!draftId && current && valid(current) && !current.submitted) return current
+  const session = reactive<PublishSession>({key:'publish-'+Date.now()+'-'+(++sequence),owner:getUserInfo()?.userId||'',generation:getSessionGeneration(),data:emptyEditor(),saving:false,submitted:false,phase:'editing',error:'',createdAt:0,postId:'',postStatus:0})
+  sessions.push(session); current = session
+  return session
+}
+export function startRepostEditor(source:import('@/types/home').RepostSummary):PublishSession {
+  if(current)retainPublishEditor(current)
+  current=undefined
+  const session=getPublishEditor();session.data.mode='post';session.data.repostOfPostId=source.id;session.data.repost=source
+  return session
+}
+export function serverAssetId(asset: Asset): number { return asset.serverId || asset.id }
+export function selectedPublishAssets(data: PublishEditor): Asset[] {
+  if (data.mode === 'image') return data.assets.filter(a=>a.mediaType==='image')
+  if (data.mode === 'video') return data.assets.filter(a=>a.mediaType==='video').slice(0,1)
+  const ids = new Set(data.postBlocks.filter(b=>'assetId' in b).map(b=>(b as {assetId:number}).assetId))
+  return data.assets.filter(a=>ids.has(a.id))
+}
+function transferKey(session: string, id: number) { return session+':'+id }
+function startClock() {
+  if (clockTimer) return
+  clockTimer = setInterval(()=>{
+    const now=Date.now()
+    for(const t of transfers){const update=byteUpdates.get(transferKey(t.session,t.id));if(update&&t.state==='uploading'){t.sent=update.sent;t.total=update.total;t.samples=update.samples.filter(s=>s.time>now-1000)}}
+    publishClock.value=now
+    if (!transfers.some(t=>t.state==='uploading'||t.state==='queued')) { clearInterval(clockTimer); clockTimer=undefined }
+  },250)
+}
+export function publishUploadStats(session: PublishSession): PublishUploadStats {
+  const now=publishClock.value, assets=selectedPublishAssets(session.data), ids=new Set(assets.map(a=>a.id))
+  const items=transfers.filter(t=>t.session===session.key&&ids.has(t.id)&&t.state!=='cancelled')
+  let total=0,sent=0,bytes=0
+  for (const asset of assets) {
+    const t=items.find(item=>item.id===asset.id), size=t?.total||asset.sizeBytes||0
+    total+=size; sent+=t ? Math.min(size,t.sent) : size
+    if(t?.state==='uploading') for(const sample of t.samples) if(sample.time>now-1000&&sample.time<=now)bytes+=sample.bytes
+  }
+  const busy=items.some(t=>t.state==='queued'||t.state==='uploading'), failed=items.some(t=>t.state==='failed')||session.phase==='failed'
+  const progress=total>0?Math.min(100,sent/total*100):busy?0:100
+  return {visible:busy||failed||session.phase==='submitting',progress,speed:bytes>=1024*1024?(bytes/1024/1024).toFixed(1)+' MB/S':(bytes/1024).toFixed(1)+' KB/S',label:failed?(items.some(t=>t.state==='failed')?'上传失败':'发布失败'):session.phase==='submitting'?'发布中':busy&&progress>=100?'处理中':'上传',failed}
+}
+export function restorePublishMedia(session:PublishSession) {
+  for(const asset of session.data.assets){
+    nextMediaId=Math.min(nextMediaId,asset.id-1)
+    if(asset.id>=0||asset.serverId||transfers.some(t=>t.session===session.key&&t.id===asset.id))continue
+    if(asset.localPath){asset.status='uploading';transfers.push({session:session.key,id:asset.id,path:asset.localPath,state:'queued',sent:0,total:asset.sizeBytes||0,attempt:0,samples:[]})}
+    else{asset.status='upload_failed';asset.errorMessage='本地文件已失效，请删除后重新选择'}
+  }
+  startClock();void pump()
+}
+export function addPublishMedia(session: PublishSession, paths: {path:string;size:number;width?:number;height?:number;durationMs?:number;coverUrl?:string}[], type: 'image'|'video', inPost: boolean) {
+  if(!valid(session)||session.submitted)return
+  for (const file of paths) {
+    const id=nextMediaId--
+    session.data.assets.push({id,mediaType:type,url:'',coverUrl:file.coverUrl||'',status:'uploading',errorMessage:'',sizeBytes:file.size,width:file.width||0,height:file.height||0,durationMs:file.durationMs||0,coverTimeMs:0,cropJson:'',localPath:file.path})
+    if(inPost)session.data.postBlocks.push({type,assetId:id})
+    transfers.push({session:session.key,id,path:file.path,state:'queued',sent:0,total:file.size,attempt:0,samples:[]})
+  }
+  retainPublishEditor(session);startClock();void pump()
+}
+async function pump() {
+  if(pumping)return
+  pumping=true
+  try {
+    while(true) {
+      const transfer=transfers.find(t=>t.state==='queued'), session=transfer?sessions.find(s=>s.key===transfer.session):undefined
+      if(!transfer)break
+      if(!session||!valid(session)){transfer.state='cancelled';continue}
+      const asset=session.data.assets.find(a=>a.id===transfer.id)
+      if(!asset){transfer.state='cancelled';continue}
+      transfer.state='uploading';transfer.sent=0;transfer.samples=[]
+      const attempt=++transfer.attempt, control:UploadControl={cancelled:false}, key=transferKey(session.key,asset.id)
+      controls.set(key,control)
+      try {
+        const uploaded=await upload<Asset>('/app/publish/assets/'+asset.mediaType,transfer.path,undefined,value=>{
+          if(control.cancelled||!valid(session)||attempt!==transfer.attempt)return
+          const now=Date.now(), previous=byteUpdates.get(key), delta=Math.max(0,value.sent-(previous?.sent||0))
+          byteUpdates.set(key,{sent:value.sent,total:value.total>0?value.total:transfer.total,samples:[...(previous?.samples||[]).filter(s=>s.time>now-1000),{time:now,bytes:delta}]})
+        },control)
+        if(control.cancelled||!valid(session)||attempt!==transfer.attempt)continue
+        Object.assign(asset,uploaded,{id:transfer.id,serverId:uploaded.id,localPath:transfer.path})
+        transfer.total=byteUpdates.get(key)?.total||transfer.total;transfer.sent=transfer.total;transfer.state='done';retainPublishEditor(session)
+      } catch(error) {
+        if(control.cancelled||!valid(session)){transfer.state='cancelled';continue}
+        transfer.state='failed';asset.status='upload_failed';asset.errorMessage=error instanceof Error?error.message:'文件上传失败，请重试'
+        if(session.submitted){session.phase='failed';session.error=asset.errorMessage}
+      } finally { controls.delete(key);byteUpdates.delete(key) }
+      if(session.submitted)void finishPublish(session)
+    }
+  } finally {pumping=false}
+}
+export function removePublishMedia(session:PublishSession,id:number) {
+  if(session.submitted)return
+  const item=transfers.find(t=>t.session===session.key&&t.id===id)
+  if(item){item.state='cancelled';item.attempt++;const control=controls.get(transferKey(session.key,id));if(control){control.cancelled=true;control.abort?.()}}
+  session.data.assets=session.data.assets.filter(a=>a.id!==id)
+  session.data.postBlocks=session.data.postBlocks.filter(b=>!('assetId'in b)||b.assetId!==id)
+  retainPublishEditor(session)
+}
+export function retryPublish(session:PublishSession,id?:number) {
+  if(!valid(session)||session.deleting||session.postId||submitting.has(session.key))return
+  for(const t of transfers.filter(t=>t.session===session.key&&t.state==='failed'&&(id==null||t.id===id))) {
+    t.state='queued';t.sent=0;t.samples=[];const asset=session.data.assets.find(a=>a.id===t.id);if(asset){asset.status='uploading';asset.errorMessage=''}
+  }
+  session.error='';session.phase=session.submitted?'uploading':'editing';startClock();void pump()
+  if(session.submitted)void finishPublish(session)
+}
+function hasContent(data:PublishEditor){return !!(data.repostOfPostId||data.title.trim()||data.content.trim()||data.postText.trim()||data.assets.length||data.postBlocks.length||data.inlineRuns.length||data.selectedTopics.length||data.poll.question.trim())}
+export function retainPublishEditor(session:PublishSession) {
+  if(!valid(session)||session.submitted)return
+  // Sessions retain their live data independently; background completions must not
+  // replace the editor selected by getPublishEditor(). Byte progress stays separate.
+  clearTimeout(saveTimers.get(session.key))
+  saveTimers.set(session.key,setTimeout(()=>{saveTimers.delete(session.key);void savePublishEditor(session).catch(()=>{})},1000))
+}
+export function savePublishEditor(session:PublishSession):Promise<void> {
+  if(!valid(session)||session.deleting||!hasContent(session.data))return Promise.resolve()
+  const running=saves.get(session.key)
+  if(running)return running.then(()=>savePublishEditor(session))
+  const data=clone(session.data), cover=selectedPublishAssets(data)[0]||data.assets[0]
+  session.saving=true
+  const promise=(async()=>{
+    try {
+      const saved=await saveDraft({id:session.draftId,revision:session.revision,mode:data.mode,title:data.title,summary:(data.mode==='post'?data.postText:data.content).slice(0,100),coverUrl:cover?.coverUrl||cover?.url||'',payload:data})
+      if(valid(session)){session.draftId=saved.id;session.revision=saved.revision}
+    } finally {session.saving=false;saves.delete(session.key)}
+  })()
+  saves.set(session.key,promise);return promise
+}
+export function enqueuePublish(session:PublishSession):boolean {
+  if(!valid(session)||session.submitted)return false
+  session.submitted=true;session.createdAt=Date.now();session.phase='uploading';session.error=''
+  clearTimeout(saveTimers.get(session.key));saveTimers.delete(session.key)
+  if(current?.key===session.key)current=undefined
+  void finishPublish(session);return true
+}
+async function finishPublish(session:PublishSession) {
+  if(!valid(session)||session.deleting||session.phase==='failed'||!session.submitted||session.postId||submitting.has(session.key))return
+  const selected=selectedPublishAssets(session.data), ids=new Set(selected.map(a=>a.id))
+  const items=transfers.filter(t=>t.session===session.key&&ids.has(t.id))
+  if(items.some(t=>t.state==='failed')){session.phase='failed';session.error=selected.find(a=>a.status==='upload_failed')?.errorMessage||'文件上传失败，请重试';return}
+  if(items.some(t=>t.state==='queued'||t.state==='uploading'))return
+  submitting.add(session.key);session.phase='submitting'
+  try {
+    await savePublishEditor(session)
+    if(!valid(session))return
+    const data=clone(session.data), media=selectedPublishAssets(data), byId=new Map(media.map(a=>[a.id,serverAssetId(a)]))
+    const runs:RichRun[]=[]
+    if(data.postText.trim())runs.push({type:'text',text:data.postText,colorId:data.activeColorId})
+    runs.push(...data.inlineRuns)
+    const blocks:RichBlock[]=[...(runs.length?[{type:'paragraph',runs} as RichBlock]:[]),...data.postBlocks.map(block=>'assetId'in block?{...block,assetId:byId.get(block.assetId)!}:block)]
+    const result=await submitPost({repostOfPostId:data.repostOfPostId,draftId:session.draftId,mode:data.mode,channelId:data.channelId,title:data.title,content:data.content,blocks:data.mode==='post'?blocks:undefined,assetIds:media.map(serverAssetId),topicIds:data.selectedTopics.map(t=>t.id),customTopics:[],...data.creator,poll:data.postBlocks.some(b=>b.type==='poll')?{...data.poll,options:data.poll.options.map(v=>v.trim()).filter(Boolean)}:undefined})
+    if(!valid(session))return
+    session.postId=result.id;session.postStatus=result.status;session.phase='complete';session.error='';publishRevision.value++
+  } catch(error) {if(valid(session)){session.phase='failed';session.error=error instanceof Error?error.message:'发布失败，请重试'}}
+  finally{submitting.delete(session.key)}
+}
+export function minePublishTasks():PublishSession[]{return sessions.filter(s=>valid(s)&&s.submitted).sort((a,b)=>b.createdAt-a.createdAt)}
+export async function deletePublishTask(session:PublishSession):Promise<boolean> {
+  if(!valid(session)||!session.submitted||session.phase!=='failed'||session.deleting||submitting.has(session.key))return false
+  session.deleting=true
+  clearTimeout(saveTimers.get(session.key));saveTimers.delete(session.key)
+  try {
+    // A save already in flight may assign the draft ID we need to remove.
+    const saving=saves.get(session.key)
+    if(saving)await saving.catch(()=>{})
+    if(!valid(session))return false
+    if(session.draftId)await deleteDraft(session.draftId)
+    if(!valid(session))return false
+    session.phase='deleted'
+    for(let i=transfers.length-1;i>=0;i--){
+      const transfer=transfers[i]
+      if(transfer.session!==session.key)continue
+      transfer.state='cancelled';transfer.attempt++
+      const key=transferKey(session.key,transfer.id),control=controls.get(key)
+      if(control){control.cancelled=true;control.abort?.()}
+      controls.delete(key);byteUpdates.delete(key);transfers.splice(i,1)
+    }
+    if(current?.key===session.key)current=undefined
+    const index=sessions.findIndex(s=>s.key===session.key)
+    if(index>=0)sessions.splice(index,1)
+    return true
+  } finally {session.deleting=false}
+}
+export function acknowledgePublishPosts(ids:string[]) {
+  for(let i=sessions.length-1;i>=0;i--)if(sessions[i].postId&&ids.includes(sessions[i].postId))sessions.splice(i,1)
+}
+watch(authRevision,()=>{
+  for(const session of sessions)if(!valid(session)){
+    clearTimeout(saveTimers.get(session.key));saveTimers.delete(session.key)
+    for(const transfer of transfers.filter(t=>t.session===session.key)){transfer.state='cancelled';const control=controls.get(transferKey(session.key,transfer.id));if(control){control.cancelled=true;control.abort?.()}}
+  }
+  if(current&&!valid(current))current=undefined
+})

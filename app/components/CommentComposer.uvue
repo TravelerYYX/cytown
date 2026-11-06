@@ -1,0 +1,230 @@
+<template>
+  <view v-if="visible" class="composer-layer" :class="[uxNative?'ux3':'',uxNative?'ux4':'']">
+    <view class="composer-mask" @tap="close"  :class="[uxNative?'ux3':'',uxNative?'ux5':'']"/>
+    <view class="composer-panel" :style="uxLayout(uxNodePrefix+'-n0',[],{ paddingBottom: 'max(env(safe-area-inset-bottom), ' + bottomInset + 'px)' })" @tap.stop :class="[uxNative?'ux3':'',uxNative?'ux6':'']" :id="uxNodePrefix+'-n0'">
+      <view class="composer-head" :class="[uxNative?'ux3':'',uxNative?'ux7':'']">
+        <text class="composer-title" :class="[uxNative?'ux8':'',uxNative?'ux9':'',uxNative?'ux10':'']">{{ replyTarget ? '回复 ' + replyTarget.authorNickname : '发表评论' }}</text>
+        <ActionButton aria-label="关闭评论编辑器" @tap="close" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux12':'']"><AppIcon name="close" tone="dark" :size="32" /></ActionButton>
+      </view>
+      <textarea v-model="content" class="composer-input" :maxlength="config.contentMax" auto-height :focus="true" :placeholder="replyTarget ? '友好回复，文明交流' : '友好讨论，文明交流'"  :class="[uxNative?'ux8':'',uxNative?'ux13':'',uxNative?'ux14':'']"/>
+      <view v-if="selectedEmoji" class="selected-emoji" :class="[uxNative?'ux3':'',uxNative?'ux15':'']">
+        <image :src="uiAsset(assetUrl(selectedEmoji!.imageUrl))" mode="aspectFit"  :class="[uxNative?'ux16':'']"/>
+        <ActionButton aria-label="移除已选表情" @tap="selectedEmoji = null" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux17':'',uxNative?'ux18':'']"><AppIcon name="close" tone="dark" :size="28" /></ActionButton>
+      </view>
+      <view v-if="images.length" class="selected-images" :class="[uxNative?'ux3':'',uxNative?'ux19':'']">
+        <view v-for="(asset, __uxIndex0) in images" :key="asset.id" class="selected-image" :class="[uxNative?'ux3':'',uxNative?'ux20':'']" :style="uxLayout(uxNodePrefix+'-g1000'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(0+__uxIndex0)}}],{})" :id="uxNodePrefix+'-g1000'+'-'+[__uxIndex0].join('-')">
+          <image :src="uiAsset(asset.localPath || assetUrl(asset.url))" mode="aspectFill"  :class="[uxNative?'ux21':'']"/>
+          <ActionButton aria-label="移除评论图片" @tap="removeImage(asset.id)" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux22':'',uxNative?'ux23':'']"><AppIcon name="close" tone="white" :size="24" /></ActionButton>
+        </view>
+        <ActionButton v-if="images.length < config.imageMax" class="add-image" aria-label="继续添加评论图片" @tap="chooseImages" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux24':'',uxNative?'ux25':'']" :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(0+images.length)}}],{})" :id="uxNodePrefix+'-g1001'"><AppIcon name="plus" tone="muted" :size="34" /></ActionButton>
+      </view>
+      <view v-if="tool === 'emoji'" class="emoji-panel" :class="[uxNative?'ux3':'',uxNative?'ux26':'']">
+        <scroll-view class="emoji-groups" direction="horizontal" :show-scrollbar="false" :class="[uxNative?'ux27':'',uxNative?'ux28':'']">
+          <ActionButton :aria-label="String(group.name)" v-for="(group, __uxIndex1) in config.emojiGroups" :key="group.id" :class="[uxNative?'ct-native-button':'',{active:emojiGroupId===group.id},uxNative?'ux11':'',uxNative?'ux41':'',uxNative?'ux42':'',uxNative&amp;&amp;!!(emojiGroupId===group.id)?'ux43':'']" @tap="emojiGroupId = group.id"><text :class="[uxNative?'ux8':'',uxNative?'ux44':'',uxNative?'ux52':'',uxNative?'ux53':'',uxNative&amp;&amp;!!(emojiGroupId===group.id)?'ux54':'',uxNative?'ux9':'']">{{ group.name }}</text></ActionButton>
+        </scroll-view>
+        <scroll-view class="emoji-list" direction="vertical" :show-scrollbar="false" :class="[uxNative?'ux27':'',uxNative?'ux35':'']">
+          <ActionButton v-for="(emoji, __uxIndex2) in visibleEmojis" :key="emoji.id" :aria-label="'选择表情' + emoji.name" @tap="selectEmoji(emoji)" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux41':'',uxNative?'ux55':'']"><image :src="uiAsset(assetUrl(emoji.imageUrl))" mode="aspectFit"  :class="[uxNative?'ux56':'']"/></ActionButton>
+          <EmptyState v-if="configLoaded && !visibleEmojis.length" compact />
+        </scroll-view>
+      </view>
+      <view class="composer-actions" :class="[uxNative?'ux3':'',uxNative?'ux37':'']">
+        <view class="composer-tools" :class="[uxNative?'ux3':'',uxNative?'ux38':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;14rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1002'">
+          <ActionButton v-if="config.imageMax > 0" aria-label="添加评论图片" :disabled="uploading" @tap="chooseImages" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux57':'',uxNative?'ux58':'']" :style="uxLayout(uxNodePrefix+'-g1003',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1003'"><AppIcon name="image" :size="38" /></ActionButton>
+          <ActionButton aria-label="选择图片表情" @tap="toggleEmoji" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux57':'',uxNative?'ux58':'']" :style="uxLayout(uxNodePrefix+'-g1004',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+(config.imageMax>0?1:0))}}],{})" :id="uxNodePrefix+'-g1004'"><AppIcon name="smile" :tone="tool === 'emoji' ? 'cyan' : 'dark'" :size="38" /></ActionButton>
+        </view>
+        <text class="length" :class="[uxNative?'ux8':'',uxNative?'ux9':'',uxNative?'ux39':'']" :style="uxLayout(uxNodePrefix+'-g1005',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;14rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1005'">{{ textLength }}/{{ config.contentMax }}</text>
+        <ActionButton :aria-label="String(sending ? '发送中' : uploading ? '上传中' : '发送')" class="send" :disabled="!canSend || sending || uploading" @tap="send" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux40':'',uxNative&amp;&amp;!!(!canSend||sending||uploading)?'ux59':'']" :style="uxLayout(uxNodePrefix+'-g1006',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;14rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1006'"><text :class="[uxNative?'ux8':'',uxNative?'ux60':'',uxNative&amp;&amp;!!(!canSend||sending||uploading)?'ux61':'',uxNative?'ux9':'']">{{ sending ? '发送中' : uploading ? '上传中' : '发送' }}</text></ActionButton>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { chooseAlbumImages } from '@/utils/media-picker'
+import EmptyState from '@/components/EmptyState.uvue'
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, reactive, ref, watch } from 'vue'
+import AppIcon from './AppIcon.uvue'
+import { API_BASE_URL } from '@/config/env'
+import { fetchIpLocation } from '@/utils/ip-locate'
+import { createComment, fetchCommentConfig, uploadCommentImage } from '@/utils/post-api'
+import type { Asset } from '@/types/publish'
+import type { CommentConfig, CommentResponse } from '@/types/post-api'
+
+const props = defineProps<{ visible: boolean; postId: string; replyTarget?: CommentResponse | null; bottomInset: number }>()
+const emit = defineEmits<{ (e: 'close'): void; (e: 'submitted', comment: CommentResponse): void }>()
+const config = reactive<CommentConfig>({ imageMax: 3, contentMax: 500, emojiGroups: [], emojis: [] })
+const content = ref('')
+const images = ref<Asset[]>([])
+const selectedEmoji = ref<CommentConfig['emojis'][number] | null>(null)
+const emojiGroupId = ref(0)
+const tool = ref<'' | 'emoji'>('')
+const uploading = ref(false)
+const sending = ref(false)
+const configLoaded = ref(false)
+const textLength = computed(() => Array.from(content.value.trim()).length)
+const visibleEmojis = computed(() => config.emojis.filter(item => item.groupId === emojiGroupId.value))
+const canSend = computed(() => selectedEmoji.value !== null || textLength.value > 0 || images.value.length > 0)
+const assetUrl = (path: string) => /^https?:\/\//i.test(path) ? path : API_BASE_URL + path
+
+watch(() => props.visible, async visible => {
+  if (!visible || configLoaded.value) return
+  try {
+    Object.assign(config, await fetchCommentConfig())
+    emojiGroupId.value = config.emojiGroups[0]?.id || 0
+    configLoaded.value = true
+  } catch { /* 请求层已经提示，保留安全默认值。 */ }
+})
+
+function reset() { content.value = ''; images.value = []; selectedEmoji.value = null; tool.value = '' }
+function close() { if (sending.value || uploading.value) return; reset(); emit('close') }
+function toggleEmoji() { tool.value = tool.value === 'emoji' ? '' : 'emoji' }
+function selectEmoji(emoji: CommentConfig['emojis'][number]) {
+  if (content.value.trim() || images.value.length) { uni.showToast({ title: '图片表情需要单独发送', icon: 'none' }); return }
+  selectedEmoji.value = emoji; tool.value = ''
+}
+function removeImage(id: number) { images.value = images.value.filter(item => item.id !== id) }
+function chooseImages() {
+  if (selectedEmoji.value) { uni.showToast({ title: '图片表情需要单独发送', icon: 'none' }); return }
+  const remaining = config.imageMax - images.value.length
+  if (remaining <= 0) { uni.showToast({ title: '图片数量已达上限', icon: 'none' }); return }
+  chooseAlbumImages({ count: remaining, sizeType: ['original'], sourceType: ['album', 'camera'], success: async result => {
+    uploading.value = true
+    try {
+      for (const path of result.tempFilePaths) {
+        const asset = await uploadCommentImage(path)
+        asset.localPath = path
+        images.value.push(asset)
+      }
+    } finally { uploading.value = false }
+  } })
+}
+async function send() {
+  if (!canSend.value || sending.value || uploading.value) return
+  sending.value = true
+  try {
+    const target = props.replyTarget
+    const region = await fetchIpLocation()
+    const created = await createComment(props.postId, {
+      ...(target ? { parentId: target.parentId || target.id, replyToId: target.id } : {}),
+      ...(selectedEmoji.value ? { emojiId: selectedEmoji.value.id } : { content: content.value.trim(), assetIds: images.value.map(item => item.id) }),
+      region
+    })
+    reset(); emit('submitted', created); emit('close')
+    uni.showToast({ title: '评论已发布', icon: 'none' })
+  } finally { sending.value = false }
+}
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.composer-layer { position: fixed; z-index: 80; inset: 0; }
+.composer-mask { position: absolute; inset: 0; background: rgba(0,0,0,.22); }
+.composer-panel { position: absolute; left: 0; right: 0; bottom: 0; padding: 22rpx 28rpx 18rpx; border-radius: 28rpx 28rpx 0 0; background: #fff; box-shadow: 0 -10rpx 30rpx rgba(0,0,0,.08); }
+.composer-head { min-height: 54rpx; display: flex; align-items: center; justify-content: space-between; flex-direction: row; }
+.composer-title { color: #33383a; font-size: 24rpx; font-weight: 600; }
+.composer-head button, .composer-tools button, .selected-image button, .selected-emoji button, .emoji-panel button { margin: 0; padding: 0; border: 0; background: transparent; line-height: 1; }
+.composer-head button::after, .composer-tools button::after, .selected-image button::after, .selected-emoji button::after, .emoji-panel button::after, .send::after, .add-image::after { border: 0; }
+.composer-input { box-sizing: border-box; width: 100%; min-height: 150rpx; max-height: 300rpx; margin-top: 12rpx; padding: 20rpx 22rpx; border-radius: 18rpx; background: #f6f7f8; color: #33383a; font-size: 25rpx; line-height: 1.55; }
+.selected-emoji { position: relative; width: 120rpx; height: 120rpx; margin-top: 14rpx; }
+.selected-emoji image { width: 100%; height: 100%; }
+.selected-emoji button { position: absolute; right: -12rpx; top: -9rpx; width: 38rpx; height: 38rpx; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #fff; box-shadow: 0 2rpx 10rpx rgba(0,0,0,.15); flex-direction: row; }
+.selected-images { display: flex; flex-wrap: wrap; gap: 12rpx; margin-top: 14rpx; flex-direction: row; }
+.selected-image, .add-image { position: relative; width: 112rpx; height: 112rpx; border-radius: 12rpx; overflow: hidden; background: #f1f2f3; }
+.selected-image > image { width: 100%; height: 100%; }
+.selected-image button { position: absolute; top: 4rpx; right: 4rpx; width: 34rpx; height: 34rpx; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(0,0,0,.55); flex-direction: row; }
+.add-image { display: flex; align-items: center; justify-content: center; margin: 0; padding: 0; flex-direction: row; }
+.emoji-panel { margin-top: 14rpx; border-top: 1rpx solid #f0f1f2; }
+.emoji-groups { width: 100%; white-space: nowrap; padding: 14rpx 0 10rpx; }
+.emoji-groups button { display: inline-flex; min-width: 90rpx; height: 48rpx; align-items: center; justify-content: center; margin-right: 10rpx; border-radius: 24rpx; color: #7b8184; font-size: 21rpx; flex-direction: row; }
+.emoji-groups button.active { background: #edf9fd; color: #00aeda; }
+.emoji-list { height: 188rpx; }
+.emoji-list button { display: inline-flex; width: 92rpx; height: 92rpx; align-items: center; justify-content: center; flex-direction: row; }
+.emoji-list image { width: 70rpx; height: 70rpx; }
+.empty-emojis { display: block; padding: 50rpx 0; text-align: center; color: #aeb2b4; font-size: 22rpx; }
+.composer-actions { min-height: 76rpx; display: flex; align-items: center; gap: 14rpx; margin-top: 8rpx; flex-direction: row; }
+.composer-tools { display: flex; align-items: center; gap: 18rpx; flex-direction: row; }
+.composer-tools button { width: 50rpx; height: 50rpx; display: flex; align-items: center; justify-content: center; flex-direction: row; }
+.length { margin-left: auto; color: #afb4b6; font-size: 19rpx; }
+.send { width: 112rpx; height: 58rpx; display: flex; align-items: center; justify-content: center; margin: 0; padding: 0; border-radius: 29rpx; background: #15bde8; color: #fff; font-size: 23rpx; line-height: 1; flex-direction: row; }
+.send[disabled] { background: #dce1e3; color: #fff; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux8{color:var(--text-main);font-size:26rpx;}
+.ux44{white-space:nowrap;}
+
+
+
+
+
+
+
+.ux52{line-height:26rpx;}
+.ux53{color:#7b8184;font-size:21rpx;}
+.ux54{color:#00aeda;}
+.ux60{color:#fff;font-size:23rpx;line-height:23rpx;}
+.ux61{color:#fff;}
+.ux3{}
+.ux27{}
+.ux9{}
+.ux13{}
+.ux11{}
+
+
+
+
+
+
+.ux4{position:fixed;z-index:80;top:0;right:0;bottom:0;left:0;}
+.ux5{position:absolute;top:0;right:0;bottom:0;left:0;background-color:rgba(0,0,0,.22);}
+.ux6{position:absolute;left:0;right:0;bottom:0;padding:22rpx 28rpx 18rpx;border-radius:28rpx 28rpx 0 0;background-color:#fff;box-shadow:0 -10rpx 30rpx rgba(0,0,0,.08);}
+.ux7{min-height:54rpx;display:flex;flex-direction:row;align-items:center;justify-content:space-between;}
+.ux10{color:#33383a;font-size:24rpx;font-weight:600;}
+.ux14{width:100%;min-height:150rpx;max-height:300rpx;margin-top:12rpx;padding:20rpx 22rpx;border-radius:18rpx;background-color:#f6f7f8;color:#33383a;font-size:25rpx;line-height:38.75rpx;}
+.ux15{position:relative;width:120rpx;height:120rpx;margin-top:14rpx;}
+.ux19{display:flex;flex-direction:row;flex-wrap:wrap;margin-top:14rpx;}
+.ux20{position:relative;width:112rpx;height:112rpx;border-radius:12rpx;overflow:hidden;background-color:#f1f2f3;}
+.ux24{position:relative;width:112rpx;height:112rpx;border-radius:12rpx;overflow:hidden;background-color:#f1f2f3;}
+.ux25{display:flex;flex-direction:row;align-items:center;justify-content:center;margin:0;padding:0;}
+.ux26{margin-top:14rpx;border-top:1rpx solid #f0f1f2;}
+.ux28{width:100%;white-space:nowrap;padding:14rpx 0 10rpx;}
+.ux35{height:188rpx;}
+.ux36{display:flex;flex-direction:column;padding:50rpx 0;text-align:center;color:#aeb2b4;font-size:22rpx;}
+.ux37{min-height:76rpx;display:flex;flex-direction:row;align-items:center;margin-top:8rpx;}
+.ux38{display:flex;flex-direction:row;align-items:center;}
+.ux39{margin-left:auto;color:#afb4b6;font-size:19rpx;}
+.ux40{width:112rpx;height:58rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;margin:0;padding:0;border-radius:29rpx;background-color:#15bde8;color:#fff;font-size:23rpx;line-height:23rpx;}
+.ux12{margin:0;padding:0;border:0px;background-color:transparent;line-height:26rpx;}
+.ux57{margin:0;padding:0;border:0px;background-color:transparent;line-height:26rpx;}
+.ux22{margin:0;padding:0;border:0px;background-color:transparent;line-height:26rpx;}
+.ux17{margin:0;padding:0;border:0px;background-color:transparent;line-height:26rpx;}
+.ux41{margin:0;padding:0;border:0px;background-color:transparent;line-height:26rpx;}
+.ux16{width:100%;height:100%;}
+.ux18{position:absolute;right:-12rpx;top:-9rpx;width:38rpx;height:38rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;border-radius:50%;background-color:#fff;box-shadow:0 2rpx 10rpx rgba(0,0,0,.15);}
+.ux21{width:100%;height:100%;}
+.ux23{position:absolute;top:4rpx;right:4rpx;width:34rpx;height:34rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;border-radius:50%;background-color:rgba(0,0,0,.55);}
+.ux42{display:flex;flex-direction:row;min-width:90rpx;height:48rpx;align-items:center;justify-content:center;margin-right:10rpx;border-radius:24rpx;color:#7b8184;font-size:21rpx;}
+.ux55{display:flex;flex-direction:row;width:92rpx;height:92rpx;align-items:center;justify-content:center;}
+.ux56{width:70rpx;height:70rpx;}
+.ux58{width:50rpx;height:50rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;}
+.ux59{background-color:#dce1e3;color:#fff;}
+.ux43{background-color:#edf9fd;color:#00aeda;}
+/* #endif */
+</style>

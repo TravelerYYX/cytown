@@ -1,0 +1,155 @@
+<template>
+ <view class="image-viewer" :class="[uxNative?'ux0':'',uxNative?'ux1':'']">
+  <swiper class="viewer-swiper" :current="current" :disable-touch="zoomed" @change="change" :class="[uxNative?'ux2':'']">
+   <swiper-item v-for="(image,index) in displayImages" :key="image.media.id||Number(index)">
+    <!-- #ifdef APP -->
+    <NativeImageZoom v-if="Number(index)===current" @zoom="zoomed=$event"><CachedImage :key="image.key" class="full-image" :src="image.url" :version="image.media.resourceVersion" :variant="image.variant" mode="aspectFit" @load="loadedImages.add(image.key)" @error="failedImages.add(image.key)" :class="[uxNative?'ux5':'']" /></NativeImageZoom>
+    <!-- #endif -->
+    <!-- #ifndef APP -->
+    <movable-area class="zoom-area" :class="[uxNative?'ux3':'']"><movable-view class="zoom-image" direction="all" :scale="true" :scale-min="1" :scale-max="5" :scale-value="1" :class="[uxNative?'ux4':'']">
+     <CachedImage v-if="Number(index)===current" :key="image.key" class="full-image" :src="image.url" :version="image.media.resourceVersion" :variant="image.variant" mode="aspectFit" @load="loadedImages.add(image.key)" @error="failedImages.add(image.key)"  :class="[uxNative?'ux5':'']"/>
+    </movable-view></movable-area>
+    <!-- #endif -->
+   </swiper-item>
+  </swiper>
+  <view v-if="imageLoading" class="viewer-loading" :class="[uxNative?'ux0':'',uxNative?'ux6':'']"><text :class="[uxNative?'ux7':'',uxNative?'ux8':'',uxNative?'ux9':'']">图片加载中…</text></view>
+  <template v-if="visible">
+   <view class="viewer-top" :style="{top:statusBarHeight+44+'px'}" :class="[uxNative?'ux0':'',uxNative?'ux10':'']"><ActionButton class="round back" aria-label="返回" @tap="$emit('back')" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux12':'',uxNative?'ux13':'']"><AppIcon name="back" tone="white" :size="40" /></ActionButton><view class="image-counter" :class="[uxNative?'ux14':'',uxNative?'ux15':'']"><text class="viewer-counter-text">{{current+1}}/{{images.length}}</text></view><ActionButton class="round more" aria-label="更多操作" @tap="sheet=true" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux12':'',uxNative?'ux16':'']"><AppIcon name="more" tone="white" :size="34" class="horizontal-more"  :class="[uxNative?'ux17':'']"/></ActionButton></view>
+   <view class="viewer-shade"  :class="[uxNative?'ux0':'',uxNative?'ux18':'']"/>
+   <view class="viewer-footer" :style="{paddingBottom:bottomInset+70+'px'}" :class="[uxNative?'ux0':'',uxNative?'ux19':'']">
+    <view class="viewer-author" :class="[uxNative?'ux0':'',uxNative?'ux20':'']"><UserAvatar navigable :src="post.author.avatar" :user-id="post.author.id" :frame-id="post.author.avatarFrame" :frame-expires-at="post.author.avatarFrameExpiresAt ?? undefined" /><view class="viewer-identity-name"><UserName :user-id="post.author.id" :nickname="post.author.nickname" :level="post.author.level" color="#ffffff" /></view><FollowButton class="viewer-follow" :user-id="post.author.id" :following="post.detail?.following" :followed-by="post.detail?.followedBy" @follow="emit('follow', $event.active)"  :class="[uxNative?'ux25':'']" :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1001'"/></view>
+    <view class="viewer-actions" :class="[uxNative?'ux0':'',uxNative?'ux26':'',uxNative&amp;&amp;uxMedia(&quot;(max-width:360px)&quot;)?'ux27':'']"><ActionButton class="round" aria-label="收起操作栏" @tap="visible=false" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux12':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;28rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(max-width:360px)&quot;),declarations:{&quot;__gap&quot;:&quot;16rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1002'"><view class="arrow down"  :class="[uxNative?'ux0':'',uxNative?'ux28':'',uxNative?'ux29':'']"/></ActionButton><ActionButton :aria-label="&quot;善语结缘，温暖常伴&quot;" class="comment-input" @tap="$emit('compose')" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux30':'']" :style="uxLayout(uxNodePrefix+'-g1003',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;28rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(max-width:360px)&quot;),declarations:{&quot;__gap&quot;:&quot;16rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1003'"><text :class="[uxNative?'ux7':'',uxNative?'ux31':'',uxNative?'ux9':'']">善语结缘，温暖常伴</text></ActionButton><ActionButton class="count-action" aria-label="查看评论" @tap="$emit('comments')" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux32':'',uxNative&amp;&amp;uxMedia(&quot;(max-width:360px)&quot;)?'ux33':'']" :style="uxLayout(uxNodePrefix+'-g1004',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;28rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(max-width:360px)&quot;),declarations:{&quot;__gap&quot;:&quot;16rpx&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1004'"><AppIcon name="comment" tone="white" :size="39" :style="uxLayout(uxNodePrefix+'-g1005',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(max-width:360px)&quot;),declarations:{&quot;__gap&quot;:&quot;4rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1005'"/><text :class="[uxNative?'ux7':'',uxNative?'ux34':'',uxNative?'ux9':'']" :style="uxLayout(uxNodePrefix+'-g1006',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(max-width:360px)&quot;),declarations:{&quot;__gap&quot;:&quot;4rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1006'">{{post.commentCount}}</text></ActionButton><ActionButton class="count-action" :aria-label="post.detail?.liked ? '取消点赞' : '点赞'" :disabled="interactionBusy.has(post.id + ':like')" @tap="like" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux32':'',uxNative&amp;&amp;uxMedia(&quot;(max-width:360px)&quot;)?'ux33':'']" :style="uxLayout(uxNodePrefix+'-g1007',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;28rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(max-width:360px)&quot;),declarations:{&quot;__gap&quot;:&quot;16rpx&quot;}},{on:true,declarations:{__index:String(0+1+1+1)}}],{})" :id="uxNodePrefix+'-g1007'"><InteractionIcon kind="like" :play-signal="likePlayback" variant="feed" idle-src="/static/icons/like-white.svg" :enabled="visible" :active="!!post.detail?.liked" :size="40" :style="uxLayout(uxNodePrefix+'-g1008',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(max-width:360px)&quot;),declarations:{&quot;__gap&quot;:&quot;4rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1008'"/><text :class="[uxNative?'ux7':'',uxNative?'ux34':'',uxNative?'ux9':'']" :style="uxLayout(uxNodePrefix+'-g1009',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(max-width:360px)&quot;),declarations:{&quot;__gap&quot;:&quot;4rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1009'">{{post.likeCount}}</text></ActionButton><ActionButton class="save-icon" aria-label="保存图片" @tap="sheet=true" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux35':'']" :style="uxLayout(uxNodePrefix+'-g1010',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;28rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(max-width:360px)&quot;),declarations:{&quot;__gap&quot;:&quot;16rpx&quot;}},{on:true,declarations:{__index:String(0+1+1+1+1)}}],{})" :id="uxNodePrefix+'-g1010'"><image :src="uiAsset(downloadIcon)" class="download-icon"  :class="[uxNative?'ux36':'']"/></ActionButton></view>
+   </view>
+  </template>
+  <ActionButton v-else class="round expand" :style="{bottom:bottomInset+70+'px'}" aria-label="展开操作栏" @tap="visible=true" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux12':'',uxNative?'ux37':'']"><view class="arrow up"  :class="[uxNative?'ux0':'',uxNative?'ux28':'',uxNative?'ux38':'']"/></ActionButton>
+  <PostShareSheet :visible="sheet" :post="post" management save-enabled :save-disabled="!post.allowDownload||imageLoading" :save-label="post.allowDownload?'保存':'作者禁止保存'" original-enabled :original-loaded="originals.has(current)" @close="sheet=false" @save="save" @original="loadOriginal" />
+ </view>
+</template>
+<script setup lang="uts">
+import PostShareSheet from '@/components/PostShareSheet.uvue'
+import UserAvatar from '@/components/UserAvatar.uvue'
+import UserName from '@/components/UserName.uvue'
+
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, ref, reactive } from 'vue'
+// #ifdef APP
+import NativeImageZoom from './NativeImageZoom.uvue'
+// #endif
+import FollowButton from './FollowButton.uvue'
+import InteractionIcon from './InteractionIcon.uvue'
+import { interactionBusy, performPostInteraction } from '@/utils/interactions'
+import CachedImage from './CachedImage.uvue'
+import AppIcon from './AppIcon.uvue'
+
+import { savePostMedia } from '@/utils/media-download'
+import type {Post,MediaSkeletonSpec} from '@/types/home'
+import type {InteractionResult} from '@/types/auth'
+const props=withDefaults(defineProps<{post:Post;statusBarHeight:number;bottomInset:number;initialIndex?:number}>(),{initialIndex:0})
+const emit=defineEmits<{(e:'back'):void;(e:'comments'):void;(e:'compose'):void;(e:'interaction',kind:'like'|'favorite',result:InteractionResult):void;(e:'follow',active:boolean):void}>()
+const images=computed(()=>props.post.media.filter(m=>m.type==='image')),current=ref(props.initialIndex),visible=ref(true),sheet=ref(false),originals=reactive(new Set<number>())
+function handleBack(){
+ if(!sheet.value)return false
+ sheet.value=false
+ return true
+}
+defineExpose({handleBack})
+const loadedImages=reactive(new Set<string>()),failedImages=reactive(new Set<string>())
+// Capture the resource identity so delayed events only update their own image.
+const displayImages=computed(()=>images.value.map((media,index)=>{
+ const url=displayUrl(media,index),variant=originals.has(index)?'original':'preview'
+ return {media,url,variant,key:JSON.stringify([props.post.id,media.id||index,url,media.resourceVersion||'legacy',variant])}
+}))
+const imageLoading=computed(()=>{
+ const image=displayImages.value[current.value]
+ return !!image&&!loadedImages.has(image.key)&&!failedImages.has(image.key)
+})
+const zoomed=ref(false)
+const downloadIcon='/static/icons/download-white.svg'
+function displayUrl(media:MediaSkeletonSpec,index:number){return (originals.has(index)?media.originalUrl:media.previewUrl)||media.url||''}
+function change(event:{detail:{current:number}}){
+ if(current.value===event.detail.current)return
+ current.value=event.detail.current;zoomed.value=false
+ const image=displayImages.value[current.value]
+ if(image)failedImages.delete(image.key)
+}
+function loadOriginal(){sheet.value=false;originals.add(current.value)}
+function save(){sheet.value=false;const media=images.value[current.value];if(props.post.allowDownload&&media?.id)void savePostMedia(props.post.id,media.id,'image',originals.has(current.value)?'original':'preview')}
+const likePlayback = ref(0)
+async function like() {
+ const wasActive = !!props.post.detail?.liked
+ const result = await performPostInteraction(props.post, 'like')
+ if (!result) return
+ emit('interaction', 'like', result)
+ if (visible.value && result.active && !wasActive) likePlayback.value++
+}
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+.viewer-counter-text{color:#fff;font-size:24rpx;}
+
+/* #ifndef APP */
+
+.image-viewer{position:fixed;inset:0;background:#000;z-index:10;overflow:hidden}.viewer-swiper,.zoom-area,.zoom-image{width:100%;height:100%}.full-image{width:100%;height:100%;display:block}.viewer-top{position:absolute;left:32rpx;right:32rpx;display:flex;justify-content:space-between;align-items:center;flex-direction:row}.round,.image-counter{display:flex;align-items:center;justify-content:center;background:rgba(50,50,50,.32);color:white;border-radius:60rpx;width:66rpx;height:66rpx;margin:0;padding:0;flex-direction:row}.image-counter{width:90rpx;height:70rpx;font-size:24rpx}.back,.more{width:68rpx;height:68rpx}.horizontal-more{transform:rotate(90deg)}.viewer-shade{position:absolute;bottom:0;left:0;right:0;height:330rpx;pointer-events:none;background:linear-gradient(transparent,rgba(0,0,0,.48) 56%,#000)}.viewer-footer{position:absolute;bottom:0;left:0;right:0;padding:0 32rpx}.viewer-author{display:flex;align-items:center;gap:0;margin-bottom:58rpx;color:white;flex-direction:row}.avatar{width:58rpx;height:58rpx;border-radius:50%}.viewer-author>text{font-size:24rpx;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.follow{margin:0 0 0 5rpx;background:#0da8fa;color:white;border-radius:17rpx;height:64rpx;min-width:158rpx;font-size:22rpx;padding:0 20rpx;display:flex;align-items:center;justify-content:center;flex-direction:row}.viewer-actions{display:flex;align-items:center;gap:28rpx;min-height:70rpx;flex-direction:row}.comment-input{height:68rpx;flex:1;min-width:0;border-radius:50rpx;background:rgba(255,255,255,.2);padding:0 12rpx;color:#fff;font-size:20rpx;display:flex;align-items:center;justify-content:center;white-space:nowrap;flex-direction:row}.count-action{display:flex;align-items:center;gap:8rpx;color:#fff;padding:0;margin:0;background:transparent;font-size:17rpx;flex-shrink:0;flex-direction:row}.save-icon{padding:0;margin:0;background:transparent;flex-shrink:0}.download-icon{width:40rpx;height:40rpx;display:block}.arrow{width:23rpx;height:23rpx;border-right:3rpx solid #fff;border-bottom:3rpx solid #fff}.arrow.down{transform:translateY(-6rpx) rotate(45deg)}.arrow.up{transform:translateY(6rpx) rotate(225deg)}.expand{position:absolute;left:32rpx}.viewer-back{position:absolute;top:0;left:0;width:100%;height:40rpx;opacity:0;pointer-events:none}.viewer-loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);padding:16rpx 24rpx;border-radius:16rpx;background:#0008;color:white;font-size:24rpx;pointer-events:none}button:after{border:none}
+.viewer-follow{background:#0da8fa;color:#fff;border-color:#0da8fa;min-width:128rpx}.viewer-follow.selected{background:#ffffff24;color:#fff;border-color:#ffffff80}
+@media(max-width:360px){.viewer-actions{gap:16rpx}.viewer-author>text{font-size:22rpx}.count-action{gap:4rpx}}
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux7{color:var(--text-main);font-size:26rpx;}
+.ux8{color:white;font-size:24rpx;}
+.ux22{color:white;}
+.ux31{color:#fff;font-size:20rpx;white-space:nowrap;}
+.ux34{color:#fff;font-size:17rpx;}
+.ux0{}
+.ux9{}
+.ux11{}
+.ux1{position:fixed;top:0;right:0;bottom:0;left:0;background-color:#000;z-index:10;overflow:hidden;}
+.ux2{width:100%;height:100%;}
+.ux3{width:100%;height:100%;}
+.ux4{width:100%;height:100%;}
+.ux5{width:100%;height:100%;display:flex;flex-direction:column;}
+.ux10{position:absolute;left:32rpx;right:32rpx;display:flex;flex-direction:row;justify-content:space-between;align-items:center;}
+.ux12{display:flex;flex-direction:row;align-items:center;justify-content:center;background-color:rgba(50,50,50,.32);color:white;border-radius:60rpx;width:66rpx;height:66rpx;margin:0;padding:0;}
+.ux14{display:flex;flex-direction:row;align-items:center;justify-content:center;background-color:rgba(50,50,50,.32);color:white;border-radius:60rpx;width:66rpx;height:66rpx;margin:0;padding:0;}
+.ux15{width:90rpx;height:70rpx;font-size:24rpx;}
+.ux13{width:68rpx;height:68rpx;}
+.ux16{width:68rpx;height:68rpx;}
+.ux17{transform:rotate(90deg);}
+.ux18{position:absolute;bottom:0;left:0;right:0;height:330rpx;pointer-events:none;background-image:linear-gradient(transparent,rgba(0,0,0,.48) 56%,#000);}
+.ux19{position:absolute;bottom:0;left:0;right:0;padding:0 32rpx;}
+.ux20{display:flex;flex-direction:row;align-items:center;margin-bottom:58rpx;color:white;}
+.ux21{width:58rpx;height:58rpx;border-radius:50%;}
+.ux26{display:flex;flex-direction:row;align-items:center;min-height:70rpx;}
+.ux30{height:68rpx;flex:1;min-width:0;border-radius:50rpx;background-color:rgba(255,255,255,.2);padding:0 12rpx;color:#fff;font-size:20rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;white-space:nowrap;}
+.ux32{display:flex;flex-direction:row;align-items:center;color:#fff;padding:0;margin:0;background-color:transparent;font-size:17rpx;flex-shrink:0;}
+.ux35{padding:0;margin:0;background-color:transparent;flex-shrink:0;}
+.ux36{width:40rpx;height:40rpx;display:flex;flex-direction:column;}
+.ux28{width:23rpx;height:23rpx;border-right:3rpx solid #fff;border-bottom:3rpx solid #fff;}
+.ux37{position:absolute;left:32rpx;}
+.ux6{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);padding:16rpx 24rpx;border-radius:16rpx;background-color:#0008;color:white;font-size:24rpx;pointer-events:none;}
+.ux25{background-color:#0da8fa;color:#fff;border-color:#0da8fa;min-width:128rpx;}
+.ux27{}
+.ux33{}
+.ux23{font-size:24rpx;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ux24{font-size:22rpx;}
+.ux29{transform:translateY(-6rpx) rotate(45deg);}
+.ux38{transform:translateY(6rpx) rotate(225deg);}
+/* #endif */
+</style>
+
+<style scoped>
+.viewer-identity-name { flex: 1; min-width: 0; margin-left: 16rpx; margin-right: 12rpx; }
+</style>

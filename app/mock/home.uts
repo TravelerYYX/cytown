@@ -1,0 +1,24 @@
+import type { GameTab, Post } from '@/types/home'
+import { postExamples } from './post-examples'
+export const gameTabs: GameTab[] = [
+  { id: 'cy', name: '次元町' }
+]
+export const mockPosts: Post[] = [
+  {
+    id: 'home-1', author: { id: 'u1', nickname: '拉菲骗了茅台', level: 11 },
+    title: '原神6周年福利来了', media: [{ type: 'image', layout: 'portrait', aspectRatio: .75 }],
+    commentCount: 1582, likeCount: 10000
+  },
+  {
+    id: 'home-2', author: { id: 'u2', nickname: '狐游不是忽悠', level: 8 },
+    title: '【狐游】砂糖cos天空和草地果然是最好的滤镜',
+    media: [{ type: 'image', layout: 'portrait', aspectRatio: .75 }, { type: 'image', layout: 'portrait', aspectRatio: .75 }],
+    commentCount: 155, likeCount: 5066
+  },
+  {
+    id: 'home-3', author: { id: 'u3', nickname: '小软妮', level: 9 },
+    title: '我叹缘分浅浅如雨渐渐', media: [{ type: 'image', layout: 'portrait', aspectRatio: .75 }],
+    commentCount: 23, likeCount: 168
+  },
+  ...postExamples
+]

@@ -1,0 +1,12 @@
+// Dialog pages have their own element tree, outside uni.getElementById's scope.
+export function semanticsElement(id: string): UniElement | null {
+  const pages = getCurrentPages()
+  for (let index = pages.length - 1; index >= 0; index--) {
+    const dialogs = pages[index].getDialogPages()
+    for (let child = dialogs.length - 1; child >= 0; child--) {
+      const element = dialogs[child].getElementById(id)
+      if (element != null) return element
+    }
+  }
+  return uni.getElementById(id)
+}

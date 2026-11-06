@@ -1,0 +1,176 @@
+<template>
+  <!-- #ifdef APP -->
+  <view class="native-surface-host">
+  <!-- #endif -->
+  <video :id="videoId" class="native-video-surface" :src="source" :poster="options.poster" :controls="false" :show-center-play-btn="false" :show-fullscreen-btn="false" :enable-progress-gesture="false" :autoplay="options.active &amp;&amp; playRequested" :muted="options.muted === true" :loop="options.loop === true" :object-fit="options.objectFit || 'contain'" @loadedmetadata="loaded" @timeupdate="timeUpdate" @progress="progress" @waiting="waiting" @play="played" @pause="paused" @ended="ended" @error="failed" @fullscreenchange="nativeFullscreen" :class="[uxNative?'ux0':'']">
+    <!-- #ifdef MP-WEIXIN -->
+    <cover-image v-if="!started && !!options.poster" class="native-video-poster" :src="options.poster" />
+    <!-- #endif -->
+    <slot />
+  </video>
+  <!-- #ifdef APP -->
+  <image v-if="!started && !!options.poster" class="native-video-poster" :src="uiAsset(options.poster)" :mode="options.objectFit === 'cover' ? 'aspectFill' : 'aspectFit'" />
+  </view>
+  <!-- #endif -->
+</template>
+<script setup lang="uts">
+import { uiAsset } from '@/utils/ui-assets'
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { PlaybackOptions, PlaybackEvent } from '@/types/playback'
+const props = defineProps<{ options: PlaybackOptions }>()
+const emit = defineEmits<{ event: [event: PlaybackEvent] }>()
+const videoId = 'ct-native-video-' + getCurrentInstance()!.uid
+const owner = getCurrentInstance()!.proxy
+const source = ref('')
+const started = ref(false)
+// Keep user intent while the native context or media is still being prepared.
+const playRequested = ref(false)
+let userControlled = false
+let context: ReturnType<typeof uni.createVideoContext> | undefined
+let time = 0, duration = 0, bufferEnd = 0, playing = false, resumeAt = 0, selected = 0, capUntil = 0, disposed = false, commandId = -1
+let stall: ReturnType<typeof setTimeout> | undefined, recovery: ReturnType<typeof setInterval> | undefined, connectTimer: ReturnType<typeof setTimeout> | undefined
+let metadataReady=false, connecting=false
+function restorePlayback(){
+  if(disposed||!context)return
+  if(resumeAt)context.seek(Math.min(resumeAt,duration||resumeAt))
+  context.playbackRate(props.options.rate)
+  if(playRequested.value&&props.options.active)context.play()
+  resumeAt=0
+}
+function connect(attempt=0){
+  if(disposed||context)return
+  connecting=true
+  context=uni.createVideoContext(videoId,owner)||uni.createVideoContext(videoId)
+  if(!context){
+    if(attempt<20)connectTimer=setTimeout(()=>connect(attempt+1),100)
+    else{connecting=false;notify({error:'视频加载失败，请检查网络后重试',waiting:false})}
+    return
+  }
+  connecting=false;clearTimeout(connectTimer)
+  if(metadataReady)restorePlayback()
+  commands()
+  // #ifdef MP-WEIXIN
+  applyFullscreen()
+  // #endif
+}
+// #ifdef MP-WEIXIN
+let isFullscreen=false,fullscreenTimer:ReturnType<typeof setTimeout>|undefined
+function applyFullscreen(){
+  if(!context||disposed)return
+  clearTimeout(fullscreenTimer)
+  const requested=props.options.fullscreen===true
+  if(requested===isFullscreen)return
+  if(requested)context.requestFullScreen({direction:90})
+  else context.exitFullScreen()
+  fullscreenTimer=setTimeout(()=>{
+    if(!disposed&&requested!==isFullscreen){notify({fullscreen:isFullscreen});uni.showToast({title:'无法切换全屏，请重试',icon:'none'})}
+  },3000)
+}
+watch(()=>props.options.fullscreen,applyFullscreen)
+// #endif
+function nativeFullscreen(event:{detail:{fullScreen:boolean}}){
+  // #ifdef MP-WEIXIN
+  clearTimeout(fullscreenTimer);isFullscreen=event.detail.fullScreen;notify({fullscreen:isFullscreen})
+  // #endif
+}
+const qualities = computed(() => [...props.options.qualities].sort((a,b) => b.height - a.height))
+function notify(extra: PlaybackEvent = {}) { if (!disposed && (props.options.active || extra.suspended || typeof extra.fullscreen === 'boolean')) emit('event', { time, duration, playing, ...extra }) }
+function switchSource(index: number, preserve = true) {
+  const levels = qualities.value
+  selected = Math.max(0, Math.min(index, Math.max(0, levels.length - 1)))
+  resumeAt = preserve ? time : 0
+  if(!preserve){userControlled=false;playRequested.value=props.options.autoplay&&props.options.active}
+  bufferEnd = 0
+  metadataReady=false
+  source.value = props.options.source ? levels[selected]?.url || props.options.source : ''
+  if (!source.value) context?.stop()
+  notify({ level: levels[selected]?.height || 0, waiting: !!source.value&&playRequested.value, error: '' })
+}
+function initialIndex() { const index = qualities.value.findIndex(q => q.height <= 720); return index < 0 ? Math.max(0, qualities.value.length - 1) : index }
+function applyQuality(preserve = true) { const value = props.options.quality; const index = value === 'auto' ? initialIndex() : qualities.value.findIndex(q => q.height === Number(value)); switchSource(Math.max(0,index),preserve) }
+function loaded(event: { detail: { duration?: number } }) {
+  duration = event.detail.duration || duration
+  metadataReady=true;restorePlayback();if(!context&&!connecting)connect()
+  notify({ waiting: playRequested.value&&!playing })
+}
+function timeUpdate(event: { detail: { currentTime: number; duration: number } }) { time = event.detail.currentTime; duration = event.detail.duration; clearTimeout(stall); notify({ waiting: false }) }
+function progress(event: { detail: { buffered: number } }) { bufferEnd = duration * event.detail.buffered / 100 }
+function waiting() {
+  notify({ waiting: playRequested.value }); clearTimeout(stall)
+  stall = setTimeout(() => { if (playRequested.value && props.options.active && props.options.quality === 'auto' && selected < qualities.value.length - 1) { switchSource(selected + 1); capUntil = Date.now() + 30000 } }, 2000)
+}
+function played() { started.value=true; playing = true; clearTimeout(stall); notify({ waiting: false }) }
+function paused() { playing = false; clearTimeout(stall); notify(); acknowledge() }
+function ended() { playing = false; playRequested.value=props.options.loop===true&&props.options.active; notify({ ended: true, waiting: false }) }
+function failed() { playing = false; playRequested.value=false; clearTimeout(stall); notify({ error: '视频加载失败，请检查网络后重试', waiting: false }) }
+function acknowledge() { if (!props.options.active && props.options.suspendId) notify({ suspended: props.options.suspendId }) }
+function commands() {
+  if(disposed)return
+  const next = props.options
+  if(!next.active){playRequested.value=false;clearTimeout(stall)}
+  else if(next.command.id!==commandId){
+    if(next.command.type==='play'||next.command.type==='retry'){userControlled=true;playRequested.value=true;notify({waiting:true,error:''})}
+    else if(next.command.type==='pause'){userControlled=true;playRequested.value=false;clearTimeout(stall);notify({waiting:false})}
+  }
+  if(!context){if(!connecting)connect();return}
+  context.playbackRate(next.rate)
+  if (!next.active) { context.pause(); void nextTick().then(acknowledge); return }
+  if (next.command.id === commandId) return
+  commandId = next.command.id
+  context=uni.createVideoContext(videoId,owner)||uni.createVideoContext(videoId)||context
+  switch (next.command.type) {
+    case 'play': context.play(); break
+    case 'pause': context.pause(); break
+    case 'seek': context.seek(Math.max(0, Math.min(next.command.value || 0, duration || next.command.value || 0))); break
+    case 'retry': source.value = ''; void nextTick().then(() => { if(!disposed)switchSource(selected) }); break
+  }
+}
+watch(() => props.options.source, () => { clearTimeout(stall); capUntil = 0; time = 0; playing = false; started.value=false; applyQuality(false) }, { immediate:true })
+watch(() => props.options.quality, () => applyQuality())
+watch(() => props.options.autoplay, value => { if(userControlled)return;playRequested.value=value&&props.options.active;if(playRequested.value){notify({waiting:true});context?.play()} })
+watch(() => [props.options.command.id, props.options.rate, props.options.active, props.options.suspendId], commands)
+onMounted(() => {
+  // #ifdef APP
+  connecting=true;connectTimer=setTimeout(()=>{source.value='';void nextTick().then(()=>{if(disposed)return;applyQuality();connect()})},100)
+  // #endif
+  // #ifdef MP-WEIXIN
+  connect()
+  // #endif
+  recovery = setInterval(() => { if (props.options.active && props.options.quality === 'auto' && capUntil && Date.now() > capUntil && bufferEnd - time >= 12 && selected > 0) { switchSource(selected - 1); capUntil = Date.now() + 30000 } }, 3000)
+})
+onBeforeUnmount(() => {
+  // #ifdef MP-WEIXIN
+  clearTimeout(fullscreenTimer);if(isFullscreen)context?.exitFullScreen()
+  // #endif
+  context?.pause(); context?.stop(); disposed = true; clearTimeout(stall); clearTimeout(connectTimer); clearInterval(recovery); context = undefined
+})
+</script>
+<style>
+.native-surface-host{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;background-color:#000;}
+.native-video-poster{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+</style>
+<style>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+
+
+.native-video-surface { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; background-color: #000000; }
+
+
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+
+.ux0{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;background-color:#000000;}
+/* #endif */
+</style>

@@ -1,0 +1,92 @@
+import Intent from 'android.content.Intent'
+import MediaAlbumDialog from 'io.ciyuantown.media.MediaAlbumDialog'
+export function openMediaAlbum(spec:string):Promise<string> {
+  return new Promise((resolve,reject)=>{
+    const activity=UTSAndroid.getUniActivity()
+    if(activity==null){reject(new Error('当前页面不可用'));return}
+    MediaAlbumDialog.open(activity!,spec,(value:string)=>resolve(value))
+  })
+}
+import LocalImageInfo from 'io.ciyuantown.media.LocalImageInfo'
+export function readImageInfo(path:string):Promise<string> {
+  return new Promise(resolve => {
+    const complete = (width:number,height:number):void => { resolve(JSON.stringify({width,height})) }
+    if (/^https?:/i.test(path)) LocalImageInfo.readRemote(UTSAndroid.getAppContext()!,path,complete)
+    else LocalImageInfo.read(UTSAndroid.getAppContext()!,UTSAndroid.convert2AbsFullPath(path),complete)
+  })
+}
+import QrImageDecoder from 'io.ciyuantown.scan.QrImageDecoder'
+export function startQrCamera(complete:(value:string)=>void):void {
+  QrImageDecoder.startCamera()
+  uni.createCameraContext()?.onAndroidCameraOriginalFrame(proxy=>{QrImageDecoder.frame(proxy,complete)})
+}
+export function stopQrCamera():void {
+  uni.createCameraContext()?.offAndroidCameraOriginalFrame()
+  QrImageDecoder.stopCamera()
+}
+export function decodeQrImage(path:string):Promise<string> {
+  return new Promise((resolve,reject)=>{
+    QrImageDecoder.decode(UTSAndroid.getAppContext()!,UTSAndroid.convert2AbsFullPath(path),(value:string,error:string)=>{
+      if(error.length>0)reject(new Error(error));else resolve(value)
+    })
+  })
+}
+import Uri from 'android.net.Uri'
+import Settings from 'android.provider.Settings'
+import ActivityInfo from 'android.content.pm.ActivityInfo'
+import Handler from 'android.os.Handler'
+import Looper from 'android.os.Looper'
+import AppUpdater from 'io.ciyuantown.update.AppUpdater'
+import ChatMediaCache from 'io.ciyuantown.chat.ChatMediaCache'
+export function startChatVideo(spec:string):string { return ChatMediaCache.start(UTSAndroid.getAppContext()!,spec) }
+export function chatVideoStatus(key:string):string { return ChatMediaCache.status(key) }
+export function releaseChatVideo(key:string):void { ChatMediaCache.release(UTSAndroid.getAppContext()!,key) }
+export function updateChatVideoSession(token:string):void { ChatMediaCache.session(token) }
+export function clearNativeChatMedia(owner:string):void { ChatMediaCache.clear(UTSAndroid.getAppContext()!,owner) }
+import { OpenExternalURL, GetReduceMotion, NativeSemantics, ApplyNativeSemantics, ReleaseNativeSemantics } from '../interface.uts'
+import { applyAndroidSemantics as applySemantics, releaseAndroidSemantics as releaseSemantics } from './accessibility.uts'
+export const applyNativeSemantics:ApplyNativeSemantics=(id:string,spec:NativeSemantics):Promise<boolean>=>applySemantics(id,spec)
+export const releaseNativeSemantics:ReleaseNativeSemantics=(id:string):void=>releaseSemantics(id)
+export function getInstalledUpdateVersion():number { return AppUpdater.installedCode(UTSAndroid.getAppContext()!).toDouble() }
+export function getUpdateSnapshot():string { return AppUpdater.snapshot(UTSAndroid.getAppContext()!) }
+export function startUpdateDownload(spec:string):string {
+  const activity=UTSAndroid.getUniActivity()
+  return activity==null?'当前页面不可用':AppUpdater.start(activity!,spec)
+}
+export function installDownloadedUpdate():string {
+  const activity=UTSAndroid.getUniActivity()
+  return activity==null?'当前页面不可用':AppUpdater.install(activity!)
+}
+export function setUpdateForeground(visible:boolean):void { AppUpdater.setForeground(UTSAndroid.getUniActivity(),visible) }
+export function takeUpdateNotification():boolean {
+  const activity=UTSAndroid.getUniActivity()
+  return activity!=null && AppUpdater.takeOpenRequest(activity!)
+}
+export function captureScreenOrientation():number[] {
+  const activity=UTSAndroid.getUniActivity()
+  if(activity==null)return []
+  return [activity!.getRequestedOrientation().toDouble(),activity!.getResources().getConfiguration().orientation.toDouble()]
+}
+export function restoreScreenOrientation(snapshot:number[]):void {
+  const activity=UTSAndroid.getUniActivity()
+  if(activity==null||snapshot.length!=2)return
+  activity!.runOnUiThread(()=>{
+    const requested=snapshot[0].toInt()
+    if(requested==ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED){
+      activity!.setRequestedOrientation(snapshot[1]==1?ActivityInfo.SCREEN_ORIENTATION_PORTRAIT:ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
+      new Handler(Looper.getMainLooper()).postDelayed(()=>{if(!activity!.isFinishing())activity!.setRequestedOrientation(requested)},500)
+    }else activity!.setRequestedOrientation(requested)
+  })
+}
+
+export const getReduceMotion: GetReduceMotion = (): boolean => {
+  const context = UTSAndroid.getAppContext()!
+  return Settings.Global.getFloat(context.getContentResolver(), Settings.Global.ANIMATOR_DURATION_SCALE, 1.0.toFloat()) <= 0
+}
+
+export const openExternalURL: OpenExternalURL = (url: string): void => {
+  const activity = UTSAndroid.getUniActivity()
+  if (activity == null) throw new Error('当前没有可用的原生页面')
+  const intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url))
+  activity.startActivity(intent)
+}

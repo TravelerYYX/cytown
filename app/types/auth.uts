@@ -1,0 +1,16 @@
+export interface UserTag { tagId: string | null; name: string; custom: boolean }
+export interface AppUserInfo {
+  userId: string; publicUid: string; qqNumber: string | null; account?: string; isOfficial?: boolean; nickname: string; avatar: string; avatarFrame?: string; avatarFrameExpiresAt?:number|null; coinBalance?:number; level: number
+  signature: string; gender: number; cardBackground: string; tags: UserTag[]
+  /** 是否已设置登录密码；旧缓存可能缺失该字段 */
+  hasPassword?: boolean
+}
+export interface AppLoginResult { token: string; refreshToken: string; userInfo: AppUserInfo }
+export interface InteractionResult { active: boolean; count: number; followedBy?: boolean }
+export interface UserStatistics { postCount: number; followerCount: number; followingCount: number; receivedLikeCount: number; favoriteCount: number; activeDays: number }
+export interface UserRelationship { userId: string; publicUid: string; nickname: string; avatar?: string; avatarFrame?: string; avatarFrameExpiresAt?:number|null; coinBalance?:number; level?: number; signature?: string; following: boolean; followedBy: boolean }
+export interface SystemAvatarItem { id: string; url: string }
+export interface SystemAvatarGroup { dynamic: SystemAvatarItem[]; static: SystemAvatarItem[] }
+export interface TagItem { id: string; name: string }
+export interface TagCategory { category: string; tags: TagItem[] }
+export interface UpdateTagItem { tagId?: string; customName?: string }

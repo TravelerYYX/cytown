@@ -1,0 +1,42 @@
+<template>
+  <!-- #ifdef APP -->
+  <view v-bind="a11yAttrs(id || a11yPrefix, {'aria-label':ariaLabel,role:role || 'button','aria-pressed':ariaPressed,'aria-checked':ariaChecked,'aria-disabled':disabled || ariaDisabled,tabindex:disabled ? -1 : 0})" class="action-button" :hover-class="disabled || hoverClass==='none' ? 'none' : 'button-hover'" :hover-start-time="20" :hover-stay-time="70" @touchstart="press.start" @touchmove="press.move" @touchend="press.end" @touchcancel="press.end" @tap="tap">
+    <button v-if="loading" class="action-spinner" :loading="true" :disabled="true" hover-class="none" />
+    <slot />
+  </view>
+  <!-- #endif -->
+  <!-- #ifndef APP -->
+  <button :id="id || a11yPrefix" :disabled="disabled" :tabindex="disabled ? -1 : 0" :loading="loading" :aria-label="ariaLabel" :aria-pressed="ariaPressed" :aria-checked="ariaChecked" :aria-disabled="disabled || ariaDisabled" :role="role" :hover-class="hoverClass" @touchstart="press.start" @touchmove="press.move" @touchend="press.end" @touchcancel="press.end" @mousedown="press.start()" @mouseup="press.end" @mouseleave="press.end" @blur="press.end" @tap="tap"><slot /></button>
+  <!-- #endif -->
+</template>
+<script setup lang="uts">
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+import { usePressMotion } from '@/composables/usePressMotion'
+// #ifdef APP
+import { inject, watch } from 'vue'
+import { feedRevealKey } from '@/composables/useFeedReveal'
+// #endif
+const {prefix:a11yPrefix,attrs:a11yAttrs,refresh:a11yRefresh}=useNativeSemantics()
+const props=withDefaults(defineProps<{id?:string;disabled?:boolean;loading?:boolean;ariaLabel?:string;ariaPressed?:boolean;ariaChecked?:boolean;ariaDisabled?:boolean|string;role?:string;hoverClass?:string;pressMotion?:boolean}>(),{id:'',disabled:false,loading:false,ariaLabel:'',role:'button',hoverClass:'button-hover',pressMotion:false})
+const press=props.pressMotion ? usePressMotion(()=>props.id || a11yPrefix,()=>!props.disabled) : {start:()=>{},move:()=>{},end:()=>{}}
+// #ifdef APP
+const feedReveal = inject(feedRevealKey, null)
+if (feedReveal) watch(() => feedReveal.phase.value, phase => {
+  // List-cell recycling can restore an older native delegate after mount.
+  // Reapply once when this channel's masks finish, never on animation frames.
+  if (phase === 'idle') a11yRefresh(props.id || a11yPrefix)
+}, { flush: 'post' })
+// #endif
+const emit=defineEmits<{tap:[event:UniPointerEvent]}>()
+function tap(event:UniPointerEvent){
+  if(props.disabled){event.stopPropagation();return}
+  emit('tap',event)
+}
+</script>
+<style>
+/* #ifdef APP */
+.action-button{position:relative;flex-direction:row;justify-content:center;align-items:center;}
+.action-spinner{width:40rpx;height:40rpx;padding:0;margin:0;margin-right:8rpx;border-width:0;background-color:transparent;pointer-events:none;}
+.button-hover{opacity:.8;}
+/* #endif */
+</style>

@@ -1,0 +1,55 @@
+import { onBeforeUnmount, ref, watch } from 'vue'
+import { getSessionGeneration, isLoggedIn } from '@/utils/auth'
+import { fetchMineComments } from '@/utils/post-api'
+import { commentHistoryRevision } from '@/utils/comment-state'
+import { useFreshTask } from './useFreshTask'
+import type { MineCommentResponse } from '@/types/post-api'
+
+export function useMineComments(active: () => boolean) {
+  const rows = ref<MineCommentResponse[]>([]), loading = ref(false), error = ref(''), hasMore = ref(true)
+  let pageNum = 1, generation = 0, loaded = false, refreshing = false
+  const valid = (current: number, viewer: number) => current === generation && viewer === getSessionGeneration()
+  function reset() { generation++; rows.value=[]; pageNum=1; loading.value=false; error.value=''; hasMore.value=true; loaded=false; refreshing=false }
+  async function loadMore() {
+    if (!active() || !isLoggedIn() || loading.value || refreshing || !hasMore.value) return
+    const current=generation, viewer=getSessionGeneration()
+    loading.value=true; error.value=''
+    try {
+      const page=await fetchMineComments(pageNum)
+      if (!valid(current,viewer)) return
+      const ids=new Set(rows.value.map(row=>row.id))
+      rows.value.push(...page.records.filter(row=>!ids.has(row.id)))
+      pageNum++; loaded=true; hasMore.value=page.current<page.pages && page.records.length>0
+      fresh.touch()
+    } catch(e) { if(valid(current,viewer)) error.value=e instanceof Error?e.message:'评论加载失败' }
+    finally { if(valid(current,viewer)) loading.value=false }
+  }
+  async function refresh() {
+    if (!active() || !isLoggedIn() || loading.value || refreshing) return
+    if (!loaded) { await loadMore(); return }
+    const current=generation, viewer=getSessionGeneration(), pages=Math.max(1,pageNum-1)
+    refreshing=true
+    try {
+      const next:MineCommentResponse[]=[]
+      let last=await fetchMineComments(1,20,true)
+      next.push(...last.records)
+      for(let page=2;page<=Math.min(pages,last.pages);page++) {
+        if(!valid(current,viewer))return
+        last=await fetchMineComments(page,20,true);next.push(...last.records)
+      }
+      if(!valid(current,viewer))return
+      rows.value=next.filter((row,index,all)=>all.findIndex(item=>item.id===row.id)===index)
+      pageNum=last.current+1;hasMore.value=last.current<last.pages;error.value=''
+    } catch { /* Keep the loaded history on a background read failure. */ }
+    finally { if(valid(current,viewer)) refreshing=false }
+  }
+  const fresh=useFreshTask(active,refresh)
+  watch(active, value => {
+    if(!value) { generation++;loading.value=false;refreshing=false;return }
+    if (!loaded) void loadMore()
+    fresh.invalidate()
+  }, { immediate:true, flush:'post' })
+  watch(commentHistoryRevision, () => { reset();fresh.invalidate() })
+  onBeforeUnmount(()=>{generation++})
+  return {rows,loading,error,hasMore,loadMore,busy:fresh.busy,idle:fresh.idle}
+}

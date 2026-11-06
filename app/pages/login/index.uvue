@@ -1,0 +1,347 @@
+<template>
+  <view class="auth-overlay">
+    <view v-if="bottomTransition" :id="uxNodePrefix + '-shade'" class="auth-shade" :style="sheet.shadeStyle.value" />
+    <view :id="uxNodePrefix + '-card'" class="auth-page" :style="sheet.cardStyle.value" :class="[uxNative?'ux0':'',uxNative?'ux1':'']">
+    <scroll-view class="auth-scroll" direction="vertical" :show-scrollbar="false" :class="[uxNative?'ux2':'',uxNative?'ux3':'']">
+      <view class="auth-hero" :style="{ height: heroHeight }" :class="[uxNative?'ux0':'',uxNative?'ux4':'']">
+        <image class="auth-banner" :src="uiAsset(AUTH_ASSETS.banner)" mode="scaleToFill"  :class="[uxNative?'ux5':'']"/>
+        <ActionButton class="auth-close" aria-label="关闭登录" :style="{ top: statusBarHeight + 'px' }" @tap="back" :class="[uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux8':'']"><AppIcon name="close" :size="42" tone="white" /></ActionButton>
+      </view>
+      <view class="auth-content" :style="contentStyle" :class="[{'password-mode':mode==='password','verification-step':codeSent},uxNative?'ux0':'',uxNative?'ux15':'']" :id="uxNodePrefix+'-n0'">
+        <text class="auth-title" :class="[uxNative?'ux34':'',uxNative?'ux46':'',uxNative?'ux16':'']">{{ mode === 'code' ? 'QQ验证码登录' : '账号密码登录' }}</text>
+        <text v-if="mode === 'code'" class="auth-caption" :class="[uxNative?'ux34':'',uxNative?'ux46':'',uxNative?'ux17':'']">未注册的QQ号验证通过将自动注册</text>
+        <view class="auth-fields" :class="[uxNative?'ux0':'',uxNative?'ux18':'',uxNative&amp;&amp;!!(mode==='password')?'ux47':'']">
+          <view class="field account-field" :class="[uxNative?'ux0':'',uxNative?'ux19':'']">
+            <text v-if="mode === 'code'" class="account-prefix" :class="[uxNative?'ux34':'',uxNative?'ux46':'',uxNative?'ux21':'']">QQ</text>
+            <input v-model="account" class="account-input" :type="mode === 'code' ? 'number' : 'text'" :maxlength="mode === 'code' ? 11 : 32" :placeholder="mode === 'code' ? '请输入QQ号' : '账号 / QQ号'" placeholder-class="auth-placeholder" :placeholder-style="uxNative ? 'color:#c5c5c5;font-size:25rpx' : ''" :disabled="sending || submitting" aria-label="登录账号"  :class="[uxNative?'ux34':'',uxNative?'ux48':'',uxNative?'ux49':'']"/>
+          </view>
+          <text v-if="mode === 'code' && account && !validAccount" class="field-hint" :class="[uxNative?'ux34':'',uxNative?'ux46':'',uxNative?'ux22':'']">请输入5至11位QQ号；官方账号请使用账号密码登录</text>
+          <view v-if="mode === 'code' && codeSent" class="field code-field" :class="[uxNative?'ux0':'',uxNative?'ux19':'']">
+            <input v-model="code" type="number" maxlength="6" placeholder="请输入6位验证码" placeholder-class="auth-placeholder" :placeholder-style="uxNative ? 'color:#c5c5c5;font-size:25rpx' : ''" :disabled="submitting || sending" aria-label="验证码"  :class="[uxNative?'ux34':'',uxNative?'ux48':'',uxNative?'ux49':'']"/>
+            <ActionButton :aria-label="String(sending ? '发送中…' : remaining > 0 ? remaining + 's后重发' : '重新获取')" class="send-button" :disabled="!canSend" @tap="send" :class="[uxNative?'ux6':'',uxNative?'ux30':'',uxNative?'ux8':'',uxNative&amp;&amp;!!!canSend?'ux56':'']"><text :class="[uxNative?'ux34':'',uxNative?'ux57':'',uxNative?'ux63':'',uxNative&amp;&amp;!!!canSend?'ux65':'',uxNative?'ux46':'']">{{ sending ? '发送中…' : remaining > 0 ? remaining + 's后重发' : '重新获取' }}</text></ActionButton>
+          </view>
+          <view v-if="mode === 'password'" class="field password-field" :class="[uxNative?'ux0':'',uxNative?'ux19':'']">
+            <input v-model="password" :password="!passwordVisible" maxlength="20" placeholder="密码" placeholder-class="auth-placeholder" :placeholder-style="uxNative ? 'color:#c5c5c5;font-size:25rpx' : ''" :disabled="submitting" aria-label="密码"  :class="[uxNative?'ux34':'',uxNative?'ux48':'',uxNative?'ux49':'']"/>
+            <ActionButton class="password-toggle" :aria-label="passwordVisible ? '隐藏密码' : '显示密码'" :aria-pressed="passwordVisible" @tap="passwordVisible = !passwordVisible" :class="[uxNative?'ux6':'',uxNative?'ux29':'',uxNative?'ux8':'']"><AppIcon :name="passwordVisible ? 'eye' : 'eye-off'" :size="32" tone="muted" /></ActionButton>
+          </view>
+        </view>
+        <view class="agreement-row" :class="[uxNative?'ux0':'',uxNative?'ux23':'',uxNative&amp;&amp;!!(mode==='password')?'ux66':'',uxNative&amp;&amp;!!codeSent?'ux67':'']">
+          <ActionButton class="agreement-toggle" :class="[{checked:agreed},uxNative?'ux6':'',uxNative?'ux24':'',uxNative?'ux8':'',uxNative&amp;&amp;!!agreed?'ux32':'']" role="checkbox" :aria-checked="agreed" aria-label="同意用户协议和隐私政策" :disabled="sending || submitting" @tap="agreed = !agreed" :id="uxNodePrefix+'-g1000'"><AppIcon v-if="agreed" name="check" :size="20" tone="white" /></ActionButton>
+          <view class="agreement-copy" :class="[uxNative?'ux0':'',uxNative?'ux25':'']" :id="uxNodePrefix+'-g1001'"><text :class="[uxNative?'ux34':'',uxNative?'ux70':'',uxNative?'ux46':'']" :id="uxNodePrefix+'-g1002'">我已阅读并同意</text><!-- #ifdef APP -->
+<text v-bind="a11yAttrs(uxNodePrefix+'-g1003',{&quot;role&quot;:&quot;link&quot;,&quot;aria-label&quot;:&quot;次元町用户协议&quot;})" class="legal-link"  @tap="placeholder('次元町用户协议')" :class="[uxNative?'ux34':'',uxNative?'ux70':'',uxNative?'ux46':'',uxNative?'ux26':'']" :id="uxNodePrefix+'-g1003'">
+<!-- #endif -->
+<!-- #ifndef APP -->
+<text :role="&quot;link&quot;" class="legal-link"  @tap="placeholder('次元町用户协议')" :class="[uxNative?'ux34':'',uxNative?'ux70':'',uxNative?'ux46':'',uxNative?'ux26':'']" :id="uxNodePrefix+'-g1003'">
+<!-- #endif -->《次元町用户协议》</text><text :class="[uxNative?'ux34':'',uxNative?'ux70':'',uxNative?'ux46':'',uxNative?'auth-agreement-conjunction':'']" :id="uxNodePrefix+'-g1004'">和</text><!-- #ifdef APP -->
+<text v-bind="a11yAttrs(uxNodePrefix+'-g1005',{&quot;role&quot;:&quot;link&quot;,&quot;aria-label&quot;:&quot;次元町隐私政策&quot;})" class="legal-link"  @tap="placeholder('次元町隐私政策')" :class="[uxNative?'ux34':'',uxNative?'ux70':'',uxNative?'ux46':'',uxNative?'ux26':'']" :id="uxNodePrefix+'-g1005'">
+<!-- #endif -->
+<!-- #ifndef APP -->
+<text :role="&quot;link&quot;" class="legal-link"  @tap="placeholder('次元町隐私政策')" :class="[uxNative?'ux34':'',uxNative?'ux70':'',uxNative?'ux46':'',uxNative?'ux26':'']" :id="uxNodePrefix+'-g1005'">
+<!-- #endif -->《次元町隐私政策》</text></view>
+        </view>
+        <ActionButton :aria-label="String(mode === 'password' ? '登录' : codeSent ? '注册并登录' : '获取验证码')" class="login-button" :disabled="primaryDisabled" @tap="primaryAction" :class="[uxNative?'ux6':'',uxNative?'ux8':'',uxNative?'ux33':'',uxNative&amp;&amp;!!primaryDisabled?'ux69':'']">
+          <view v-if="primaryBusy" :id="spinnerId" :flatten="false" class="login-spinner" aria-hidden="true">
+            <image class="login-spinner-image" :src="uiAsset('/static/images/auth/loading-ring.png')" mode="aspectFit" />
+          </view>
+          <text :class="[uxNative?'ux34':'',uxNative?'ux76':'',uxNative?'ux78':'',uxNative&amp;&amp;!!primaryDisabled?'ux79':'',uxNative?'ux46':'']">{{ mode === 'password' ? '登录' : codeSent ? '注册并登录' : '获取验证码' }}</text>
+        </ActionButton>
+        <text v-if="mode === 'code' && codeSent" class="auth-hint" :class="[uxNative?'ux34':'',uxNative?'ux46':'',uxNative?'ux31':'']">验证码已发送至 {{ sentAccount }}@qq.com，5分钟内有效</text>
+        <view class="auth-footer" :class="[uxNative?'ux0':'',uxNative?'ux27':'',uxNative&amp;&amp;!!codeSent?'ux68':'']">
+          <ActionButton :aria-label="String(mode === 'code' ? '账号密码登录' : 'QQ验证码登录')" class="mode-item" :disabled="sending || submitting" @tap="switchMode(mode === 'code' ? 'password' : 'code')" :class="[uxNative?'ux6':'',uxNative?'ux8':'',uxNative?'ux55':'']" :id="uxNodePrefix+'-g1006'"><text :class="[uxNative?'ux34':'',uxNative?'ux85':'',uxNative?'ux86':'',uxNative?'ux46':'']">{{ mode === 'code' ? '账号密码登录' : 'QQ验证码登录' }}</text></ActionButton>
+          <view class="footer-divider"  :class="[uxNative?'ux0':'',uxNative?'ux28':'']" :id="uxNodePrefix+'-g1007'"/>
+          <ActionButton aria-label="登录帮助" @tap="placeholder('登录帮助')" :class="[uxNative?'ux6':'',uxNative?'ux8':'',uxNative?'ux55':'']" :id="uxNodePrefix+'-g1008'"><text :class="[uxNative?'ux34':'',uxNative?'ux85':'',uxNative?'ux86':'',uxNative?'ux46':'']">遇到问题</text></ActionButton>
+        </view>
+      </view>
+    </scroll-view>
+    <EyeCareOverlay />
+    </view>
+  </view>
+</template>
+<script setup lang="uts">
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+const uxNodePrefix = a11yPrefix
+
+import { uxNative, uxMedia } from '@/utils/native-styles'
+
+import { setStatusBar } from '@/utils/platform'
+import { computed, nextTick, ref, watch } from 'vue'
+
+import AppIcon from '@/components/AppIcon.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { AUTH_ASSETS } from '@/config/assets'
+import { login, loginByPassword, sendCode } from '@/utils/auth-api'
+import { saveLogin } from '@/utils/auth'
+import { closeLoginToBottom, notifyLoginReady, releaseLoginNavigation } from '@/utils/login-navigation'
+import { useLoginSheetMotion } from '@/composables/useLoginSheetMotion'
+
+const bottomTransition = ref(false)
+const dialogLogin = ref(false)
+const sheet = useLoginSheetMotion(uxNodePrefix)
+let shopProductId = ''
+onLoad(query => {
+  const productId = query?.shopProductId ?? ''
+  if (/^[1-9][0-9]{0,18}$/.test(productId)) shopProductId = productId
+  bottomTransition.value = query?.transition === 'bottom'
+  dialogLogin.value = query?.dialog === '1'
+  if (bottomTransition.value) sheet.prepare()
+})
+onReady(() => { if (bottomTransition.value) sheet.open(notifyLoginReady) })
+
+const { statusBarHeight, bottomInset, viewportWidth } = useWindowInsets()
+// Native layout must be available on the first frame, without Element measurement.
+const contentStyle = computed(() => uxNative ? { paddingBottom: Math.max(60 * viewportWidth.value / 750, bottomInset.value) + 'px' } : {})
+// Match CSS rpx sizing to the current window, including split-screen and rotation.
+// uni.rpx2px can use a different reference width in the Android runtime.
+const heroHeight = computed(() => uxNative ? (332 * viewportWidth.value / 750+statusBarHeight.value)+'px' : 'calc(332rpx + ' + statusBarHeight.value + 'px)')
+type LoginMode = 'code' | 'password'
+const mode = ref<LoginMode>('code')
+const account = ref('')
+const code = ref('')
+const password = ref('')
+const passwordVisible = ref(false)
+const agreed = ref(false)
+const sentAccount = ref('')
+const sending = ref(false)
+const submitting = ref(false)
+const remaining = ref(0)
+const codeSent = computed(() => mode.value === 'code' && !!sentAccount.value && sentAccount.value === account.value)
+const validAccount = computed(() => mode.value === 'code' ? /^[0-9]{5,11}$/.test(account.value) : account.value.trim().length > 0)
+const validCode = computed(() => /^[0-9]{6}$/.test(code.value))
+const canSend = computed(() => mode.value === 'code' && validAccount.value && agreed.value && !sending.value && !submitting.value && remaining.value === 0)
+const canSubmit = computed(() => agreed.value && validAccount.value && (mode.value === 'code' ? codeSent.value && validCode.value : !!password.value))
+const primaryBusy = computed(() => sending.value || submitting.value)
+const primaryDisabled = computed(() => primaryBusy.value || (mode.value === 'code' && !codeSent.value ? !canSend.value : !canSubmit.value))
+const spinnerId = uxNodePrefix + '-login-spinner'
+// #ifdef APP
+watch(primaryBusy, async (busy, _previous, onCleanup) => {
+  if (!busy || uxMedia('(prefers-reduced-motion: reduce)')) return
+  let cancelled = false
+  let motion: UniAnimation | null = null
+  onCleanup(() => { cancelled = true; motion?.cancel() })
+  await nextTick()
+  if (cancelled || !primaryBusy.value) return
+  motion = uni.getElementById(spinnerId)?.animate([
+    { transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }
+  ], { duration: 750, iterations: Infinity, easing: 'linear' }) ?? null
+}, { flush: 'post' })
+// #endif
+function switchMode(next: LoginMode) {
+  if (sending.value || submitting.value || mode.value === next) return
+  mode.value = next
+  code.value = ''
+  password.value = ''
+  passwordVisible.value = false
+}
+// A different recipient invalidates verification without bypassing the cooldown.
+watch(account, () => { code.value = ''; sentAccount.value = '' })
+let deadline = 0
+let timer: ReturnType<typeof setInterval> | undefined
+let disposed = false
+function tick() {
+  remaining.value = Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
+  if (!remaining.value && timer) { clearInterval(timer); timer = undefined }
+}
+async function send() {
+  if (!canSend.value) return
+  const recipient = account.value
+  sending.value = true
+  try {
+    await sendCode(recipient)
+    if (disposed) return
+    deadline = Date.now() + 60000
+    tick()
+    if (timer) clearInterval(timer)
+    timer = setInterval(tick, 500)
+    if (account.value === recipient && mode.value === 'code') { sentAccount.value = recipient; code.value = '' }
+    uni.showToast({ title: '验证码已发送', icon: 'none' })
+  } catch { /* Request layer displays errors; preserve fields for retry. */ }
+  finally { sending.value = false }
+}
+async function submit() {
+  if (!canSubmit.value || submitting.value || sending.value) return
+  submitting.value = true
+  try {
+    const result = mode.value === 'code' ? await login(account.value, code.value) : await loginByPassword(account.value, password.value)
+    if (disposed) return
+    saveLogin(result)
+    if (shopProductId) {
+      const pages = getCurrentPages()
+      if (pages.length > 1 && pages[pages.length - 2].route === 'pages/shop/detail') uni.navigateBack()
+      else uni.redirectTo({ url: '/pages/shop/detail?id=' + shopProductId })
+    } else uni.reLaunch({ url: '/pages/index/index' })
+  } catch { /* Request layer displays errors. */ }
+  finally { submitting.value = false }
+}
+function primaryAction() { mode.value === 'code' && !codeSent.value ? void send() : void submit() }
+function placeholder(title: string) { uni.showToast({ title: title + '待上线', icon: 'none' }) }
+function back() {
+  if (bottomTransition.value) { sheet.close(() => closeLoginToBottom(dialogLogin.value)); return }
+  getCurrentPages().length > 1 ? uni.navigateBack() : uni.reLaunch({ url: '/pages/index/index' })
+}
+onBackPress(event => {
+  if (bottomTransition.value && event.from === 'backbutton') { back(); return true }
+  return false
+})
+onShow(() => {
+  tick()
+  setStatusBar('dark')
+})
+onUnload(() => { disposed = true; if (timer) clearInterval(timer); if (bottomTransition.value) releaseLoginNavigation() })
+</script>
+<style scoped>
+.auth-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; }
+.auth-shade { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, .2); }
+.auth-page { overflow: hidden; }
+.login-spinner { width: 28rpx; height: 28rpx; margin-right: 10rpx; flex-shrink: 0; pointer-events: none; }
+.login-spinner-image { width: 28rpx; height: 28rpx; }
+/* #ifndef APP */
+.login-spinner { animation: login-spin 750ms linear infinite; }
+@keyframes login-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .login-spinner { animation: none; } }
+/* #endif */
+</style>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.auth-page { position: fixed; inset: 0; display: flex; background: #fafafa; padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); flex-direction: row; }
+.auth-scroll { flex: 1; min-width: 0; height: 100%; }
+.auth-page button { margin: 0; padding: 0; border: 0; background: transparent; border-radius: 0; line-height: normal; font-weight: 400; }
+.auth-page button::after { border: 0; }
+.auth-hero { position: relative; width: 100%; background: #1487e9; }
+.auth-banner { display: block; width: 100%; height: 100%; }
+.auth-close { position: absolute; left: 20rpx; margin-top: 44rpx !important; width: 52rpx; height: 52rpx; display: flex; align-items: center; justify-content: center; flex-direction: row; }
+.auth-content { padding: 48rpx 55rpx max(60rpx, env(safe-area-inset-bottom, 0px)); }
+.auth-title { display: block; font-size: 28rpx; line-height: 40rpx; color: #252525; }
+.auth-caption { display: block; font-size: 21rpx; line-height: 30rpx; margin-top: 1rpx; color: #686868; }
+.auth-fields { position: relative; margin-top: 25rpx; }
+.field { display: flex; align-items: center; height: 92rpx; border-bottom: 1rpx solid #f7f7f7; flex-direction: row; }
+.field input { flex: 1; min-width: 0; width: 0; height: 80rpx; font-size: 25rpx; color: #252525; background: transparent; }
+.auth-placeholder { color: #c5c5c5; }
+.account-prefix { flex-shrink: 0; width: 78rpx; border-right: 1rpx solid #eeeeef; margin-right: 36rpx; font-size: 24rpx; line-height: 26rpx; color: #252525; }
+.field-hint { position: absolute; top: 94rpx; left: 0; font-size: 19rpx; color: #c27676; line-height: 26rpx; }
+.agreement-row { display: flex; align-items: flex-start; gap: 12rpx; margin-top: 44rpx; min-height: 26rpx; flex-direction: row; }
+.agreement-toggle { width: 24rpx; height: 24rpx; flex-shrink: 0; border: 2rpx solid #cecece !important; border-radius: 50% !important; display: flex; align-items: center; justify-content: center; margin-top: 1rpx !important; flex-direction: row; }
+.agreement-toggle.checked { background: #42aaca; border-color: #42aaca !important; }
+.agreement-copy { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 7rpx; color: #8c8c8c; font-size: 18rpx; line-height: 26rpx; flex-direction: row; }
+.legal-link { color: #45a4bf; white-space: nowrap; }
+.auth-page .login-button { width: 100%; height: 92rpx; margin-top: 24rpx; border-radius: 7rpx; display: flex; align-items: center; justify-content: center; background: #19a4ee; color: #fff; font-size: 25rpx; flex-direction: row; }
+.auth-page .login-button[disabled] { background: #f0f1f5; color: #c8c9cc; }
+.auth-footer { display: flex; align-items: center; justify-content: center; gap: 36rpx; margin-top: 52rpx; flex-direction: row; }
+.auth-footer button { color: #939393; font-size: 21rpx; line-height: 30rpx; }
+.footer-divider { width: 1rpx; height: 24rpx; background: #f1f1f1; }
+.password-mode .auth-fields { margin-top: 19rpx; }
+.password-mode .agreement-row { margin-top: 46rpx; }
+.password-toggle { width: 50rpx; height: 60rpx; display: flex; align-items: center; justify-content: center; flex-shrink: 0; flex-direction: row; }
+.send-button { color: #45a4bf; font-size: 21rpx; padding-left: 18rpx !important; min-width: 140rpx; }
+.send-button[disabled] { color: #b5b5b5; }
+.auth-hint { display: block; margin-top: 18rpx; color: #9b9b9b; font-size: 19rpx; line-height: 28rpx; overflow-wrap: anywhere; }
+.verification-step .agreement-row { margin-top: 35rpx; }
+.verification-step .auth-footer { margin-top: 36rpx; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux34{color:var(--text-main);font-size:26rpx;}
+
+
+
+
+
+
+
+
+
+
+
+.ux57{color:#45a4bf;font-size:21rpx;}
+
+
+
+
+
+.ux63{line-height:normal;font-weight:400;}
+
+.ux65{color:#b5b5b5;}
+.auth-agreement-conjunction{margin-left:7rpx;}
+.ux70{color:#8c8c8c;font-size:18rpx;line-height:26rpx;}
+
+
+
+
+
+.ux76{line-height:normal;font-weight:400;}
+
+.ux78{color:#fff;font-size:25rpx;}
+.ux79{color:#c8c9cc;}
+
+
+
+
+
+.ux85{line-height:normal;font-weight:400;}
+.ux86{color:#939393;font-size:21rpx;line-height:30rpx;}
+.ux0{}
+.ux2{}
+.ux46{}
+.ux48{}
+.ux6{}
+
+
+
+
+
+
+.ux1{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:row;background-color:#fafafa;padding-left:env(safe-area-inset-left, 0px);padding-right:env(safe-area-inset-right, 0px);}
+.ux3{flex:1;min-width:0;height:100%;}
+.ux4{position:relative;width:100%;background-color:#1487e9;}
+.ux5{display:flex;flex-direction:column;width:100%;height:100%;}
+.ux7{position:absolute;left:20rpx;margin-top:44rpx!important;width:52rpx;height:52rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;}
+.ux15{padding:48rpx 55rpx 60rpx;}
+.ux16{display:flex;flex-direction:column;font-size:28rpx;line-height:40rpx;color:#252525;}
+.ux17{display:flex;flex-direction:column;font-size:21rpx;line-height:30rpx;margin-top:1rpx;color:#686868;}
+.ux18{position:relative;margin-top:25rpx;}
+.ux19{display:flex;flex-direction:row;align-items:center;height:92rpx;border-bottom:1rpx solid #f7f7f7;}
+
+.ux21{flex-shrink:0;width:78rpx;border-right:1rpx solid #eeeeef;margin-right:36rpx;font-size:24rpx;line-height:26rpx;color:#252525;}
+.ux22{position:absolute;top:94rpx;left:0;font-size:19rpx;color:#c27676;line-height:26rpx;}
+.ux23{display:flex;flex-direction:row;align-items:flex-start;margin-top:44rpx;min-height:26rpx;}
+.ux24{width:24rpx;height:24rpx;flex-shrink:0;border:2rpx solid #cecece!important;border-radius:50%!important;display:flex;flex-direction:row;align-items:center;justify-content:center;margin-top:1rpx!important;}
+.ux25{flex:1;margin-left:12rpx;display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;color:#8c8c8c;font-size:18rpx;line-height:26rpx;}
+.ux26{margin-left:7rpx;color:#45a4bf;white-space:nowrap;}
+.ux27{display:flex;flex-direction:row;align-items:center;justify-content:center;margin-top:52rpx;}
+.ux28{margin-left:36rpx;margin-right:36rpx;width:1rpx;height:24rpx;background-color:#f1f1f1;}
+.ux29{width:50rpx;height:60rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;flex-shrink:0;}
+.ux30{color:#45a4bf;font-size:21rpx;padding-left:18rpx!important;min-width:140rpx;}
+.ux31{display:flex;flex-direction:column;margin-top:18rpx;color:#9b9b9b;font-size:19rpx;line-height:28rpx;}
+
+
+
+
+
+.ux8{margin:0;padding:0;border:0px;background-color:transparent;border-radius:0;line-height:normal;font-weight:400;}
+.ux49{flex:1;min-width:0;width:0;height:80rpx;font-size:25rpx;color:#252525;background-color:transparent;}
+.ux55{color:#939393;font-size:21rpx;line-height:30rpx;}
+.ux32{background-color:#42aaca;border-color:#42aaca!important;}
+.ux33{width:100%;height:92rpx;margin-top:24rpx;border-radius:7rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;background-color:#19a4ee;color:#fff;font-size:25rpx;}
+.ux47{margin-top:19rpx;}
+.ux66{margin-top:46rpx;}
+.ux56{color:#b5b5b5;}
+.ux67{margin-top:35rpx;}
+.ux68{margin-top:36rpx;}
+.ux69{background-color:#f0f1f5;color:#c8c9cc;}
+/* #endif */
+</style>

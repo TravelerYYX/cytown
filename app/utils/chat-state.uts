@@ -1,0 +1,104 @@
+import { ref,computed,watch } from 'vue'
+import { API_BASE_URL } from '@/config/env'
+import { authRevision,isLoggedIn,getSessionGeneration,getToken } from './auth'
+import { chatOwner,chatStored,chatStore,localChatRows,saveChatRows,deleteChatLocal,chatDeleted,chatClientMarker,cloudChatHidden,markCloudChatDeleted,markCloudChatCleared,pendingChatOperations,finishChatOperation,normalizeChatReply } from './chat-local'
+import { chatList,chatHistory,chatMessage,chatSend,chatSync,chatTicket,chatImageUpload,chatVideoUpload,chatEmojiUpload,chatAsset,chatAssetRetry,chatRevoke,chatRead,chatId } from './chat-api'
+import { chatCachedImage,chatCachedImageSource,removeChatCachedMedia,releaseChatObjectURLs,reconcileChatOperations } from './chat-cache'
+import type { ChatAsset,ChatMessage,ChatConversation,ChatKind,ChatReply,ChatPostCard,ChatProductCard } from '@/types/chat'
+// #ifdef WEB
+import { refreshChatWorker } from './chat-browser-bridge.js'
+// #endif
+// #ifndef WEB
+import { persistFile } from './file-storage'
+// #endif
+// #ifdef APP-ANDROID
+import { updateChatVideoSession } from '@/uni_modules/ct-platform'
+// #endif
+export const chatConversations=ref<ChatConversation[]>([])
+export const chatMessages=ref<Record<string,ChatMessage[]>>({})
+export const chatError=ref('')
+export const chatRevision=ref(0)
+export const activeChat=ref('')
+export const chatUnread=computed(()=>chatConversations.value.reduce((total,item)=>total+item.unread,0))
+let foreground=false,launched=false,identity='',socket:ReturnType<typeof uni.connectSocket>|null=null
+let heartbeat:ReturnType<typeof setInterval>|null=null,reconnect:ReturnType<typeof setTimeout>|null=null,poll:ReturnType<typeof setInterval>|null=null
+let syncFlight:Promise<void>|null=null,connecting=false,openingPush=false
+const sending=new Set<string>()
+function chatSendError(error:unknown):string{if(error instanceof Error)return error.message;if(error&&typeof error==='object'){const detail=error as {message?:string;errMsg?:string};return detail.message||detail.errMsg||'发送失败，请重试'}return '发送失败，请重试'}
+export function chatRows(id:string):ChatMessage[]{if(!chatMessages.value[id])chatMessages.value[id]=localChatRows(id).map(message=>message.localState==='sending'&&!sending.has(message.clientId)?{...message,localState:'failed',error:'上次发送已中断，点击重试'}:message);return chatMessages.value[id]}
+function storeRows(id:string,rows:ChatMessage[]){const hidden=new Set(chatDeleted(id));const next=rows.filter(x=>!cloudChatHidden(x)&&!hidden.has(x.id)&&!hidden.has(chatClientMarker(x))).map(normalizeChatReply).sort((a,b)=>a.sentAt-b.sentAt||Number(a.id)-Number(b.id));chatMessages.value={...chatMessages.value,[id]:next};saveChatRows(id,next);chatRevision.value++}
+function queueRemovedAsset(asset:ChatAsset){const queue=chatStored<ChatAsset[]>('purgeAssets',[]);if(!queue.some(x=>x.id===asset.id&&x.version===asset.version))queue.push(asset);chatStore('purgeAssets',queue)}
+async function purgeChatAssets(){const owner=chatOwner(),session=getSessionGeneration();for(const asset of chatStored<ChatAsset[]>('purgeAssets',[])){if(owner!==chatOwner()||session!==getSessionGeneration())return;try{const cover=chatStored<ChatAsset|null>('cover.'+asset.coverId,null);await removeChatCachedMedia(asset);if(owner!==chatOwner()||session!==getSessionGeneration())return;if(cover)await removeChatCachedMedia(cover);if(owner!==chatOwner()||session!==getSessionGeneration())return;chatStore('purgeAssets',chatStored<ChatAsset[]>('purgeAssets',[]).filter(x=>x.id!==asset.id||x.version!==asset.version))}catch{}}}
+async function cloudDeleteMessage(message:ChatMessage){const previous=chatRows(message.conversationId).find(x=>x.id===message.id||chatClientMarker(x)===chatClientMarker(message));const asset=previous?.asset||chatStored<ChatAsset|null>('assetFor.'+message.id,null)||message.asset;if(asset)queueRemovedAsset(asset);markCloudChatDeleted(message);sending.delete(message.clientId);for(const op of pendingChatOperations())if(op.messageId===message.id)finishChatOperation(op.operationId);storeRows(message.conversationId,chatRows(message.conversationId));await purgeChatAssets()}
+async function cloudClearConversation(conversation:string,through:number){const rows=chatRows(conversation).filter(x=>/^\d+$/.test(x.id)&&Number(x.id)<=through);for(const row of rows)if(row.asset)queueRemovedAsset(row.asset);markCloudChatCleared(conversation,through);for(const row of rows){markCloudChatDeleted(row);sending.delete(row.clientId)}for(const op of pendingChatOperations())if(rows.some(x=>x.id===op.messageId))finishChatOperation(op.operationId);storeRows(conversation,chatRows(conversation));await purgeChatAssets()}
+export async function mergeChatMessage(message:ChatMessage){
+ if(message.revoked)chatStore('replyRevoked.'+message.id,true)
+ if(message.deleted){await cloudDeleteMessage(message);return}
+ if(cloudChatHidden(message)){await cloudDeleteMessage(message);return}
+ const owner=chatOwner(),session=getSessionGeneration();const rows=chatRows(message.conversationId),previous=rows.find(x=>x.id===message.id||x.clientId===message.clientId&&x.senderId===message.senderId)
+ if(message.asset)chatStore('assetFor.'+message.id,message.asset)
+ if(message.revoked){const asset=previous?.asset||chatStored<ChatAsset|null>('assetFor.'+message.id,null);if(asset){await removeChatCachedMedia(asset).catch(()=>{});const cover=chatStored<ChatAsset|null>('cover.'+asset.coverId,null);if(cover)await removeChatCachedMedia(cover).catch(()=>{})}}
+ if(owner!==chatOwner()||session!==getSessionGeneration()||cloudChatHidden(message))return
+ if(chatDeleted(message.conversationId).includes(chatClientMarker(message)))deleteChatLocal(message)
+ storeRows(message.conversationId,[...rows.filter(x=>x.id!==message.id&&!(x.clientId===message.clientId&&x.senderId===message.senderId)),message])
+ if(message.asset&&message.kind!=='video')void chatCachedImage(message.asset).catch(()=>{})
+ if(message.asset?.coverId)void chatCover(message.asset).catch(()=>{})
+}
+function localSummaries(rows:ChatConversation[]):ChatConversation[]{return rows.map(item=>{
+ if(!item.lastMessageId||!chatDeleted(item.id).includes(item.lastMessageId))return item
+ const last=chatRows(item.id).filter(x=>!x.localState).slice(-1)[0];const summary=last?(last.revoked?(last.senderId===chatOwner()?'你撤销了一条消息':'对方撤销了一条消息'):last.kind==='text'?last.content:last.kind==='post'?'[帖子]'+(last.post?.title||''):last.kind==='product'?'[商品]'+(last.product?.name||''):last.kind==='image'?'[图片]':last.kind==='video'?'[视频]':'[表情]'):'暂无消息'
+ return {...item,lastMsg:summary,lastTime:last?.sentAt||0,sortTime:last?.sentAt||0}
+}).sort((a,b)=>b.sortTime-a.sortTime)}
+export function chatCoverSource(asset:ChatAsset):string{if(!asset.coverId)return '';const cover=chatStored<ChatAsset|null>('cover.'+asset.coverId,null);return cover?chatCachedImageSource(cover):''}
+export async function chatCover(asset:ChatAsset):Promise<string>{if(!asset.coverId)return '';let cover=chatStored<ChatAsset|null>('cover.'+asset.coverId,null);if(!cover){cover=await chatAsset(asset.coverId);chatStore('cover.'+asset.coverId,cover)}return chatCachedImage(cover)}
+export async function refreshChats(){if(!isLoggedIn())return;const owner=chatOwner(),session=getSessionGeneration();const rows=await chatList();if(owner!==chatOwner()||session!==getSessionGeneration())return;chatConversations.value=localSummaries(rows);chatStore('conversations',chatConversations.value)}
+export async function loadChatHistory(id:string,before='0'){const session=getSessionGeneration();const result=await chatHistory(id,before);if(session!==getSessionGeneration())return '';for(const row of result.records){if(session!==getSessionGeneration())return '';await mergeChatMessage(row)}return session===getSessionGeneration()?result.nextCursor:''}
+export async function markChatRead(id:string){const rows=chatRows(id);const ids=rows.map(x=>x.id).concat(chatDeleted(id)).filter(x=>/^\d+$/.test(x));if(!ids.length)return;const last=ids.reduce((a,b)=>Number(a)>Number(b)?a:b);await chatRead(id,last);if(activeChat.value===id){chatConversations.value=chatConversations.value.map(x=>x.id===id?{...x,unread:0}:x)}}
+export async function syncChats():Promise<void>{if(!isLoggedIn())return;if(syncFlight)return syncFlight;const owner=chatOwner(),session=getSessionGeneration();const flight=(async()=>{try{await purgeChatAssets();await reconcileChatOperations();
+// #ifdef WEB
+refreshChatWorker(owner,getToken()||'')
+// #endif
+// #ifdef APP-ANDROID
+updateChatVideoSession(getToken()||'')
+// #endif
+let cursor=chatStored<number>('cursor',0),more=true;while(more&&owner===chatOwner()&&session===getSessionGeneration()){const result=await chatSync(cursor);for(const event of result.events){if(owner!==chatOwner()||session!==getSessionGeneration())return;if(event.kind==='cleared')await cloudClearConversation(event.conversationId,Number(event.messageId));}const ids=[...new Set(result.events.filter(x=>x.kind!=='cleared'&&!!x.messageId&&!(Number(x.messageId)<=chatStored<number>('cleared.'+x.conversationId,0)&&!chatStored<ChatAsset|null>('assetFor.'+x.messageId,null)&&!chatRows(x.conversationId).some(row=>row.id===x.messageId))).map(x=>x.messageId))];for(const id of ids){const message=await chatMessage(id);if(owner!==chatOwner()||session!==getSessionGeneration())return;await mergeChatMessage(message)}if(owner!==chatOwner()||session!==getSessionGeneration())return;cursor=result.cursor;chatStore('cursor',cursor);more=result.more}await refreshChats();if(activeChat.value)await markChatRead(activeChat.value).catch(()=>{});chatError.value=''}catch(e){if(owner===chatOwner())chatError.value=e instanceof Error?e.message:'聊天同步失败，请重试'}})();syncFlight=flight;try{await flight}finally{if(syncFlight===flight)syncFlight=null}}
+export function deleteLocalMessage(message:ChatMessage){deleteChatLocal(message);storeRows(message.conversationId,chatRows(message.conversationId).filter(x=>x.id!==message.id));sending.delete(message.clientId);chatConversations.value=localSummaries(chatConversations.value)}
+export async function revokeChatMessage(message:ChatMessage){const updated=await chatRevoke(message.id);await mergeChatMessage(updated);await refreshChats()}
+export function newChatMessage(conversation:ChatConversation,kind:ChatKind,content='',path='',original=false,emojiId='',reply:ChatReply|null=null,deferSend=false,post:ChatPostCard|null=null,product:ChatProductCard|null=null):ChatMessage{const client=chatId();const message:ChatMessage={id:'local-'+client,conversationId:conversation.id,senderId:chatOwner(),clientId:client,kind,content,sentAt:Date.now(),revokeUntil:0,revoked:false,canRevoke:false,protectedReceipt:false,asset:null,localState:'sending',localPath:path,original,emojiId,reply,post,product};storeRows(conversation.id,[...chatRows(conversation.id),message]);if(!deferSend)void sendChatMessage(conversation.peerId,message);return chatRows(conversation.id).find(x=>x.clientId===client&&x.senderId===message.senderId)||message}
+export async function sendChatMessage(peer:string,message:ChatMessage){if(sending.has(message.clientId))return;message=chatRows(message.conversationId).find(x=>x.clientId===message.clientId&&x.senderId===message.senderId)||message;sending.add(message.clientId);const session=getSessionGeneration();message.localState='sending';message.error='';storeRows(message.conversationId,chatRows(message.conversationId));try{
+ let asset=message.asset;
+ if(message.kind!=='text'&&message.kind!=='post'&&message.kind!=='product'&&!asset){if(message.kind==='emoji')asset=await chatEmojiUpload(message.emojiId||'');else{
+  // #ifndef WEB
+  // Album selections can be file/content URIs that uploadFile can read but saveFile rejects.
+  // Keep an owned copy when supported, without preventing upload of the selected source.
+  if(message.localPath&&!message.localPath.includes('/ct-image-'))try{message.localPath=await persistFile(message.localPath)}catch{}
+  // #endif
+  asset=message.kind==='video'?await chatVideoUpload(message.localPath||''):await chatImageUpload(message.localPath||'',!!message.original)
+ }message.asset=asset;storeRows(message.conversationId,chatRows(message.conversationId))}
+ if(asset?.state==='failed')asset=await chatAssetRetry(asset.id)
+ const processingStarted=Date.now()
+ while(asset?.state==='processing'){if(session!==getSessionGeneration()||!sending.has(message.clientId))return;if(Date.now()-processingStarted>=180000)throw new Error('视频处理超时，点击重试继续查询');await new Promise<void>(resolve=>setTimeout(resolve,1500));asset=await chatAsset(asset.id);message.asset=asset;storeRows(message.conversationId,chatRows(message.conversationId))}
+ if(asset?.state==='failed')throw new Error(asset.errorMessage||'视频处理失败，请重试');if(session!==getSessionGeneration()||!sending.has(message.clientId))return;
+ const sent=await chatSend(peer,message.clientId,message.kind,message.content,asset?.id||'',message.reply?.messageId||'',message.post?.id||'',message.product?.id||'');if(session!==getSessionGeneration())return;await mergeChatMessage(sent);await refreshChats()
+ }catch(e){if(session===getSessionGeneration()&&sending.has(message.clientId)){const pending=chatRows(message.conversationId).find(x=>x.clientId===message.clientId&&x.senderId===message.senderId);if(pending?.localState){pending.localState='failed';pending.error=chatSendError(e);storeRows(message.conversationId,chatRows(message.conversationId))}}}finally{sending.delete(message.clientId);chatConversations.value=localSummaries(chatConversations.value)}}
+function disconnect(){if(heartbeat)clearInterval(heartbeat);heartbeat=null;if(reconnect)clearTimeout(reconnect);reconnect=null;const old=socket;socket=null;old?.close({});connecting=false}
+async function connect(){if(!foreground||!isLoggedIn()||socket||connecting)return;connecting=true;const session=getSessionGeneration();try{const result=await chatTicket();if(!foreground||session!==getSessionGeneration())return;const task=uni.connectSocket({url:API_BASE_URL.replace(/^http/,'ws')+'/app/chat/socket?ticket='+result.ticket,complete:()=>{}});socket=task;task.onOpen(()=>{if(socket!==task)return;void syncChats();heartbeat=setInterval(()=>task.send({data:'ping'}),20000)});task.onMessage(()=>{if(socket===task)void syncChats()});const closed=()=>{if(socket!==task)return;socket=null;if(heartbeat)clearInterval(heartbeat);heartbeat=null;if(foreground)reconnect=setTimeout(()=>{void connect()},3000)};task.onClose(closed);task.onError(closed)}catch{if(foreground)reconnect=setTimeout(()=>{void connect()},5000)}finally{connecting=false}}
+export function launchChat(){if(launched)return;launched=true;identity=chatOwner();chatConversations.value=chatStored<ChatConversation[]>('conversations',[]);watch(authRevision,()=>{const next=chatOwner();
+ // #ifdef APP-ANDROID
+ updateChatVideoSession(getToken()||'')
+ // #endif
+ if(next!==identity){disconnect();releaseChatObjectURLs();identity=next;syncFlight=null;sending.clear();chatMessages.value={};chatConversations.value=chatStored<ChatConversation[]>('conversations',[]);activeChat.value='';chatError.value='';chatRevision.value++}if(foreground&&isLoggedIn())showChat()},{flush:'sync'})}
+export function showChat(){foreground=true;void openPendingChat();setTimeout(()=>{void openPendingChat()},300);if(!isLoggedIn())return;void syncChats();void connect();if(!poll)poll=setInterval(()=>{void syncChats();void connect();void openPendingChat()},10000)}
+export function hideChat(){foreground=false;disconnect();if(poll)clearInterval(poll);poll=null;activeChat.value=''}
+export function receiveChatPush(payload:Record<string,unknown>,clicked:boolean){if(payload['type']!=='chat')return false;void syncChats();if(clicked){const conversation=String(payload['conversationId']||''),message=String(payload['messageId']||'');if(/^\d+$/.test(conversation)&&/^\d+$/.test(message)){uni.setStorageSync('ct.chat.pendingPush',{conversation,message});void openPendingChat()}}return true}
+async function openPendingChat(){
+ if(!foreground||openingPush||!getCurrentPages().length)return
+ const pending=uni.getStorageSync('ct.chat.pendingPush') as {conversation?:string;message?:string}|null;if(!pending?.message)return
+ const current=getCurrentPages().slice(-1)[0]
+ if(!isLoggedIn()){if(current.route!=='pages/login/index')uni.navigateTo({url:'/pages/login/index'});return}
+ if(current.route==='pages/login/index')return
+ const owner=chatOwner();openingPush=true
+ try{const message=await chatMessage(pending.message);const latest=uni.getStorageSync('ct.chat.pendingPush') as {message?:string}|null;if(!foreground||latest?.message!==pending.message||owner!==chatOwner())return;uni.removeStorageSync('ct.chat.pendingPush');if(message.deleted)return;const page=getCurrentPages().slice(-1)[0];if(page.route==='pages/chat/index'&&page.options['id']===message.conversationId)return;uni.navigateTo({url:'/pages/chat/index?id='+message.conversationId,fail:()=>{if(owner===chatOwner()&&!uni.getStorageSync('ct.chat.pendingPush'))uni.setStorageSync('ct.chat.pendingPush',pending)}})}
+ catch{const latest=uni.getStorageSync('ct.chat.pendingPush') as {message?:string}|null;if(isLoggedIn()&&owner===chatOwner()&&latest?.message===pending.message)uni.removeStorageSync('ct.chat.pendingPush')}
+ finally{openingPush=false}
+}

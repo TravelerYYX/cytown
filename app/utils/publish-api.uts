@@ -1,0 +1,15 @@
+import type { Asset, DraftView, FollowingUser, PublishConfig, Topic } from '@/types/publish'
+import { GET, POST, upload } from './request'
+export const fetchPublishConfig = () => GET<PublishConfig>('/app/publish/config')
+export const fetchTopics = (keyword = '') => GET<Topic[]>('/app/publish/topics', keyword ? { keyword } : undefined)
+export const createCustomTopic = (name: string, description = '') => POST<Topic>('/app/publish/topics/custom', { name, description })
+export const fetchFollowing = (keyword = '') => GET<FollowingUser[]>('/app/publish/following', keyword ? { keyword } : undefined)
+export const uploadPublishImage = (path: string, progress?: (value: number) => void) => upload<Asset>('/app/publish/assets/image', path, progress)
+export const uploadPublishVideo = (path: string, progress?: (value: number) => void) => upload<Asset>('/app/publish/assets/video', path, progress)
+export const updateVideoCover = (id: number, data: { timeMs: number; x: number; y: number; width: number; height: number }) => POST<Asset>(`/app/publish/assets/${id}/cover`, data)
+export const fetchDrafts = () => GET<DraftView[]>('/app/publish/drafts')
+export const fetchDraft = (id: number) => GET<DraftView>(`/app/publish/drafts/${id}`)
+export const saveDraft = (data: Record<string, unknown>) => POST<DraftView>('/app/publish/drafts/save', data)
+export const deleteDraft = (id: number) => POST<void>('/app/publish/drafts/delete', { id })
+export const submitPost = (data: Record<string, unknown>) => POST<{ id: string; status: number; message: string }>('/app/publish/submit', data)
+export const votePoll = (postId: string, optionId: number) => POST<import('@/types/home').PollView>(`/app/post/${encodeURIComponent(postId)}/poll/vote`, { optionId })

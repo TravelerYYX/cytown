@@ -1,0 +1,7 @@
+{
+  "id": "ct-platform",
+  "displayName": "次元町原生平台适配",
+  "version": "1.0.0",
+  "description": "Native external URL integration for uni-app x",
+  "uni_modules": { "dependencies": [], "encrypt": [] }
+}

@@ -1,0 +1,367 @@
+<template>
+  <view :id="motionPrefix+'-root'" class="screen home-view" :class="[uxNative?'ux0':'',uxNative?'ux1':'',uxNative?'ux2':'']">
+    <PaneScroll :video-top-inset="pinned ? statusBarHeight + 198 * viewportWidth / 750 : 0" :swipe-enabled="!configLoading" @swipe="swipeChannel" class="screen-scroll" :post-items="feedLayout === 'waterfall' ? undefined : displayPosts" :minimum-content-height="feedMinimumHeight" post-variant="home" :viewport-width="viewportWidth" :transition-key="String(activeChannel)" :active="paneVisible" :collapse-threshold="collapseOffset" :visual-scroll="paintHeader" :scroll-top="requestedTop" :show-scrollbar="false" :lower-threshold="120" :refresher-enabled="true" :refresh-inline="true" :refresher-triggered="refreshing" @refresherrefresh="refreshAll" @refreshstate="syncRefreshState" @scroll="onScroll" @scrolltolower="loadMoreOnReachBottom" @busy="feedFresh.busy(); configFresh.busy()" @idle="feedFresh.idle(); configFresh.idle()" :class="[uxNative?'ux3':'']">
+      <template #before>
+      <HomeHeader :motion-prefix="motionPrefix" :interactive="!pinned" :active="paneVisible" :status-bar-height="statusBarHeight" :games="gameTabs" :active-game="activeGame" :entries="entries" :header-entry="headerEntry" :news="news" :config-loading="configLoading" @game-change="activeGame = $event.id" />
+      <view :id="motionPrefix+'-feed'" class="feed-card" :class="[uxNative?'ux0':'',uxNative?'ux4':'']">
+        <view v-if="configLoading" class="channel-loading" :class="[uxNative?'ux0':'',uxNative?'ux5':'']"><SkeletonBlock :width="690" :height="54" /></view>
+        <view :id="motionPrefix+'-original-tabs'"><ChannelTabs v-if="!configLoading" :interactive="!pinned" :tabs="channels" :active="activeChannel" :viewport-width="viewportWidth" @change="activeChannel = $event.id" /></view>
+        <RefreshIndicator :height="refreshHeight" :dragging="refreshDragging" :active="refreshing" />
+      </view>
+      </template>
+        <view :id="motionPrefix+'-channel-content'" class="feed-body" @touchstart="channelSwipe.start" @touchmove="channelSwipe.move" @touchend="channelSwipe.end" @touchcancel="channelSwipe.cancel" :class="[{'waterfall-body':feedLayout==='waterfall'},uxNative?'ux0':'',uxNative?'ux10':'',uxNative &amp;&amp; feedLayout==='waterfall'?'ux14':'']">
+          <WaterfallFeed v-if="feedLayout === 'waterfall'" :posts="displayPosts" :visible="paneVisible" :viewport-width="viewportWidth" />
+          <FeedLoadingPlaceholder v-if="feedReveal.pending.value &amp;&amp; !displayPosts.length" :waterfall="feedLayout === 'waterfall'" />
+          <view v-else-if="feedReveal.pending.value" class="feed-loading-tail" />
+          <view v-else-if="error" class="load-tip" :class="[uxNative?'ux0':'',uxNative?'ux9':'']"><text :class="[uxNative?'ux15':'',uxNative?'ux17':'',uxNative?'ux18':'']">{{ error }}</text><ActionButton :aria-label="&quot;重试&quot;" @tap="retryFeed" :class="[uxNative?'ct-native-button':'',uxNative?'ux19':'']"><text :class="[uxNative?'ux15':'',uxNative?'ux17':'',uxNative?'ux18':'']">重试</text></ActionButton></view>
+          <EmptyState v-else-if="!posts.length" />
+          <view v-else-if="loading && !refreshing" class="pagination-tail"><PaginationLoading :active="paneVisible" label="帖子加载中" /></view>
+          <view v-else class="load-tip" :class="[uxNative?'ux0':'',uxNative?'ux9':'']"><text :class="[uxNative?'ux15':'',uxNative?'ux17':'',uxNative?'ux18':'']">{{ loading ? '加载中…' : hasMore ? '上拉加载更多' : '已经到底了' }}</text></view>
+        </view>
+    </PaneScroll>
+    <view :id="motionPrefix+'-compact'" class="home-compact" :class="[uxNative?'ux0':'',uxNative?'ux13':'']">
+      <view class="home-compact-search">
+        <image class="home-compact-backdrop" src="/static/images/home-compact-header.png" mode="scaleToFill" />
+        <SearchHeader :motion-prefix="motionPrefix" :interactive="searchInteractive" :status-bar-height="statusBarHeight" keyword="无神怜爱的梦国" />
+      </view>
+      <view class="home-compact-tabs">
+        <!-- Share the native layout origin with the tabs. A separately
+             calculated pixel top can round differently and expose a white row. -->
+        <image class="home-corner-guards" src="/static/images/home-compact-corners.png" mode="scaleToFill" />
+        <view :id="motionPrefix+'-pinned-tabs'" class="home-pinned-tabs">
+          <ChannelTabs v-if="!configLoading" :interactive="pinned" :tabs="channels" :active="activeChannel" :viewport-width="viewportWidth" @change="activeChannel = $event.id" />
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+<script setup lang="uts">
+import EmptyState from '@/components/EmptyState.uvue'
+import PaginationLoading from '@/components/PaginationLoading.uvue'
+import ActionButton from '@/components/ActionButton.uvue'
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { useHorizontalSwipe } from '@/composables/useHorizontalSwipe'
+import PaneScroll from '@/components/PaneScroll.uvue'
+import RefreshIndicator from '@/components/RefreshIndicator.uvue'
+import { usePaneVisibility } from '@/composables/usePaneVisibility'
+import { computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref } from 'vue'
+import { useFreshTask } from '@/composables/useFreshTask'
+import { usePostOwnership } from '@/composables/usePostOwnership'
+import { authRevision, getUserInfo, isLoggedIn } from '@/utils/auth'
+import HomeHeader from '@/components/HomeHeader.uvue'
+import SearchHeader from '@/components/SearchHeader.uvue'
+import ChannelTabs from '@/components/ChannelTabs.uvue'
+import WaterfallFeed from '@/components/WaterfallFeed.uvue'
+import { feedLayout as preferredFeedLayout } from '@/utils/app-settings'
+import SkeletonBlock from '@/components/SkeletonBlock.uvue'
+import { usePaneScroll } from '@/composables/usePaneScroll'
+import { gameTabs } from '@/mock/home'
+import {entryChannelRequest} from '@/utils/navigation'
+import { fetchPosts, toPost } from '@/utils/post-api'
+import { DEFAULT_NEWS_EMPTY_TEXT, fetchHomeConfig } from '@/utils/home-config-api'
+import { useHomeHeaderMotion } from '@/composables/useHomeHeaderMotion'
+import { useFeedReveal } from '@/composables/useFeedReveal'
+import FeedLoadingPlaceholder from '@/components/FeedLoadingPlaceholder.uvue'
+import { retainPost, releasePost } from '@/utils/interactions'
+import type { ViewProps, Post, Channel, FeatureEntry, HeaderEntry, HomeNews } from '@/types/home.uts'
+const props = defineProps<ViewProps>()
+const paneVisible = usePaneVisibility(() => props.active)
+// Vapor cannot safely retarget the same page's named slots between a native
+// list and a scroll view. Apply a changed preference in a fresh native page,
+// once home becomes visible; storage, login and cached images remain available.
+// #ifdef APP
+const feedLayout = ref(preferredFeedLayout.value)
+let replacingLayoutPage = false
+watch(() => [preferredFeedLayout.value, paneVisible.value], () => {
+  if (!paneVisible.value || feedLayout.value === preferredFeedLayout.value || replacingLayoutPage) return
+  replacingLayoutPage = true
+  uni.redirectTo({ url: '/pages/index/index', fail: () => { replacingLayoutPage = false } })
+}, { flush: 'post' })
+// #endif
+// #ifndef APP
+const feedLayout = preferredFeedLayout
+// #endif
+const emit = defineEmits<{ (e: 'collapse', value: boolean): void }>()
+const { offset, requestedTop, onScroll, scrollToTop } = usePaneScroll(() => props.active)
+const posts = ref<Post[]>([])
+const feedReveal = useFeedReveal(() => paneVisible.value)
+const placeholderPosts = ref<Post[]>([])
+const displayPosts = computed(() => posts.value.length ? posts.value : feedReveal.pending.value ? placeholderPosts.value : [])
+usePostOwnership(() => [...posts.value, ...placeholderPosts.value])
+// Keep enough native/browser content to preserve a pinned header while replacing rows.
+const feedMinimumHeight = ref(uni.getWindowInfo().windowHeight)
+type ChannelSnapshot = { posts: Post[]; nextPage: number; more: boolean; at: number }
+const channelCache = new Map<string, ChannelSnapshot>()
+const cacheKey = () => String(activeChannel.value) + ':' + String(activeChannelScope.value)
+const channelRequests = new Map<string, ReturnType<typeof fetchPosts>>()
+function fetchChannelPage(page: number) {
+  const key = cacheKey() + ':' + page
+  const pending = channelRequests.get(key)
+  if (pending) return pending
+  const task = fetchPosts(page, 10, activeChannel.value || undefined).finally(() => {
+    if (channelRequests.get(key) === task) channelRequests.delete(key)
+  })
+  channelRequests.set(key, task)
+  return task
+}
+function invalidateChannelRequests() {
+  const prefix = cacheKey() + ':'
+  for (const key of channelRequests.keys()) if (key.startsWith(prefix)) channelRequests.delete(key)
+}
+function dropSnapshot(key: string) {
+  const snapshot = channelCache.get(key)
+  channelCache.delete(key)
+  snapshot?.posts.forEach(releasePost)
+}
+function clearChannelCache() { for (const key of channelCache.keys()) dropSnapshot(key) }
+function saveSnapshot() {
+  // Retain loaded pages for each configured channel; cards remain virtualized.
+  const key = cacheKey(), cachedPosts = posts.value.slice()
+  cachedPosts.forEach(retainPost)
+  dropSnapshot(key)
+  channelCache.set(key, { posts: cachedPosts, nextPage: pageNum, more: hasMore.value, at: Date.now() })
+}
+onBeforeUnmount(() => { clearChannelCache(); channelRequests.clear() })
+watch(() => feedReveal.phase.value, phase => { if (phase === 'idle') placeholderPosts.value = [] })
+const loading = ref(false)
+const error = ref('')
+const refreshFailed = ref(false)
+const hasMore = ref(true)
+let pageNum = 1
+let generation = 0
+onBeforeUnmount(() => { generation++ })
+function loadMoreOnReachBottom() { if (!error.value) void loadMore() }
+async function loadMore() {
+  if (!paneVisible.value || loading.value || !hasMore.value) return
+  if (!posts.value.length) feedReveal.begin()
+  loading.value = true
+  const token = generation
+  error.value = ''
+  refreshFailed.value = false
+  try {
+    const page = await fetchChannelPage(pageNum)
+    if (token !== generation) return
+    const ids = new Set(posts.value.map(p => p.id))
+    posts.value.push(...page.records.filter(p => !ids.has(p.id)).map(p => toPost(p)))
+    hasMore.value = pageNum < page.pages && page.records.length > 0
+    pageNum++
+    feedFresh.touch()
+    saveSnapshot()
+    if (feedReveal.pending.value) { if (posts.value.length) void feedReveal.reveal(); else feedReveal.finish() }
+  } catch (e) {
+    if (token === generation) { error.value = e instanceof Error ? e.message : '帖子加载失败'; feedReveal.finish() }
+  } finally { if (token === generation) loading.value = false }
+}
+let revalidatingGeneration = -1
+async function revalidate() {
+  if (!paneVisible.value || revalidatingGeneration === generation || refreshing.value || loading.value) return
+  if (!posts.value.length && !channelCache.has(cacheKey())) return loadMore()
+  revalidatingGeneration = generation
+  const token = generation
+  try {
+    const page = await fetchChannelPage(1)
+    if (token !== generation) return
+    if (!posts.value.length) {
+      posts.value = page.records.map(record => toPost(record))
+      pageNum = 2
+      hasMore.value = page.current < page.pages && page.records.length > 0
+    } else {
+      const existing = new Set(posts.value.map(post => post.id))
+      for (const record of page.records) if (existing.has(record.id)) toPost(record)
+    }
+    saveSnapshot()
+    feedFresh.touch()
+  } catch { /* Keep the feed and scroll position on a transient failure. */ }
+  finally { if (revalidatingGeneration === token) revalidatingGeneration = -1 }
+}
+const feedFresh = useFreshTask(() => paneVisible.value, revalidate)
+const configFresh = useFreshTask(() => paneVisible.value, () => loadConfig(false), 300_000)
+watch(feedLayout, () => { void scrollToTop() })
+const viewer = computed(() => { void authRevision.value; return isLoggedIn() ? getUserInfo()?.userId : null })
+watch(viewer, () => { clearChannelCache(); channelRequests.clear(); placeholderPosts.value = []; feedReveal.begin(); generation++; posts.value = []; pageNum = 1; hasMore.value = true; loading.value = false; if (paneVisible.value) void loadMore() })
+const channels = ref<Channel[]>([])
+const entries = ref<FeatureEntry[]>([])
+const headerEntry = ref<HeaderEntry | null>(null)
+const news = ref<HomeNews>({ enabled: true, interval: 3, emptyText: DEFAULT_NEWS_EMPTY_TEXT, items: [] })
+const configLoading = ref(true)
+const refreshing = ref(false)
+const refreshHeight = ref(0), refreshDragging = ref(false)
+function syncRefreshState(state: { height: number; dragging: boolean }) { refreshHeight.value = state.height; refreshDragging.value = state.dragging }
+let configTask: Promise<void> | undefined
+let selectingRefreshChannel = false
+function loadConfig(showLoading = true): Promise<void> {
+  return configTask ||= fetchConfig(showLoading).finally(() => { configTask = undefined })
+}
+async function fetchConfig(showLoading: boolean) {
+  if (showLoading) configLoading.value = true
+  try {
+    const config = await fetchHomeConfig()
+    selectingRefreshChannel = refreshing.value
+    const configuredKeys = new Set(config.channels.map(channel => String(channel.id) + ':' + String(channel.showAllPosts === true)))
+    for (const key of channelCache.keys()) if (!configuredKeys.has(key)) dropSnapshot(key)
+    channels.value = config.channels
+    if(entryChannelRequest.value){const channel=config.channels.find(c=>String(c.id)===entryChannelRequest.value);if(channel)activeChannel.value=channel.id;entryChannelRequest.value=null}
+    entries.value = config.entries
+    headerEntry.value = config.headerEntry || null
+    news.value = { ...config.news, emptyText: config.news.emptyText || DEFAULT_NEWS_EMPTY_TEXT }
+    if (!channels.value.some(channel => channel.id === activeChannel.value)) activeChannel.value = channels.value[0]?.id ?? ''
+    selectingRefreshChannel = false
+    configFresh.touch()
+  } catch {
+    // Keep the last successful configuration; the initial state provides empty news.
+  } finally { configLoading.value = false }
+}
+async function refreshAll() {
+  if (refreshing.value) return
+  refreshing.value = true
+  invalidateChannelRequests()
+  const token = ++generation
+  loading.value = true
+  error.value = ''
+  refreshFailed.value = false
+  try {
+    // Keep mounted controls and the last successful feed while refreshing.
+    // Resolve the configuration before requesting its selected channel.
+    await loadConfig(false)
+    if (token !== generation) return
+    invalidateChannelRequests()
+    const page = await fetchPosts(1, 10, activeChannel.value || undefined)
+    if (token !== generation) return
+    posts.value = page.records.map(p => toPost(p))
+    pageNum = 2
+    feedFresh.touch()
+    hasMore.value = page.current < page.pages && page.records.length > 0
+    saveSnapshot()
+    if (feedReveal.pending.value) { if (posts.value.length) void feedReveal.reveal(); else feedReveal.finish() }
+  } catch (e) {
+    if (token === generation) {
+      error.value = e instanceof Error ? e.message : '帖子加载失败'
+      refreshFailed.value = true
+      feedReveal.finish()
+    }
+  } finally {
+    if (token === generation) loading.value = false
+    refreshing.value = false
+  }
+}
+function retryFeed() { return refreshFailed.value ? refreshAll() : loadMore() }
+onMounted(async () => { await loadConfig(); if (!activeChannel.value) void loadMore() })
+const activeGame = ref('cy')
+const activeChannel = ref<string | number>('')
+const channelSwipe = useHorizontalSwipe(() => (!uxNative || feedLayout.value === 'waterfall') && paneVisible.value && !configLoading.value && !refreshing.value, () => String(activeChannel.value), swipeChannel)
+function swipeChannel(direction: number) {
+  const index = channels.value.findIndex(channel => channel.id === activeChannel.value)
+  const next = channels.value[index + direction]
+  if (index >= 0 && next) activeChannel.value = next.id
+}
+const activeChannelScope = computed(() => channels.value.find(channel => channel.id === activeChannel.value)?.showAllPosts === true)
+watch([activeChannel, activeChannelScope], ([value, scope], [old, oldScope]) => {
+  if (!value || value === old && scope === oldScope) return
+  // refreshAll requests the channel selected by its configuration response.
+  if (selectingRefreshChannel) return
+  feedMinimumHeight.value = Math.max(uni.getWindowInfo().windowHeight, offset.value + uni.getWindowInfo().windowHeight)
+  generation++; pageNum = 1; hasMore.value = true; loading.value = false; error.value = ''; refreshFailed.value = false
+  const key = cacheKey(), snapshot = channelCache.get(key)
+  if (snapshot) {
+    // Restore before replacing rows: cached channels never re-enter loading.
+    feedReveal.restore()
+    placeholderPosts.value = []
+    posts.value = snapshot.posts.slice(); pageNum = snapshot.nextPage; hasMore.value = snapshot.more
+    channelCache.delete(key); channelCache.set(key, snapshot)
+    if (Date.now() - snapshot.at >= 60000) void revalidate()
+    else feedFresh.touch()
+    return
+  }
+  feedReveal.begin()
+  if (posts.value.length) placeholderPosts.value = posts.value
+  posts.value = []
+  void loadMore()
+}, { flush: 'sync' })
+const { prefix: motionPrefix, pinned, searchInteractive, collapseOffset, paint: paintHeader, scheduleMeasure } = useHomeHeaderMotion(() => paneVisible.value, () => props.viewportWidth, () => props.statusBarHeight, () => news.value.enabled)
+watch(pinned, value => emit('collapse', value))
+watch(() => [configLoading.value, feedLayout.value], scheduleMeasure, { flush: 'post' })
+defineExpose({ scrollToTop })
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.home-view { background: #fff; }
+.feed-card { position: relative; margin-top: -32rpx; }
+.feed-body { background: #fff; }
+.feed-body.waterfall-body { background: #f6f7f9; padding-top: 18rpx; }
+.empty-posts {
+  display: flex;
+  min-height: 520rpx;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding-bottom: 80rpx;
+  flex-direction: row;
+}
+.empty-posts-image { width: 240rpx; height: 240rpx; }
+.home-compact { opacity: 0; visibility: hidden; pointer-events: none; position: absolute; top: 0; left: 0; right: 0; z-index: 10; }
+.channel-loading { height: 90rpx; padding: 18rpx 30rpx; background: #fff; border-radius: 32rpx 32rpx 0 0; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux15{color:var(--text-main);font-size:26rpx;}
+
+.ux17{text-align:center;color:var(--text-sub);font-size:22rpx;}
+
+
+
+
+
+.ux0{}
+.ux18{}
+.ux19{}
+
+
+.ux1{position:absolute;top:0;right:0;bottom:0;left:0;background-color:var(--surface);overflow:hidden;}
+.ux3{width:100%;height:100%;}
+
+.ux9{text-align:center;color:var(--text-sub);font-size:22rpx;padding:30rpx 0 40rpx;}
+.ux2{background-color:#fff;}
+.ux4{position:relative;margin-top:-32rpx;}
+.ux10{background-color:#fff;}
+.ux11{display:flex;flex-direction:row;min-height:520rpx;align-items:center;justify-content:center;padding-bottom:80rpx;}
+.ux12{width:240rpx;height:240rpx;}
+.ux13{position:absolute;top:0;left:0;right:0;z-index:10;opacity:0;visibility:hidden;pointer-events:none;}
+.ux5{height:90rpx;padding:18rpx 30rpx;background-color:#fff;border-radius:32rpx 32rpx 0 0;}
+
+
+
+
+
+.ux14{background-color:#f6f7f9;padding-top:18rpx;}
+.ux30{position:relative;}
+/* #endif */
+</style>
+
+<style scoped>
+.home-compact-search { position: relative; }
+.home-compact-backdrop { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.home-compact-tabs { position: relative; height: 90rpx; }
+/* Keep native parent bounds stable: a zero-height tabs container clips the
+   corner guards until the delayed sticky handover has already completed. */
+.home-pinned-tabs { height: 90rpx; overflow: hidden; visibility: hidden; pointer-events: none; }
+/* Both image slices come from one banner rendering. The transparent interior
+   preserves flowing content while the wallpaper continues around the corners. */
+.home-corner-guards { position: absolute; top: 0; left: 0; width: 100%; height: 32rpx; z-index: 2; pointer-events: none; }
+</style>
+
+<style scoped>
+.feed-loading-tail { height: 96rpx; }
+.pagination-tail { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100%; height: 96rpx; }
+</style>

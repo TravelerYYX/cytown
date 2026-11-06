@@ -1,0 +1,81 @@
+import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
+import type { InjectionKey, Ref } from 'vue'
+import { rectById } from '@/utils/element-geometry'
+
+export type FeedRevealPhase = 'idle' | 'loading' | 'preparing' | 'revealing'
+export interface FeedRevealContext {
+  phase: Ref<FeedRevealPhase>; active: () => boolean; waitingMedia: Ref<number>; restoring: Ref<boolean>
+  sweepingCard: Ref<string>; setCardWaiting: (id: string, waiting: boolean) => void
+}
+export const feedRevealKey: InjectionKey<FeedRevealContext> = Symbol('home-feed-reveal')
+
+/** One render barrier and one completion timer for the whole feed. */
+export function useFeedReveal(active: () => boolean) {
+  const phase = ref<FeedRevealPhase>('loading')
+  const waitingMedia = ref(0)
+  const restoring = ref(false)
+  const sweepingCard = ref('')
+  const waitingCards = new Set<string>()
+  let sweepRevision = 0, choosing = false, disposed = false, previousCard = ''
+  let sweepTimer: ReturnType<typeof setTimeout> | undefined
+  function stopSweep() {
+    sweepRevision++; choosing = false; clearTimeout(sweepTimer); sweepTimer = undefined; sweepingCard.value = ''
+  }
+  async function nextCard() {
+    sweepTimer = undefined
+    if (disposed || !active() || restoring.value || !waitingCards.size) return
+    const token = sweepRevision
+    choosing = true
+    sweepingCard.value = ''
+    await nextTick()
+    const viewport = uni.getWindowInfo()
+    const measured = await Promise.all([...waitingCards].map(async id => ({ id, rect: await rectById(id) })))
+    if (token !== sweepRevision || disposed) return
+    choosing = false
+    const visible = measured.filter(item => waitingCards.has(item.id) && item.rect != null && item.rect.width > 0 && item.rect.height > 0 && item.rect.bottom > 0 && item.rect.top < viewport.windowHeight && item.rect.left < viewport.windowWidth && item.rect.left + item.rect.width > 0)
+      .sort((a, b) => Math.round(a.rect!.top) - Math.round(b.rect!.top) || a.rect!.left - b.rect!.left)
+    if (visible.length) {
+      const index = visible.findIndex(item => item.id === previousCard)
+      previousCard = visible[(index + 1) % visible.length].id
+      sweepingCard.value = previousCard
+    }
+    // Only advance once per sweep; the renderer moves the light between ticks.
+    sweepTimer = setTimeout(() => { void nextCard() }, visible.length ? 1500 : 300)
+  }
+  function setCardWaiting(id: string, waiting: boolean) {
+    if (waiting) waitingCards.add(id)
+    else waitingCards.delete(id)
+    if (!waitingCards.size || (!waiting && sweepingCard.value === id)) stopSweep()
+    if (waitingCards.size && !sweepTimer && !choosing) void nextCard()
+  }
+  let revision = 0, frame = 0
+  let completion: ReturnType<typeof setTimeout> | undefined
+  provide(feedRevealKey, { phase, active, waitingMedia, restoring, sweepingCard, setCardWaiting })
+  function cancel() { revision++; cancelAnimationFrame(frame); clearTimeout(completion) }
+  function begin() { cancel(); restoring.value = false; phase.value = 'loading' }
+  async function reveal() {
+    cancel()
+    const token = revision
+    phase.value = 'preparing'
+    await nextTick()
+    if (token !== revision) return
+    if (!active()) { phase.value = 'idle'; return }
+    // Commit real card geometry beneath the masks before starting transitions.
+    frame = requestAnimationFrame(() => {
+      if (token !== revision) return
+      frame = requestAnimationFrame(() => {
+        if (token !== revision) return
+        phase.value = 'revealing'
+        completion = setTimeout(() => { if (token === revision) phase.value = 'idle' }, 440)
+      })
+    })
+  }
+  function finish() { cancel(); phase.value = 'idle' }
+  function restore() { restoring.value = true; stopSweep(); finish() }
+  watch(active, value => {
+    if (!value) { stopSweep(); if (phase.value !== 'loading') finish() }
+    else if (waitingCards.size) void nextCard()
+  })
+  onBeforeUnmount(() => { disposed = true; cancel(); stopSweep(); waitingCards.clear() })
+  return { phase, restoring, pending: computed(() => phase.value === 'loading' || phase.value === 'preparing'), begin, reveal, finish, restore }
+}

@@ -1,0 +1,80 @@
+<template>
+  <view class="search-header" :style="{ paddingTop: statusBarHeight + 'px' }" :class="[uxNative?'ux0':'',uxNative?'ux1':'']">
+    <view class="bar" :class="[uxNative?'ux0':'',uxNative?'ux2':'']">
+      <view :id="motionPrefix ? motionPrefix+'-avatar' : uxNodePrefix+'-g1000'" class="search-avatar-motion">
+        <ActionButton class="search-avatar" :press-motion="true" :disabled="!interactive" aria-label="用户头像" @tap="openProfile" :class="[uxNative?'ct-native-button':'',uxNative?'ux3':'',uxNative?'ux4':'']"><image class="search-avatar-image" :src="uiAsset(avatarUrl(userInfo))" mode="aspectFill" :class="[uxNative?'ux5':'']" /></ActionButton>
+      </view>
+      <view :id="motionPrefix ? motionPrefix+'-search' : uxNodePrefix+'-g1001'" class="search-box-motion">
+        <ActionButton :aria-label="String(keyword) + ' 搜索'" class="search-box" :press-motion="true" :disabled="!interactive" @tap="openSearch" :class="[uxNative?'ct-native-button':'',uxNative?'ux3':'',uxNative?'ux6':'']">
+          <AppIcon name="search" tone="white" :size="34" /><text class="search-keyword" :class="[uxNative?'ux7':'',uxNative?'ux8':'',uxNative?'ux9':'']">{{ keyword }}</text><text class="search-label" :class="[uxNative?'ux7':'',uxNative?'ux8':'',uxNative?'ux10':'']">搜索</text>
+        </ActionButton>
+      </view>
+    </view>
+  </view>
+</template>
+<script setup lang="uts">
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { getCurrentInstance, ref, watch } from 'vue'
+const uxNodePrefix = 'home-search-' + getCurrentInstance()!.uid
+import AppIcon from './AppIcon.uvue'
+import { openSearchPage } from '@/utils/navigation'
+import { authRevision, avatarUrl, getUserInfo, isLoggedIn } from '@/utils/auth'
+import type { AppUserInfo } from '@/types/auth'
+const props = withDefaults(defineProps<{ statusBarHeight: number; keyword: string; motionPrefix?: string; interactive?: boolean }>(), { motionPrefix: '', interactive: true })
+function openSearch() { openSearchPage(props.keyword) }
+const userInfo = ref<AppUserInfo | null>(getUserInfo())
+const loggedIn = ref(isLoggedIn())
+watch(authRevision, () => { userInfo.value = getUserInfo(); loggedIn.value = isLoggedIn() })
+function openProfile() { uni.navigateTo({ url: loggedIn.value ? '/pages/profile-edit/index' : '/pages/login/index' }) }
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.search-header { position: relative; }
+.bar { height: 108rpx; display: flex; align-items: center; padding: 0 34rpx; gap: 24rpx; flex-direction: row; }
+.search-avatar { flex-shrink: 0; padding: 0; line-height: 0; }
+.search-avatar-image { display: block; width: 62rpx; height: 62rpx; border-radius: 10rpx; }
+.search-box { flex: 1; min-width: 0; display: flex; align-items: center; height: 66rpx; border: 2rpx solid rgba(255,255,255,.22); background: rgba(255,255,255,.14); border-radius: 14rpx; padding: 0 22rpx; flex-direction: row; }
+.search-keyword { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; margin: 0 16rpx; font-size: 24rpx; color: #d8dee5; }
+.search-label { color: #fff; padding-left: 24rpx; border-left: 1rpx solid #b8c0cb; font-size: 24rpx; font-weight: 600; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux7{color:var(--text-main);font-size:26rpx;}
+.ux0{}
+.ux8{}
+.ux3{}
+.ux1{position:relative;}
+.ux2{height:108rpx;display:flex;flex-direction:row;align-items:center;padding:0 34rpx;}
+.ux4{flex-shrink:0;padding:0;line-height:0rpx;}
+.ux5{display:flex;flex-direction:column;width:62rpx;height:62rpx;border-radius:10rpx;}
+.ux6{flex:1;min-width:0;display:flex;flex-direction:row;align-items:center;height:66rpx;border:2rpx solid rgba(255,255,255,.22);background-color:rgba(255,255,255,.14);border-radius:14rpx;padding:0 22rpx;}
+.ux9{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;margin:0 16rpx;font-size:24rpx;color:#d8dee5;}
+.ux10{color:#fff;padding-left:24rpx;border-left:1rpx solid #b8c0cb;font-size:24rpx;font-weight:600;}
+/* #endif */
+</style>
+
+<style scoped>
+.search-avatar-motion { flex-shrink: 0; width: 62rpx; height: 62rpx; }
+.search-box-motion { flex: 1; min-width: 0; height: 66rpx; }
+.search-box { width: 100%; }
+</style>
+
+<style scoped>
+/* #ifdef APP */
+.search-box-motion { margin-left: 24rpx; }
+/* #endif */
+</style>

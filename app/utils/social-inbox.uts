@@ -1,0 +1,58 @@
+import { ref, watch } from 'vue'
+import { GET, POST } from './request'
+import { authRevision, getSessionGeneration, isLoggedIn } from './auth'
+import { openProfileChat } from './user-profile'
+import { chatId } from './chat-api'
+import type { ChatConversation } from '@/types/chat'
+import type { Page } from '@/types/post-api'
+import type { SocialKind, SocialNotification, SocialSummary } from '@/types/social'
+
+const empty=():SocialSummary=>({reply:0,repost:0,mention:0,like:0,follow:0,unreadCount:0})
+export const socialSummary=ref<SocialSummary>(empty())
+export const socialError=ref('')
+export const thanksBusy=ref<string[]>([])
+let timer:ReturnType<typeof setInterval>|undefined,launched=false,foreground=false
+let flight:Promise<void>|null=null,session=getSessionGeneration()
+export async function refreshSocial(){
+  if(!isLoggedIn())return
+  if(flight)return flight
+  const generation=getSessionGeneration()
+  const current=(async()=>{try{const value=await GET<SocialSummary>('/app/social/summary',undefined,true);if(generation===getSessionGeneration()){socialSummary.value=value;socialError.value=''}}catch{if(generation===getSessionGeneration())socialError.value='互动通知刷新失败，请重试'}})()
+  flight=current;try{await current}finally{if(flight===current)flight=null}
+}
+export const fetchSocial=(kind:SocialKind,pageNum:number,pageSize=20,following=false)=>GET<Page<SocialNotification>>('/app/social/notifications',{kind,pageNum,pageSize,following},true)
+export async function readSocial(ids:string[]){
+  if(!ids.length)return
+  const generation=getSessionGeneration()
+  await POST<void>('/app/social/read',{ids})
+  if(generation===getSessionGeneration())await refreshSocial()
+}
+export function openSocial(kind:SocialKind){if(!isLoggedIn()){uni.navigateTo({url:'/pages/login/index'});return}uni.navigateTo({url:'/pages/social/index?kind='+kind})}
+export function openSocialPost(row:SocialNotification){
+  if(!row.postId){uni.showToast({title:'帖子已删除',icon:'none'});return}
+  uni.navigateTo({url:'/pages/post/index?id='+encodeURIComponent(row.postId)+(row.commentId?'&commentId='+encodeURIComponent(row.commentId):'')})
+}
+interface ThanksIntent { nonce:string; notification:string; generation:number; conversation:ChatConversation }
+let pending:ThanksIntent|null=null
+export async function thankSocialLike(row:SocialNotification){
+  if(thanksBusy.value.length>0)return
+  const generation=getSessionGeneration();thanksBusy.value.push(row.id)
+  try{
+    const conversation=await openProfileChat(row.actorId)
+    if(generation!==getSessionGeneration())return
+    const nonce=chatId();pending={nonce,notification:row.id,generation,conversation}
+    uni.navigateTo({url:'/pages/chat/index?id='+encodeURIComponent(conversation.id)+'&thanks='+nonce,fail:()=>{if(pending?.nonce===nonce)pending=null;finishThanks(row.id)}})
+  }catch{finishThanks(row.id)}
+}
+export function consumeThanks(nonce:string,conversationId:string):ThanksIntent|null {
+  const intent=pending
+  if(!intent||intent.nonce!==nonce||intent.conversation.id!==conversationId||intent.generation!==getSessionGeneration())return null
+  pending=null;return intent
+}
+export function finishThanks(id:string){thanksBusy.value=thanksBusy.value.filter(value=>value!==id)}
+export function showSocial(){foreground=true;if(isLoggedIn()){void refreshSocial();if(!timer)timer=setInterval(()=>void refreshSocial(),10000)}}
+export function hideSocial(){foreground=false;if(timer)clearInterval(timer);timer=undefined}
+export function launchSocial(){
+  if(launched)return;launched=true
+  watch(authRevision,()=>{const next=getSessionGeneration();if(next!==session){session=next;socialSummary.value=empty();socialError.value='';flight=null;pending=null;thanksBusy.value=[];if(timer)clearInterval(timer);timer=undefined}if(foreground)showSocial()},{flush:'sync'})
+}

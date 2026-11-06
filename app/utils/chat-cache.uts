@@ -1,0 +1,101 @@
+import { API_BASE_URL } from '@/config/env'
+import { getToken, getSessionGeneration } from './auth'
+import { chatOwner, chatStored, chatStore, persistChatOperation,finishChatOperation,pendingChatOperations,chatAssetRemoved,markChatAssetRemoved,cloudChatHidden } from './chat-local'
+import { chatReceipt,chatId } from './chat-api'
+import type { ChatAsset, ChatMessage,ChatOperation } from '@/types/chat'
+// #ifdef WEB
+import {postChatWorker} from './chat-browser-bridge.js'
+import { webChatBlob, webChatVideo, clearWebChatMedia,removeWebChatMedia } from './chat-cache-web'
+// #endif
+// #ifndef WEB
+import { fileSize,deleteFile } from './file-storage'
+// #endif
+// #ifdef APP-ANDROID
+import { startChatVideo,chatVideoStatus,releaseChatVideo,clearNativeChatMedia,updateChatVideoSession } from '@/uni_modules/ct-platform'
+// #endif
+let cacheEpoch=0
+const assetEpoch=new Map<string,number>()
+const liveOperations=new Set<string>()
+const flights=new Map<string,Promise<string>>()
+const objectURLs=new Map<string,string>()
+// Bind persistent local images during the first render; validate them asynchronously below.
+export function chatCachedImageSource(asset:ChatAsset):string{
+ if(chatAssetRemoved(asset.id))return ''
+ // #ifdef WEB
+ return objectURLs.get(chatOwner()+':'+asset.id+':'+asset.version)||''
+ // #endif
+ // #ifndef WEB
+ const entry=chatStored<{path:string;size:number}|null>('media.'+asset.id+'.'+asset.version,null)
+ return entry&&entry.size===asset.sizeBytes?entry.path:''
+ // #endif
+}
+export function releaseChatObjectURLs(){
+ // #ifdef WEB
+ for(const url of objectURLs.values())URL.revokeObjectURL(url)
+ if(navigator.serviceWorker?.controller)postChatWorker(navigator.serviceWorker.controller,{type:'chat-session-end'})
+ // #endif
+ objectURLs.clear()
+ // #ifdef APP-ANDROID
+ updateChatVideoSession('')
+ // #endif
+}
+export async function chatCachedImage(asset:ChatAsset):Promise<string>{if(chatAssetRemoved(asset.id))throw new Error('消息已删除');const key=chatOwner()+':'+asset.id+':'+asset.version;let flight=flights.get(key);if(flight)return flight;const session=getSessionGeneration(),owner=chatOwner(),epoch=cacheEpoch,assetStamp=assetEpoch.get(key)||0;flight=(async()=>{
+ // #ifdef WEB
+ let url=objectURLs.get(key);if(url)return url;const blob=await webChatBlob(asset);if(session!==getSessionGeneration()||chatAssetRemoved(asset.id)||epoch!==cacheEpoch||assetStamp!==(assetEpoch.get(key)||0))throw new Error('缓存操作已取消');url=URL.createObjectURL(blob)||'';if(!url)throw new Error('图片缓存不可用');objectURLs.set(key,url);return url
+ // #endif
+ // #ifndef WEB
+ const suffix='media.'+asset.id+'.'+asset.version,entry=chatStored<{path:string;size:number}|null>(suffix,null);if(entry){try{if(await fileSize(entry.path)===asset.sizeBytes)return entry.path}catch{}}
+ const directory=uni.env.USER_DATA_PATH+'/ct-private-chat-'+owner;await new Promise<void>((resolve,reject)=>uni.getFileSystemManager().mkdir({dirPath:directory,recursive:true,success:()=>resolve(),fail:e=>{if(e.errMsg.includes('exist'))resolve();else reject(e)}}));
+ const path=directory+'/'+asset.id+'-'+asset.version+'-'+chatId()+'.'+asset.extension;const result=await new Promise<DownloadFileSuccess>((resolve,reject)=>uni.downloadFile({url:API_BASE_URL+'/app/chat/assets/'+asset.id+'/content',filePath:path,header:{Authorization:'Bearer '+getToken()},success:resolve,fail:reject}));if(result.statusCode!==200||await fileSize(path)!==asset.sizeBytes){await deleteFile(path).catch(()=>{});throw new Error('私聊媒体下载失败或文件不完整')}if(session!==getSessionGeneration()||epoch!==cacheEpoch||assetStamp!==(assetEpoch.get(key)||0)){await deleteFile(path).catch(()=>{});throw new Error('缓存操作已取消')}chatStore(suffix,{path,size:asset.sizeBytes});return path
+ // #endif
+})();flights.set(key,flight);try{return await flight}finally{if(flights.get(key)===flight)flights.delete(key)}}
+export async function reconcileChatOperations(){const owner=chatOwner();for(const op of pendingChatOperations()){if(op.stage==='prepared'){if(liveOperations.has(op.operationId))continue;op.stage='failed'};if(op.stage==='success'||op.stage==='failed'){try{await chatReceipt(op.messageId,op.operationId,op.kind,op.stage==='success'?'confirm':'fail');if(owner!==chatOwner())return;finishChatOperation(op.operationId)}catch{}}}}
+export async function saveChatImage(message:ChatMessage){if(!message.asset||message.revoked||cloudChatHidden(message))throw new Error('消息已撤销或删除');const owner=chatOwner(),session=getSessionGeneration(),asset=message.asset;const source=await chatCachedImage(asset);let operation:ChatOperation|null=null;
+ if(message.senderId!==owner){operation={operationId:chatId(),messageId:message.id,kind:'saved',stage:'prepared'};liveOperations.add(operation.operationId);persistChatOperation(operation);try{await chatReceipt(message.id,operation.operationId,'saved','reserve');if(session!==getSessionGeneration())throw new Error('账号已切换');operation.stage='started';persistChatOperation(operation)}catch(e){if(owner===chatOwner()&&session===getSessionGeneration()){operation.stage='failed';persistChatOperation(operation);await reconcileChatOperations()}liveOperations.delete(operation.operationId);throw e}}
+ try{if(session!==getSessionGeneration())throw new Error('账号已切换');
+  // #ifdef WEB
+  const anchor=document.createElement('a');anchor.href=source;anchor.download='chat-'+message.id+'.'+asset.extension;document.body.appendChild(anchor);anchor.click();anchor.remove()
+  // #endif
+  // #ifndef WEB
+  await new Promise<void>((resolve,reject)=>uni.saveImageToPhotosAlbum({filePath:source,success:()=>resolve(),fail:reject}))
+  // #endif
+  if(operation&&owner===chatOwner()){operation.stage='success';persistChatOperation(operation);await reconcileChatOperations()}
+  uni.showToast({title:'已保存',icon:'success'})
+ }catch(e){if(operation&&owner===chatOwner()){operation.stage='failed';persistChatOperation(operation);await reconcileChatOperations()}throw e}finally{if(operation)liveOperations.delete(operation.operationId)}
+}
+export async function chatVideoSource(message:ChatMessage):Promise<string>{
+ if(cloudChatHidden(message)||message.asset&&chatAssetRemoved(message.asset.id))throw new Error('消息已删除');
+ // #ifdef WEB
+ return (await webChatVideo(message)).url
+ // #endif
+ // #ifdef APP-ANDROID
+ const asset=message.asset!;return startChatVideo(JSON.stringify({owner:chatOwner(),api:API_BASE_URL,token:getToken(),asset,messageId:message.id,peer:message.senderId!==chatOwner()}))
+ // #endif
+ // #ifndef WEB
+ // #ifndef APP-ANDROID
+ throw new Error('当前平台暂不支持私聊视频')
+ // #endif
+ // #endif
+}
+export async function removeChatCachedMedia(asset:ChatAsset){markChatAssetRemoved(asset.id);markChatAssetRemoved(asset.coverId);const key=chatOwner()+':'+asset.id+':'+asset.version;assetEpoch.set(key,(assetEpoch.get(key)||0)+1);flights.delete(key);
+ // #ifdef WEB
+ const url=objectURLs.get(key);if(url)URL.revokeObjectURL(url);objectURLs.delete(key);await removeWebChatMedia(asset)
+ // #endif
+ // #ifndef WEB
+ const suffix='media.'+asset.id+'.'+asset.version;const row=chatStored<{path:string}|null>(suffix,null);if(row)await deleteFile(row.path).catch(()=>{});uni.removeStorageSync('ct.chat.'+chatOwner()+'.'+suffix)
+ // #endif
+ // #ifdef APP-ANDROID
+ releaseChatVideo(asset.id+':'+asset.version)
+ // #endif
+}
+export async function clearChatMedia(){const owner=chatOwner();if(!owner)return;cacheEpoch++;flights.clear();releaseChatObjectURLs();
+ // #ifdef WEB
+ await clearWebChatMedia()
+ // #endif
+ // #ifndef WEB
+ const info=uni.getStorageInfoSync();for(const key of info.keys){if(!key.startsWith('ct.chat.'+owner+'.media.'))continue;const entry=uni.getStorageSync(key) as {path?:string};if(entry?.path)await deleteFile(entry.path).catch(()=>{});uni.removeStorageSync(key)}
+ // #endif
+ // #ifdef APP-ANDROID
+ clearNativeChatMedia(owner)
+ // #endif
+}

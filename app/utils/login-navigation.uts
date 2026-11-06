@@ -1,0 +1,60 @@
+let opening = false
+// #ifdef APP || WEB
+let parentPage: UniPage | null = null
+// #endif
+
+export function notifyLoginReady(): void {
+  opening = false
+  uni.showToast({ title: '请先登录', icon: 'none' })
+}
+
+export function paintLoginBackground(progress: number): void {
+  // #ifdef APP || WEB
+  const element = parentPage?.getElementById('ct-main-shell')
+  element?.style.setProperty('transform', 'scale(' + (1 - .018 * progress) + ')')
+  // #endif
+}
+
+export function releaseLoginNavigation(): void {
+  paintLoginBackground(0)
+  opening = false
+  // #ifdef APP || WEB
+  parentPage = null
+  // #endif
+}
+
+export function openLoginFromBottom(): void {
+  if (opening) return
+  opening = true
+  // #ifdef APP || WEB
+  const pages = getCurrentPages()
+  if (!pages.length) { opening = false; return }
+  parentPage = pages[pages.length - 1]
+  if (parentPage!.getDialogPages().some(page => page.route === 'pages/login/index')) { opening = false; return }
+  // The transparent page lets the card's animated corners reveal the original page.
+  uni.openDialogPage({
+    url: '/pages/login/index?transition=bottom&dialog=1',
+    parentPage: parentPage!,
+    animationType: 'none',
+    triggerParentHide: true,
+    disableEscBack: true,
+    fail: releaseLoginNavigation
+  })
+  // #endif
+  // #ifdef MP-WEIXIN
+  uni.navigateTo({ url: '/pages/login/index', success: notifyLoginReady, complete: () => { opening = false } })
+  // #endif
+}
+
+export function closeLoginToBottom(dialog = false): void {
+  // #ifdef APP || WEB
+  if (dialog) {
+    const page = parentPage?.getDialogPages().find(item => item.route === 'pages/login/index')
+    if (page) uni.closeDialogPage({ dialogPage: page, animationType: 'none', complete: releaseLoginNavigation })
+    else releaseLoginNavigation()
+    return
+  }
+  // #endif
+  if (getCurrentPages().length > 1) uni.navigateBack({ animationType: 'none' })
+  else uni.reLaunch({ url: '/pages/index/index' })
+}

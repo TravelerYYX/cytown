@@ -1,0 +1,90 @@
+<template>
+  <view class="account-page" :style="{ paddingTop: statusBarHeight + 'px' }">
+    <view class="account-header">
+      <ActionButton class="account-back" aria-label="返回" :disabled="switching" @tap="goBack"><AppIcon name="back" :size="42" /></ActionButton>
+      <text class="account-title">切换账号</text>
+      <view class="header-space" />
+    </view>
+    <scroll-view class="account-scroll" direction="vertical" :show-scrollbar="false">
+      <text class="account-hint">轻触头像进行账号切换</text>
+      <view class="account-card">
+        <view v-for="account in accounts" :key="account.userInfo.userId">
+          <ActionButton class="account-item" :aria-label="account.userInfo.nickname + (currentId === account.userInfo.userId ? '，当前账号' : '，切换账号')" :aria-pressed="currentId === account.userInfo.userId" :disabled="switching" @tap="selectAccount(account.userInfo.userId)">
+            <view class="account-avatar"><UserAvatar class="account-photo" :src="account.userInfo.avatar" :size="82" /></view>
+            <text class="account-name">{{ account.userInfo.nickname }}</text>
+            <AppIcon v-if="currentId === account.userInfo.userId" name="check" tone="cyan" :size="42" />
+          </ActionButton>
+          <view class="account-divider" />
+        </view>
+        <ActionButton class="account-item" aria-label="登录其他账号" :disabled="switching" @tap="loginOther">
+          <view class="plus-circle"><view class="plus-horizontal" /><view class="plus-vertical" /></view>
+          <text class="account-name">登录其他账号</text>
+        </ActionButton>
+      </view>
+      <view :style="{ height: (bottomInset + 24) + 'px' }" />
+    </scroll-view>
+    <EyeCareOverlay />
+  </view>
+</template>
+<script setup lang="uts">
+import { ref } from 'vue'
+import ActionButton from '@/components/ActionButton.uvue'
+import AppIcon from '@/components/AppIcon.uvue'
+import UserAvatar from '@/components/UserAvatar.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { getRememberedAccounts, getUserInfo } from '@/utils/auth'
+import { switchAccount } from '@/utils/account-switch'
+import { setStatusBar } from '@/utils/platform'
+import { notifyWindowResize } from '@/utils/window-events'
+
+const { statusBarHeight, bottomInset } = useWindowInsets()
+const accounts = ref(getRememberedAccounts())
+const currentId = ref(getUserInfo()?.userId || '')
+const switching = ref(false)
+let disposed = false
+onResize(notifyWindowResize)
+onShow(() => { accounts.value = getRememberedAccounts(); currentId.value = getUserInfo()?.userId || ''; setStatusBar('dark') })
+onUnload(() => { disposed = true })
+onBackPress(() => switching.value)
+function goBack() { getCurrentPages().length > 1 ? uni.navigateBack() : uni.reLaunch({ url: '/pages/index/index' }) }
+function loginOther() { uni.navigateTo({ url: '/pages/login/index' }) }
+async function selectAccount(userId: string) {
+  if (switching.value) return
+  if (userId === currentId.value) { uni.showToast({ title: '当前已是该账号', icon: 'none' }); return }
+  switching.value = true
+  try {
+    await switchAccount(userId)
+    if (!disposed) uni.reLaunch({ url: '/pages/index/index?tab=mine' })
+  } catch (error) {
+    if (!disposed) {
+      accounts.value = getRememberedAccounts()
+      uni.showToast({ title: error instanceof Error ? error.message : '切换失败，请重试', icon: 'none' })
+    }
+  } finally { switching.value = false }
+}
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+.account-page { position: fixed; top: 0; right: 0; bottom: 0; left: 0; display: flex; flex-direction: column; background-color: #f6f7f9; }
+.account-header { display: flex; flex-direction: row; align-items: center; height: 136rpx; flex-shrink: 0; padding: 0 32rpx; }
+.account-back { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 44rpx; height: 64rpx; flex-shrink: 0; }
+.account-title { flex: 1; text-align: center; font-size: 26rpx; font-weight: 600; line-height: 40rpx; color: #242729; }
+.header-space { width: 44rpx; flex-shrink: 0; }
+.account-scroll { flex: 1; height: 0; min-height: 0; }
+.account-hint { display: flex; flex-direction: column; padding: 24rpx 50rpx 20rpx; font-size: 24rpx; line-height: 32rpx; color: #858688; }
+.account-card { margin: 0 33rpx; background-color: #fff; border-radius: 28rpx; overflow: hidden; }
+.account-item { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; height: 132rpx; padding: 0 25rpx; }
+.account-avatar { position: relative; width: 82rpx; height: 82rpx; border-radius: 41rpx; overflow: hidden; flex-shrink: 0; }
+.account-photo { position: absolute; left: -15rpx; top: -15rpx; }
+.account-name { flex: 1; min-width: 0; margin-left: 25rpx; font-size: 26rpx; font-weight: 400; line-height: 40rpx; color: #242729; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-divider { height: 2rpx; margin-left: 25rpx; background-color: #f6f7f9; }
+.plus-circle { position: relative; width: 82rpx; height: 82rpx; border-radius: 41rpx; border: 2rpx solid #f6f7f9; flex-shrink: 0; }
+.plus-horizontal { position: absolute; top: 37rpx; left: 21rpx; width: 36rpx; height: 4rpx; border-radius: 2rpx; background-color: #c3c7cb; }
+.plus-vertical { position: absolute; top: 21rpx; left: 37rpx; width: 4rpx; height: 36rpx; border-radius: 2rpx; background-color: #c3c7cb; }
+/* #ifndef APP */
+.account-page button { margin: 0; border: 0; border-radius: 0; background: transparent; line-height: normal; text-align: left; }
+.account-page button::after { border: 0; }
+/* #endif */
+</style>

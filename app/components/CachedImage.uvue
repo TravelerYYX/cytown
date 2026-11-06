@@ -1,0 +1,82 @@
+<template><image :key="imageKey" class="cached-image" :src="uiAsset(source)" :mode="mode" :lazy-load="deferred" @load="loaded" @error="fallback" /></template>
+<script setup lang="uts">
+import { uiAsset } from '@/utils/ui-assets'
+import { probeImageInfo } from '@/utils/image-info'
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { ref, watch, onBeforeUnmount, onMounted, getCurrentInstance, nextTick } from 'vue'
+// #ifdef APP
+import { onReuse } from 'vue'
+// #endif
+import { cachedImage, cachedImageSource, mediaUrl } from '@/utils/media-cache'
+type ImageDimensions = { width: number; height: number }
+type ImageLoadEvent = { detail: ImageDimensions }
+const props=withDefaults(defineProps<{src:string;version?:string;variant?:string;enabled?:boolean;deferred?:boolean;priority?:number;mode?:'scaleToFill'|'aspectFit'|'aspectFill'|'widthFix'|'heightFix'|'top'|'bottom'|'center'|'left'|'right'|'top left'|'top right'|'bottom left'|'bottom right'}>(),{version:'legacy',variant:'preview',enabled:true,deferred:false,priority:0,mode:'scaleToFill'})
+const emit = defineEmits<{ load: [event: ImageLoadEvent]; error: [event: unknown] }>()
+const source=ref('');let revision=0;let release=()=>{}
+const imageKey = ref(0)
+let notified = false
+const inRange = ref(!props.deferred)
+const instance = getCurrentInstance()
+let observer: ReturnType<typeof uni.createIntersectionObserver> | undefined
+onMounted(() => {
+  if (!props.deferred) return
+  try {
+    const height = uni.getSystemInfoSync().windowHeight
+    observer = uni.createIntersectionObserver(instance?.proxy, { initialRatio: 0 })
+    observer.relativeToViewport({ top: height * 2, bottom: height * 2 }).observe('.cached-image', result => {
+      if (result.intersectionRatio > 0) { inRange.value = true; observer?.disconnect() }
+    })
+  } catch { inRange.value = true }
+})
+watch(()=>[props.src,props.version,props.variant,props.enabled,inRange.value],async()=>{
+  const current=++revision;release();release=()=>{}
+  imageKey.value++; notified = false
+  source.value=props.enabled && inRange.value ? cachedImageSource(props.src,props.version,props.variant) : ''
+  if (!props.enabled || !inRange.value) return
+  if (source.value) return
+  const image=await cachedImage(props.src,props.version,props.variant,{priority:()=>props.priority,cancelled:()=>current!==revision})
+  if(current!==revision){image.release();return}release=image.release;source.value=image.url
+},{immediate:true})
+function loaded(event: unknown) {
+  if (!source.value || notified) return
+  notified = true
+  emit('load', event as ImageLoadEvent)
+}
+function fallback(event: unknown){
+  if (!source.value || notified) return
+  const original = mediaUrl(props.src)
+  if (source.value !== original) { release(); release = () => {}; notified = false; source.value = original }
+  else emit('error', event)
+}
+// A native memory-cache hit can finish before the recycled image's listener is
+// attached. Confirm local decoding after binding, independently of that event.
+// #ifdef APP
+async function verifyNativeImage() {
+  const current = revision, expected = source.value
+  if (!expected || /^https?:/.test(expected)) return
+  await nextTick()
+  if (current !== revision || expected !== source.value) return
+  probeImageInfo(uiAsset(expected),
+    (width, height) => { if (current === revision && expected === source.value) loaded({ detail: { width, height } }) },
+    error => { if (current === revision && expected === source.value) fallback(error) }
+  )
+}
+onMounted(() => { void verifyNativeImage() })
+watch(() => [source.value, imageKey.value], () => { void verifyNativeImage() }, { flush: 'post' })
+onReuse(() => { notified = false; imageKey.value++ })
+// #endif
+onBeforeUnmount(()=>{revision++;release();observer?.disconnect()})
+</script>
+
+<style>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+
+
+/* #endif */
+</style>

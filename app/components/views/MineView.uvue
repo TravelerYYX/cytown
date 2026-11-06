@@ -1,0 +1,744 @@
+<template>
+  <GuestMineView v-if="!loggedIn" :active="active" :status-bar-height="statusBarHeight" :viewport-width="viewportWidth" :entries="mineEntries" @menu="emit('menu', mineEntries)" />
+  <view v-else class="screen mine-view" :style="paneStyle" :class="[uxNative?'ux4':'',uxNative?'ux5':'',uxNative?'ux6':'']">
+    <PaneScroll v-for="paneChannel in minePaneChannels" :key="paneChannel" :style="minePaneStyle(paneChannel)" :keep-scroll-synced="uxNative" :video-top-inset="statusBarHeight + (collapsed ? LAYOUT.compactHeader + LAYOUT.channelTabs : 0) * viewportWidth / 750" :manage-posts="paneChannelId(paneChannel) === 'publish'" @post-menu="emit('postMenu', $event)" swipe-enabled @swipe="swipeChannel" class="screen-scroll" :post-items="uxNative && paneChannel!=='comment' ? panePosts(paneChannel) : undefined" :comment-items="uxNative && paneChannel==='comment' ? myComments : undefined" post-variant="mine" :viewport-width="viewportWidth" :minimum-content-height="nativeMineMinimum" :transition-key="uxNative ? paneChannel : activeChannel" :active="paneVisible && !searchOpen && paneChannelId(paneChannel)===activeChannel" :collapse-threshold="collapseOffset" :fade-distance="LAYOUT.compactHeader * viewportWidth / 750" :fade-target="uxNodePrefix+(uxNative ? '-compact-controls' : '-compact-header')" :scroll-top="paneChannelId(paneChannel)===activeChannel ? requestedTop : Math.min(offset, Math.ceil(collapseOffset)+1)" :show-scrollbar="false" :lower-threshold="120" @scroll="onMinePaneScroll(paneChannel, $event)" @scrolltolower="paneChannelId(paneChannel)===activeChannel && loadMore()" @busy="postsFresh.busy(); entriesFresh.busy(); statisticsFresh.busy(); commentsBusy()" @idle="postsFresh.idle(); entriesFresh.idle(); statisticsFresh.idle(); commentsIdle()" :class="[uxNative?'ux7':'']">
+      <template #before>
+<view class="profile-header" :style="{ paddingTop: statusBarHeight + 'px' }" :class="[uxNative?'ux4':'',uxNative?'ux8':'']">
+        <!-- #ifdef APP -->
+        <NativeProfileBackdrop :width="viewportWidth" :height="statusBarHeight + (LAYOUT.profileHeader + 32) * viewportWidth / 750" />
+        <!-- #endif -->
+        <!-- #ifndef APP -->
+        <view class="profile-background" />
+        <view class="profile-blur" />
+        <!-- #endif -->
+        <view class="profile-dim"  :class="[uxNative?'ux4':'',uxNative?'ux11':'']"/>
+        <view class="profile-body" :class="[uxNative?'ux4':'',uxNative?'ux12':'']">
+          <ProfileBar :nickname="mineProfile.nickname" @menu="emit('menu', mineEntries)" />
+          <view class="identity">
+            <ActionButton class="identity-avatar" aria-label="编辑资料" @tap="openProfile">
+              <UserAvatar class="identity-avatar-art" :src="userInfo?.avatar" :user-id="userInfo?.userId" :frame-id="userInfo?.avatarFrame" :frame-expires-at="userInfo?.avatarFrameExpiresAt ?? undefined" :size="117" />
+            </ActionButton>
+            <view class="identity-info">
+              <view class="nickname-row">
+                <view class="mine-user-name" @tap="openProfile"><UserName :user-id="userInfo?.userId" :nickname="mineProfile.nickname" :size="31" color="#ffffff" /></view>
+                <ActionButton class="identity-edit" aria-label="编辑资料" @tap="openProfile">
+                  <view class="identity-edit-glyph"><view class="identity-edit-pen" /><view class="identity-edit-line" /></view>
+                </ActionButton>
+              </view>
+              <text class="identity-meta identity-uid">UID: {{ mineProfile.uid }}</text>
+              <text class="identity-meta identity-ip">IP: {{ ipLocation }}</text>
+            </view>
+          </view>
+          <text class="signature" :class="[uxNative?'ux19':'',uxNative?'ux21':'',uxNative?'ux26':'']">{{ mineProfile.signature }}</text>
+          <view v-if="loggedIn && userTags.length" class="user-tags" :class="[uxNative?'ux4':'',uxNative?'ux27':'']">
+            <text v-for="(tag, __uxIndex0) in userTags" :key="(tag.custom ? 'c' : 's') + tag.name" class="user-tag" :class="[uxNative?'ux19':'',uxNative?'ux21':'',uxNative?'ux28':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1004'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;13rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(0+__uxIndex0)}}],{})" :id="panePrefix(paneChannel)+'-g1004'+'-'+[__uxIndex0].join('-')">{{ tag.name }}</text>
+          </view>
+          <ActionButton :aria-label="&quot;添加个性标签&quot;" v-else class="add-tag" @tap="openTags" :class="[uxNative?'ct-native-button':'',uxNative?'ux14':'',uxNative?'ux29':'']"><AppIcon name="plus" :size="26" tone="white"  :style="uxLayout(panePrefix(paneChannel)+'-g1005',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;6rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;20rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="panePrefix(paneChannel)+'-g1005'"/><text :class="[uxNative?'ux19':'',uxNative?'ux30':'',uxNative?'ux21':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1006',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;6rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;20rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="panePrefix(paneChannel)+'-g1006'">添加个性标签</text></ActionButton>
+          <view class="stats" :class="[uxNative?'ux4':'',uxNative?'ux31':'']">
+            <ActionButton :aria-label="String(mineProfile.fans) + ' ' + &quot;粉丝&quot;" @tap="openRelationships('followers')" :class="[uxNative?'ct-native-button':'',uxNative?'ux14':'',uxNative?'ux32':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1007',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;28rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="panePrefix(paneChannel)+'-g1007'"><!-- #ifdef APP --><NativeStatLabel :value="mineProfile.fans" label="粉丝" :label-size="15" :value-size="24" /><!-- #endif --><!-- #ifndef APP --><text class="stat-value" :class="[uxNative?'ux19':'',uxNative?'ux33':'',uxNative?'ux21':'',uxNative?'ux34':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1008',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="panePrefix(paneChannel)+'-g1008'">{{ mineProfile.fans }}</text><text :class="[uxNative?'ux19':'',uxNative?'ux33':'',uxNative?'ux21':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1009',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="panePrefix(paneChannel)+'-g1009'">粉丝</text><!-- #endif --></ActionButton>
+            <ActionButton :aria-label="String(mineProfile.following) + ' ' + &quot;关注&quot;" @tap="openRelationships('following')" :class="[uxNative?'ct-native-button':'',uxNative?'ux14':'',uxNative?'ux32':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1010',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;28rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="panePrefix(paneChannel)+'-g1010'"><!-- #ifdef APP --><NativeStatLabel :value="mineProfile.following" label="关注" :label-size="15" :value-size="24" /><!-- #endif --><!-- #ifndef APP --><text class="stat-value" :class="[uxNative?'ux19':'',uxNative?'ux33':'',uxNative?'ux21':'',uxNative?'ux34':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1011',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="panePrefix(paneChannel)+'-g1011'">{{ mineProfile.following }}</text><text :class="[uxNative?'ux19':'',uxNative?'ux33':'',uxNative?'ux21':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1012',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="panePrefix(paneChannel)+'-g1012'">关注</text><!-- #endif --></ActionButton>
+            <ActionButton :aria-label="String(mineProfile.likes) + ' ' + &quot;获赞&quot;" @tap="open('feature', '获赞')" :class="[uxNative?'ct-native-button':'',uxNative?'ux14':'',uxNative?'ux32':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1013',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;28rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="panePrefix(paneChannel)+'-g1013'"><!-- #ifdef APP --><NativeStatLabel :value="mineProfile.likes" label="获赞" :label-size="15" :value-size="24" /><!-- #endif --><!-- #ifndef APP --><text class="stat-value" :class="[uxNative?'ux19':'',uxNative?'ux33':'',uxNative?'ux21':'',uxNative?'ux34':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1014',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="panePrefix(paneChannel)+'-g1014'">{{ mineProfile.likes }}</text><text :class="[uxNative?'ux19':'',uxNative?'ux33':'',uxNative?'ux21':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1015',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="panePrefix(paneChannel)+'-g1015'">获赞</text><!-- #endif --></ActionButton>
+          </view>
+          <scroll-view class="role-scroll" direction="horizontal" :show-scrollbar="false" :class="[uxNative?'ux35':'',uxNative?'ux36':'']">
+            <view class="role-track" :class="[uxNative?'ux4':'',uxNative?'ux37':'']">
+              <ActionButton :aria-label="(userDisplayName || card.roleName) + ' ' + card.server + ' ' + card.stats.map(stat=>String(stat.value)+' '+stat.label).join(' ')" v-for="(card, __uxIndex1) in gameRoleCards" :key="card.id" class="role-card" @tap="openProfile" :style="uxLayout(panePrefix(paneChannel)+'-g1016'+'-'+[__uxIndex1].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:true,declarations:{__index:String(0+__uxIndex1)}}],{})" :id="panePrefix(paneChannel)+'-g1016'+'-'+[__uxIndex1].join('-')">
+                <!-- #ifdef APP -->
+                <NativeRoleBackdrop :source="cardBackgroundImage" />
+                <!-- #endif -->
+                <!-- #ifndef APP -->
+                <view class="role-card-bg" :style="{ backgroundImage: 'url(' + cardBackgroundImage + ')' }" />
+                <!-- #endif -->
+                <view class="role-top">
+                  <view class="role-avatar-window">
+                    <UserAvatar class="role-avatar-art" :src="userInfo?.avatar" :user-id="userInfo?.userId" :frame-id="userInfo?.avatarFrame" :frame-expires-at="userInfo?.avatarFrameExpiresAt ?? undefined" :size="58" :radius="12" />
+                  </view>
+                  <view class="role-name">
+                    <text class="role-nickname">{{ userDisplayName || card.roleName }}</text>
+                    <text class="role-server">{{ card.server }}</text>
+                  </view>
+                </view>
+                <view class="role-stats">
+                  <view v-for="stat in card.stats" :key="stat.label" class="role-stat">
+                    <text class="role-value" :class="[stat.label === '次元币' && String(stat.value).length > 8 ? 'coin-balance-compact' : '']">{{ stat.value }}</text>
+                    <text class="role-label">{{ stat.label }}</text>
+                  </view>
+                </view>
+              </ActionButton>
+            </view>
+          </scroll-view>
+        </view>
+      </view>
+<!-- #ifdef APP -->
+<view class="profile-panel" :class="[uxNative?'ux4':'',uxNative?'ux52':'']" :id="panePrefix(paneChannel)+'-n2'"><MineQuickEntries :entries="mineEntries" />
+<ChannelTabs :tabs="mineChannels" :active="activeChannel" searchable @change="activeChannel = String($event.id)" @search="openWorkSearch" /></view>
+<!-- #endif -->
+<!-- #ifdef APP -->
+<PendingPublishCard v-for="task in panePublishes(paneChannel)" :key="task.key" :task="task" />
+<!-- #endif -->
+</template>
+<!-- #ifdef APP -->
+<view class="native-mine-footer"><template v-if="paneChannel!=='comment'" :style="uxLayout(panePrefix(paneChannel)+'-g1024',[{on:true,declarations:{__index:String(0+1)}}],{})" :id="panePrefix(paneChannel)+'-g1024'">
+          
+          <view v-if="paneLoading(paneChannel) && !panePosts(paneChannel).length && !panePublishes(paneChannel).length" class="empty-copy" :class="[uxNative?'ux4':'',uxNative?'ux67':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1026',[{on:true,declarations:{__index:String(0+1)}}],{})" :id="panePrefix(paneChannel)+'-g1026'"><text :class="[uxNative?'ux19':'',uxNative?'ux125':'',uxNative?'ux21':'']">{{ paneLabel(paneChannel) + '加载中…' }}</text></view>
+          <view v-else-if="paneError(paneChannel) && !panePosts(paneChannel).length && !panePublishes(paneChannel).length" class="empty-copy" :class="[uxNative?'ux4':'',uxNative?'ux67':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1027',[{on:true,declarations:{__index:String(0+1+(paneLoading(paneChannel)&amp;&amp;!panePosts(paneChannel).length && !panePublishes(paneChannel).length?1:0))}}],{})" :id="panePrefix(paneChannel)+'-g1027'"><text :class="[uxNative?'ux19':'',uxNative?'ux125':'',uxNative?'ux21':'']">{{ paneError(paneChannel) }}</text><ActionButton :aria-label="&quot;重试&quot;" class="retry-button" @tap="loadMore" :class="[uxNative?'ct-native-button':'',uxNative?'ux14':'',uxNative?'ux68':'']"><text :class="[uxNative?'ux19':'',uxNative?'ux125':'',uxNative?'ux126':'',uxNative?'ux21':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1028',[{on:uxNative,declarations:{&quot;__padding&quot;:&quot;56rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="panePrefix(paneChannel)+'-g1028'">重试</text></ActionButton></view>
+          <view v-else-if="!loggedIn" class="empty-copy" :class="[uxNative?'ux4':'',uxNative?'ux67':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1029',[{on:true,declarations:{__index:String(0+1+(paneLoading(paneChannel)&amp;&amp;!panePosts(paneChannel).length && !panePublishes(paneChannel).length?1:0)+1)}}],{})" :id="panePrefix(paneChannel)+'-g1029'"><text :class="[uxNative?'ux19':'',uxNative?'ux125':'',uxNative?'ux21':'']">{{ paneChannel === 'publish' ? '登录后查看自己发布的内容' : '登录后查看' + paneLabel(paneChannel) }}</text></view>
+          <EmptyState v-else-if="!panePosts(paneChannel).length && !panePublishes(paneChannel).length" />
+          <view v-else-if="panePosts(paneChannel).length" class="load-tip" :class="[uxNative?'ux4':'',uxNative?'ux55':'']" :style="uxLayout(panePrefix(paneChannel)+'-g1031',[{on:true,declarations:{__index:String(0+1+(paneLoading(paneChannel)&amp;&amp;!panePosts(paneChannel).length && !panePublishes(paneChannel).length?1:0)+1+1+1)}}],{})" :id="panePrefix(paneChannel)+'-g1031'"><text :class="[uxNative?'ux19':'',uxNative?'ux133':'',uxNative?'ux21':'']">{{ paneLoading(paneChannel) ? '加载中…' : paneHasMore(paneChannel) ? '上拉加载更多' : '已经到底了' }}</text></view>
+        </template><MineCommentsStatus v-else-if="paneChannel==='comment'" :loading="commentsLoading || (!myComments.length && commentsHasMore && !commentsError)" :error="commentsError" :count="myComments.length" :has-more="commentsHasMore" :active="paneVisible && paneChannel===activeChannel" @retry="loadMoreComments" /><EmptyState v-else /></view>
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view class="profile-panel" :class="[uxNative?'ux4':'',uxNative?'ux52':'']" :style="uxLayout(uxNodePrefix+'-n2',[{on:uxNative,declarations:{&quot;min-height&quot;:&quot;100vh&quot;}}],{})" :id="uxNodePrefix+'-n2'">
+        <MineQuickEntries :entries="mineEntries" />
+        <ChannelTabs :tabs="mineChannels" :active="activeChannel" searchable @change="activeChannel = String($event.id)" @search="openWorkSearch" />
+        <view class="mine-channel-content" @touchstart="channelSwipe.start" @touchmove="channelSwipe.move" @touchend="channelSwipe.end" @touchcancel="channelSwipe.cancel" :style="uxLayout(uxNodePrefix+'-n3',[],{})" :id="uxNodePrefix+'-n3'">
+        <template v-if="postsChannel" :style="uxLayout(uxNodePrefix+'-g1024',[{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1024'">
+          <PendingPublishCard v-for="task in pendingPublishes" :key="task.key" :task="task" />
+          <VirtualPostColumn :manage-posts="activeChannel === 'publish'" @post-menu="emit('postMenu', $event)" :posts="filteredPosts" :active="paneVisible && !searchOpen" :viewport-width="viewportWidth" variant="mine"  :style="uxLayout(uxNodePrefix+'-g1025',[{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1025'"/>
+          <view v-if="loading && !posts.length && !pendingPublishes.length" class="empty-copy" :class="[uxNative?'ux4':'',uxNative?'ux67':'']" :style="uxLayout(uxNodePrefix+'-g1026',[{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1026'"><text :class="[uxNative?'ux19':'',uxNative?'ux125':'',uxNative?'ux21':'']">{{ postsLabel + '加载中…' }}</text></view>
+          <view v-else-if="error && !posts.length && !pendingPublishes.length" class="empty-copy" :class="[uxNative?'ux4':'',uxNative?'ux67':'']" :style="uxLayout(uxNodePrefix+'-g1027',[{on:true,declarations:{__index:String(0+1+(loading&amp;&amp;!posts.length && !pendingPublishes.length?1:0))}}],{})" :id="uxNodePrefix+'-g1027'"><text :class="[uxNative?'ux19':'',uxNative?'ux125':'',uxNative?'ux21':'']">{{ error }}</text><ActionButton :aria-label="&quot;重试&quot;" class="retry-button" @tap="loadMore" :class="[uxNative?'ct-native-button':'',uxNative?'ux14':'',uxNative?'ux68':'']"><text :class="[uxNative?'ux19':'',uxNative?'ux125':'',uxNative?'ux126':'',uxNative?'ux21':'']" :style="uxLayout(uxNodePrefix+'-g1028',[{on:uxNative,declarations:{&quot;__padding&quot;:&quot;56rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1028'">重试</text></ActionButton></view>
+          <view v-else-if="!loggedIn" class="empty-copy" :class="[uxNative?'ux4':'',uxNative?'ux67':'']" :style="uxLayout(uxNodePrefix+'-g1029',[{on:true,declarations:{__index:String(0+1+(loading&amp;&amp;!posts.length && !pendingPublishes.length?1:0)+1)}}],{})" :id="uxNodePrefix+'-g1029'"><text :class="[uxNative?'ux19':'',uxNative?'ux125':'',uxNative?'ux21':'']">{{ activeChannel === 'publish' ? '登录后查看自己发布的内容' : '登录后查看' + postsLabel }}</text></view>
+          <EmptyState v-else-if="!filteredPosts.length && !pendingPublishes.length" />
+          <view v-else-if="filteredPosts.length" class="load-tip" :class="[uxNative?'ux4':'',uxNative?'ux55':'']" :style="uxLayout(uxNodePrefix+'-g1031',[{on:true,declarations:{__index:String(0+1+(loading&amp;&amp;!posts.length && !pendingPublishes.length?1:0)+1+1+1)}}],{})" :id="uxNodePrefix+'-g1031'"><text :class="[uxNative?'ux19':'',uxNative?'ux133':'',uxNative?'ux21':'']">{{ loading ? '加载中…' : hasMore ? '上拉加载更多' : '已经到底了' }}</text></view>
+        </template>
+        <template v-else-if="activeChannel==='comment'">
+          <MineCommentCard v-for="comment in myComments" :key="comment.id" :comment="comment" :active="paneVisible && !searchOpen" />
+          <MineCommentsStatus :loading="commentsLoading" :error="commentsError" :count="myComments.length" :has-more="commentsHasMore" :active="paneVisible" @retry="loadMoreComments" />
+        </template>
+        <EmptyState v-else />
+        </view>
+      </view>
+<!-- #endif -->
+    </PaneScroll>
+    <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(a11yPrefix+'-0',{&quot;aria-hidden&quot;:compactProgress === 0})" v-show="!searchOpen" class="mine-compact" :class="[{'is-visible':compactProgress>0,'is-collapsed':collapsed},uxNative?'ux4':'',uxNative?'ux60':'',uxNative&amp;&amp;!!(compactProgress>0)?'ux71':'']" >
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :aria-hidden="compactProgress === 0" v-show="!searchOpen" class="mine-compact" :class="[{'is-visible':compactProgress>0,'is-collapsed':collapsed},uxNative?'ux4':'',uxNative?'ux60':'',uxNative&amp;&amp;!!(compactProgress>0)?'ux71':'']" >
+<!-- #endif -->
+      <view :id="uxNodePrefix+'-compact-header'" class="compact-header reference-compact-header" :style="{ paddingTop: statusBarHeight + 'px' }" :class="[uxNative?'ux4':'',uxNative?'ux61':'',uxNative&amp;&amp;uxMedia(&quot;(prefers-reduced-motion: reduce)&quot;)?'ux64':'',uxNative&amp;&amp;!!(compactProgress>0)?'ux82':'']"><view :id="uxNodePrefix+'-compact-controls'" :class="[uxNative?'mine-compact-controls':'',uxNative&amp;&amp;uxMedia(&quot;(prefers-reduced-motion: reduce)&quot;)?'ux64':'']"><ProfileBar compact @menu="emit('menu', mineEntries)" :nickname="mineProfile.nickname" :avatar="userInfo?.avatar" :user-id="userInfo?.userId" :frame-id="userInfo?.avatarFrame" :frame-expires-at="userInfo?.avatarFrameExpiresAt ?? undefined" :level="userInfo?.level || 0" /></view></view>
+      <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(a11yPrefix+'-1',{&quot;aria-hidden&quot;:!collapsed})" class="compact-channels"  :class="[uxNative?'ux4':'',uxNative?'ux62':'',uxNative&amp;&amp;uxMedia(&quot;(prefers-reduced-motion: reduce)&quot;)?'ux65':'',uxNative&amp;&amp;!!collapsed?'ux83':'']">
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :aria-hidden="!collapsed" class="compact-channels"  :class="[uxNative?'ux4':'',uxNative?'ux62':'',uxNative&amp;&amp;uxMedia(&quot;(prefers-reduced-motion: reduce)&quot;)?'ux65':'',uxNative&amp;&amp;!!collapsed?'ux83':'']">
+<!-- #endif --><view class="compact-channels-panel reference-compact-panel" :class="[uxNative?'ux4':'',uxNative?'ux63':'']">
+      <ChannelTabs :tabs="mineChannels" :active="activeChannel" searchable @change="activeChannel = String($event.id)" @search="openWorkSearch" />
+      </view></view>
+    </view>
+    <view v-if="searchMounted" :id="uxNodePrefix+'-work-search'" class="mine-search-overlay">
+      <view class="mine-search-profile-bar" :style="{paddingTop:statusBarHeight+'px'}"><ProfileBar compact :nickname="mineProfile.nickname" :avatar="userInfo?.avatar" :user-id="userInfo?.userId" :frame-id="userInfo?.avatarFrame" :frame-expires-at="userInfo?.avatarFrameExpiresAt ?? undefined" :level="userInfo?.level || 0" @menu="emit('menu', mineEntries)" /></view>
+      <MineWorkSearch :initial-scope="activeChannel==='favorite'?'favorite':'publish'" ref="workSearchRef" :motion-id="uxNodePrefix+'-work-search-sheet'" :active="paneVisible && searchOpen" :ready="searchReady" :viewport-width="viewportWidth" @cancel="closeWorkSearch" @post-menu="emit('postMenu', $event)" />
+    </view>
+    <view v-if="!collapsed && !searchOpen" class="mine-status" :style="{ height: statusBarHeight + 'px' }"  :class="[uxNative?'ux4':'',uxNative?'ux66':'']"/>
+  </view>
+</template>
+<script setup lang="uts">
+import EmptyState from '@/components/EmptyState.uvue'
+import MineWorkSearch from '@/components/MineWorkSearch.uvue'
+import { useMineSearchMotion } from '@/composables/useMineSearchMotion'
+import MineCommentCard from '@/components/MineCommentCard.uvue'
+import MineCommentsStatus from '@/components/MineCommentsStatus.uvue'
+import { useMineComments } from '@/composables/useMineComments'
+import UserAvatar from '@/components/UserAvatar.uvue'
+import UserName from '@/components/UserName.uvue'
+
+import { fetchLevelProgress, fetchLevelConfig } from '@/utils/level-api'
+import type { LevelProgress } from '@/types/level'
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+// #ifdef APP
+import NativeStatLabel from '@/components/NativeStatLabel.uvue'
+// #endif
+// #ifdef APP
+import NativeProfileBackdrop from '@/components/NativeProfileBackdrop.uvue'
+import NativeRoleBackdrop from '@/components/NativeRoleBackdrop.uvue'
+// #endif
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { useHorizontalSwipe } from '@/composables/useHorizontalSwipe'
+import PaneScroll from '@/components/PaneScroll.uvue'
+import { usePaneVisibility } from '@/composables/usePaneVisibility'
+import { useFreshTask } from '@/composables/useFreshTask'
+import { usePostOwnership } from '@/composables/usePostOwnership'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+
+import { authRevision, avatarUrl, getSessionGeneration, getUserInfo, isLoggedIn, saveUserInfo } from '@/utils/auth'
+import { fetchMe } from '@/utils/auth-api'
+import AppIcon from '@/components/AppIcon.uvue'
+import ProfileBar from '@/components/ProfileBar.uvue'
+import GuestMineView from './GuestMineView.uvue'
+import MineQuickEntries from '@/components/MineQuickEntries.uvue'
+import { DEFAULT_MEMBERSHIP_TARGET, fetchMembershipTarget, fetchMineEntries } from '@/utils/mine-entry-api'
+// #ifndef APP
+import VirtualPostColumn from '@/components/VirtualPostColumn.uvue'
+// #endif
+import PendingPublishCard from '@/components/PendingPublishCard.uvue'
+import { minePublishTasks, acknowledgePublishPosts, publishRevision } from '@/utils/publish-tasks'
+import { entryMinePublishRequest } from '@/utils/navigation'
+import ChannelTabs from '@/components/ChannelTabs.uvue'
+import { usePaneScroll } from '@/composables/usePaneScroll'
+import { fetchFavoritePosts, fetchLikedPosts, fetchMinePosts, fetchPostHistory, postHistoryRevision, toPost } from '@/utils/post-api'
+import { ensureInteractionLogin, fetchStatistics, interactionRevision, membershipRevision } from '@/utils/interactions'
+import type { UserStatistics } from '@/types/auth'
+import { openDestination } from '@/utils/navigation'
+import { LAYOUT } from '@/config/layout'
+import { cardBackgroundUrl } from '@/config/assets'
+import { ownIpProvince, refreshOwnLocation } from '@/utils/user-location'
+import { mineProfile as demoProfile, gameRoleCards as demoRoleCards, mineChannels } from '@/mock/mine'
+import type { MineEntry, NavigationKind, Post, ViewProps } from '@/types/home.uts'
+const props = defineProps<ViewProps>()
+const paneVisible = usePaneVisibility(() => props.active)
+const configuredMineEntries = ref<MineEntry[]>([])
+const membershipTarget = ref(DEFAULT_MEMBERSHIP_TARGET)
+const mineEntries = computed(() => {
+  const entries = configuredMineEntries.value
+  const coinIndex = entries.findIndex(entry => entry.targetType === 'app' && entry.linkUrl.split('?')[0] === '/pages/coin/index')
+  if (coinIndex < 0) return entries
+  const membership: MineEntry = {
+    id: -1, title: '会员', description: '查看会员权益', iconUrl: '/static/images/membership/crown.svg',
+    targetType: 'app', linkUrl: membershipTarget.value, openMode: 'inapp', showTopbar: true
+  }
+  return [...entries.slice(0, coinIndex + 1), membership, ...entries.slice(coinIndex + 1)]
+})
+async function refreshEntries() {
+  try { configuredMineEntries.value = await fetchMineEntries() } catch { /* Keep the last successful list. */ }
+}
+const entriesFresh = useFreshTask(() => paneVisible.value, refreshEntries, 300_000)
+watch(paneVisible, visible => {
+  if (visible) void fetchMembershipTarget().then(target => { membershipTarget.value = target }).catch(() => {})
+}, { immediate: true })
+const userInfo = ref(getUserInfo())
+const loggedIn = ref(isLoggedIn())
+const ipLocation = ownIpProvince
+const statistics = ref<UserStatistics>()
+const levelProgress = ref<LevelProgress>()
+const historyTotal = ref<number>()
+const gameRoleCards = computed(() => demoRoleCards.map(card => ({
+  ...card,
+  server: '次元町' + (levelProgress.value ? String(levelProgress.value.level) + '级' : '—级'),
+  stats: card.stats.map((stat, index) => index === 0
+    ? { ...stat, value: statistics.value?.activeDays == null ? '—' : String(statistics.value.activeDays) }
+    : index === 1 ? { label: '当前称号', value: levelProgress.value?.title || '—' }
+    : stat.label === '次元币' ? { ...stat, value: userInfo.value?.coinBalance == null ? '—' : String(userInfo.value.coinBalance) }
+    : stat.label === '足迹' ? { ...stat, value: historyTotal.value == null ? '—' : String(historyTotal.value) } : stat)
+})))
+let historyRevision = 0
+async function refreshHistoryTotal() {
+  if (!loggedIn.value || !paneVisible.value) return
+  const session = getSessionGeneration(), revision = ++historyRevision
+  try {
+    const page = await fetchPostHistory(1, 1)
+    if (session === getSessionGeneration() && revision === historyRevision) historyTotal.value = page.total
+  } catch { /* Retain the last total; missing data displays a dash. */ }
+}
+let coinBalanceRevision = 0
+async function refreshCoinBalance() {
+  if (!loggedIn.value || !paneVisible.value) return
+  const session = getSessionGeneration(), revision = ++coinBalanceRevision
+  try {
+    const user = await fetchMe()
+    if (session === getSessionGeneration() && revision === coinBalanceRevision) saveUserInfo(user)
+  } catch { /* Keep the last known balance; missing data displays a dash. */ }
+}
+let statisticsRevision = 0
+async function refreshStatistics() {
+  if (!loggedIn.value || !props.active) return
+  const revision = ++statisticsRevision
+  try {
+    const values = await Promise.all([fetchStatistics(), fetchLevelProgress(), fetchLevelConfig()])
+    if (revision === statisticsRevision) {
+      statistics.value = values[0]
+      levelProgress.value = values[1]
+      const user = getUserInfo()
+      if (user && user.level !== values[1].level) { user.level = values[1].level; saveUserInfo(user) }
+    }
+  }
+  catch { /* Retain successful statistics; first-load values display a dash. */ }
+}
+function openRelationships(type: 'followers' | 'following') {
+  if (ensureInteractionLogin()) uni.navigateTo({ url: '/pages/relationships/index?type=' + type })
+}
+const mineProfile = computed(() => ({
+  ...demoProfile, nickname: loggedIn.value ? userInfo.value?.nickname || '町友' : '点击登录',
+  uid: userInfo.value?.publicUid || '—',
+  signature: loggedIn.value ? (userInfo.value?.signature || '这个人很懒，什么都没写') : '个性签名即将上线',
+  fans: statistics.value?.followerCount ?? '—', following: statistics.value?.followingCount ?? '—', likes: statistics.value?.receivedLikeCount ?? '—'
+}))
+const userTags = computed(() => userInfo.value?.tags || [])
+const cardBackgroundImage = computed(() => cardBackgroundUrl(userInfo.value?.cardBackground))
+const userDisplayName = computed(() => loggedIn.value ? userInfo.value?.nickname || '町友' : '')
+function syncProfile() { userInfo.value = getUserInfo(); loggedIn.value = isLoggedIn() }
+function openProfile() { uni.navigateTo({ url: loggedIn.value ? '/pages/profile-edit/index' : '/pages/login/index' }) }
+function openTags() { loggedIn.value ? uni.navigateTo({ url: '/pages/profile-edit/tags' }) : open('feature', '添加个性标签') }
+const viewer = computed(() => { void authRevision.value; return isLoggedIn() ? getUserInfo()?.userId : null })
+watch(authRevision, syncProfile)
+watch(viewer, () => { statisticsRevision++; coinBalanceRevision++; historyRevision++; statistics.value = undefined; levelProgress.value = undefined; historyTotal.value = undefined; channelSnapshots.clear(); dirtyChannels.clear(); resetPosts(); postsFresh.invalidate(); statisticsFresh.invalidate(); coinBalanceFresh.invalidate(); historyFresh.invalidate() })
+watch(postHistoryRevision, () => { historyRevision++; historyFresh.invalidate() })
+watch(interactionRevision, () => statisticsFresh.invalidate())
+watch(() => membershipRevision.favorites, () => invalidateMembership('favorite'))
+watch(() => membershipRevision.likes, () => invalidateMembership('like'))
+onShow(syncProfile)
+watch(paneVisible, active => { if (active) { syncProfile(); void refreshOwnLocation() } }, { immediate: true })
+const { offset, requestedTop, onScroll } = usePaneScroll(() => props.active)
+const posts = ref<Post[]>([])
+const loading = ref(false)
+const error = ref('')
+const hasMore = ref(true)
+let pageNum = 1
+let loadRevision = 0
+onBeforeUnmount(() => { loadRevision++; statisticsRevision++; coinBalanceRevision++; historyRevision++ })
+let membershipDirty = false
+// Keep each channel's successful pages for immediate return switches.
+type MineChannelSnapshot = { posts: Post[]; page: number; hasMore: boolean; error: string; updated: number }
+const channelSnapshots = reactive(new Map<string, MineChannelSnapshot>())
+usePostOwnership(() => [...posts.value, ...Array.from(channelSnapshots.values()).flatMap(snapshot => snapshot.posts)])
+const dirtyChannels = new Set<string>()
+let postsUpdated = 0
+function invalidateMembership(channel: string) {
+  dirtyChannels.add(channel)
+  if (activeChannel.value !== channel) return
+  membershipDirty = true
+  postsFresh.invalidate()
+}
+const emit = defineEmits<{ postMenu: [post: Post]; menu: [entries: MineEntry[]] }>()
+function refreshManagedPosts() {
+  workSearchRef.value?.refresh()
+  channelSnapshots.clear()
+  resetPosts()
+  void loadMore()
+  statisticsFresh.invalidate()
+}
+function openFavorites() {
+  if (!ensureInteractionLogin()) return
+  closeWorkSearch(true)
+  activeChannel.value = 'favorite'
+  void nextTick(() => {
+    // Native/Web scroll offsets round to pixels; cross the compact threshold fully.
+    const top = Math.max(0, Math.ceil(collapseOffset.value) + 1)
+    requestedTop.value = uxNative ? top : top + .1
+    if (!uxNative) void nextTick(() => { requestedTop.value = top })
+  })
+}
+const searchMounted = ref(false), searchOpen = ref(false), searchReady = ref(false)
+const workSearchRef = ref<InstanceType<typeof MineWorkSearch> | null>(null)
+const searchMotion = useMineSearchMotion(() => uxNodePrefix+'-work-search', () => uxNodePrefix+'-work-search-sheet')
+async function openWorkSearch() {
+  if (searchOpen.value || !ensureInteractionLogin()) return
+  searchReady.value = false; searchOpen.value = true; searchMounted.value = true
+  await nextTick()
+  if (searchOpen.value) searchMotion.play(true, () => { if (searchOpen.value) searchReady.value = true })
+}
+function closeWorkSearch(immediate: boolean = false): boolean {
+  if (!searchMounted.value) return false
+  searchOpen.value = false; searchReady.value = false; uni.hideKeyboard()
+  const finish = () => { if (!searchOpen.value) searchMounted.value = false }
+  if (immediate) { searchMotion.stop(true); finish() } else searchMotion.play(false, finish)
+  return true
+}
+watch(() => props.active, active => { if (!active) closeWorkSearch(true) })
+watch(viewer, () => closeWorkSearch(true))
+defineExpose({ refreshManagedPosts, openFavorites, closeWorkSearch })
+function resetPosts() { loadRevision++; posts.value = []; pageNum = 1; hasMore.value = true; loading.value = false; error.value = ''; membershipDirty = false; postsUpdated = 0 }
+const postsChannel = computed(() => ['publish', 'like', 'favorite'].includes(activeChannel.value))
+const postsLabel = computed(() => activeChannel.value === 'favorite' ? '收藏' : activeChannel.value === 'like' ? '赞过' : '发布内容')
+function fetchChannelPosts(page: number) {
+  if (activeChannel.value === 'favorite') return fetchFavoritePosts(page)
+  if (activeChannel.value === 'like') return fetchLikedPosts(page)
+  return fetchMinePosts(page)
+}
+function currentMembershipRevision() {
+  if (activeChannel.value === 'favorite') return membershipRevision.favorites
+  if (activeChannel.value === 'like') return membershipRevision.likes
+  return 0
+}
+async function loadMore() {
+  if (activeChannel.value === 'comment') { await loadMoreComments(); return }
+  if (!paneVisible.value || !loggedIn.value || !postsChannel.value || loading.value || !hasMore.value) return
+  if (membershipDirty && pageNum > 1) { postsFresh.invalidate(); return }
+  const revision = loadRevision
+  const membership = currentMembershipRevision()
+  loading.value = true
+  error.value = ''
+  try {
+    const page = await fetchChannelPosts(pageNum)
+    if (revision !== loadRevision || membership !== currentMembershipRevision()) return
+    const ids = new Set(posts.value.map(post => post.id))
+    const nextPosts = page.records.filter(post => !ids.has(post.id)).map(p => toPost(p))
+    posts.value = [...posts.value, ...nextPosts]
+    hasMore.value = pageNum < page.pages && page.records.length > 0
+    membershipDirty = false
+    dirtyChannels.delete(activeChannel.value)
+    postsUpdated = Date.now()
+    pageNum++
+    postsFresh.touch()
+  } catch (e) {
+    if (revision === loadRevision) error.value = e instanceof Error ? e.message : postsLabel.value + '加载失败'
+  } finally {
+    if (revision === loadRevision) {
+      loading.value = false
+      if (membership !== currentMembershipRevision()) postsFresh.invalidate()
+    }
+  }
+}
+const activeChannel = ref('publish')
+const nativeVisibleChannels = ref(['publish'])
+let nativeSwapRevision = 0, nativeSwapFrame = 0
+onBeforeUnmount(() => { nativeSwapRevision++; cancelAnimationFrame(nativeSwapFrame) })
+const { rows: myComments, loading: commentsLoading, error: commentsError, hasMore: commentsHasMore, loadMore: loadMoreComments, busy: commentsBusy, idle: commentsIdle } = useMineComments(() => paneVisible.value && !searchOpen.value && loggedIn.value && activeChannel.value==='comment')
+const pendingPublishes=computed(()=>activeChannel.value==='publish'?minePublishTasks():[])
+watch(entryMinePublishRequest,()=>{if(entryMinePublishRequest.value>0){activeChannel.value='publish';void nextTick(()=>{requestedTop.value=Math.max(0,collapseOffset.value)})}},{immediate:true})
+watch(publishRevision,()=>{channelSnapshots.delete('publish');if(activeChannel.value==='publish'){resetPosts();void loadMore()}statisticsFresh.invalidate()})
+watch(()=>posts.value.map(post=>post.id),ids=>{if(activeChannel.value==='publish')acknowledgePublishPosts(ids)})
+const channelSwipe = useHorizontalSwipe(() => !uxNative && paneVisible.value, () => activeChannel.value, swipeChannel)
+function swipeChannel(direction: number) {
+  const index = mineChannels.findIndex(channel => channel.id === activeChannel.value)
+  const next = mineChannels[index + direction]
+  if (index >= 0 && next) activeChannel.value = String(next.id)
+}
+watch(activeChannel, (next, previous) => {
+  if (uxNative) {
+    const revision = ++nativeSwapRevision
+    cancelAnimationFrame(nativeSwapFrame)
+    nativeVisibleChannels.value = [...new Set([...nativeVisibleChannels.value, previous, next])]
+    // Native visibility updates are queued per view. Keep the outgoing surface
+    // underneath until the incoming surface has had a render pass, so a draw
+    // between their updates can never expose the parent background.
+    void nextTick(() => {
+      if (revision !== nativeSwapRevision) return
+      nativeSwapFrame = requestAnimationFrame(() => {
+        if (revision !== nativeSwapRevision) return
+        nativeSwapFrame = requestAnimationFrame(() => {
+          if (revision === nativeSwapRevision) nativeVisibleChannels.value = [next]
+        })
+      })
+    })
+  }
+  if (previous !== 'comment') channelSnapshots.set(previous, { posts: posts.value, page: pageNum, hasMore: hasMore.value, error: error.value, updated: postsUpdated })
+  loadRevision++
+  loading.value = false
+  const snapshot = channelSnapshots.get(next)
+  posts.value = snapshot?.posts ?? []
+  pageNum = snapshot?.page ?? 1
+  hasMore.value = snapshot?.hasMore ?? true
+  error.value = snapshot?.error ?? ''
+  postsUpdated = snapshot?.updated ?? 0
+  membershipDirty = dirtyChannels.has(next)
+  // Keep the tabs in place when leaving a deeply scrolled, longer list.
+  const top = Math.min(offset.value, Math.ceil(collapseOffset.value) + 1)
+  offset.value = top
+  requestedTop.value = uxNative ? top : top + .1
+  if (!uxNative) void nextTick(() => { requestedTop.value = top })
+  if (membershipDirty || Date.now() - postsUpdated >= 60_000) postsFresh.invalidate()
+  else postsFresh.touch()
+  if (props.active && postsChannel.value && pageNum === 1) void loadMore()
+})
+async function revalidatePosts() {
+  if (!loggedIn.value || !postsChannel.value || loading.value) return
+  if (pageNum === 1) { await loadMore(); return }
+  const revision = loadRevision
+  const membership = currentMembershipRevision()
+  try {
+    const page = await fetchChannelPosts(1)
+    if (revision !== loadRevision || membership !== currentMembershipRevision() || loading.value) return
+    const first = page.records.map(p => toPost(p))
+    const likesChanged = activeChannel.value === 'like' &&
+      (first.length !== Math.min(posts.value.length, page.size) || first.some((post, index) => post.id !== posts.value[index]?.id))
+    if (membershipDirty || likesChanged) {
+      posts.value = first; pageNum = 2; hasMore.value = page.current < page.pages; membershipDirty = false
+    } else {
+      const ids = new Set(first.map(p => p.id))
+      posts.value=[...first,...posts.value.filter(p=>!ids.has(p.id))]
+    }
+    dirtyChannels.delete(activeChannel.value)
+    postsUpdated = Date.now()
+  } catch { /* Keep existing content on transient errors. */ }
+}
+const postsFresh = useFreshTask(() => paneVisible.value && !searchOpen.value && loggedIn.value, revalidatePosts)
+const statisticsFresh = useFreshTask(() => paneVisible.value && loggedIn.value, refreshStatistics)
+const coinBalanceFresh = useFreshTask(() => paneVisible.value && loggedIn.value, refreshCoinBalance)
+const historyFresh = useFreshTask(() => paneVisible.value && loggedIn.value, refreshHistoryTotal)
+watch(paneVisible, active => { if (active) historyFresh.invalidate() }, { immediate: true })
+watch(paneVisible, active => { if (active) coinBalanceFresh.invalidate() }, { immediate: true })
+watch(paneVisible, active => { if (active && !posts.value.length) void loadMore() }, { immediate: true, flush: 'post' })
+const filteredPosts = computed(() => {
+  if (activeChannel.value === 'favorite') return posts.value.filter(post => post.detail?.favorited)
+  if (activeChannel.value === 'like') return posts.value.filter(post => post.detail?.liked)
+  return posts.value
+})
+const nativeMinePosts = computed(() => postsChannel.value ? filteredPosts.value : [])
+
+// Keep native cells, decoded images and their layout attached to each channel.
+// Data caching alone still makes RecyclerView detach/rebind the visible cards.
+const minePaneChannels = uxNative ? ['publish', 'like', 'comment', 'favorite'] : ['web']
+const paneChannelId = (channel: string) => channel === 'web' ? activeChannel.value : channel
+const panePrefix = (channel: string) => uxNative ? uxNodePrefix + '-' + channel : uxNodePrefix
+function onMinePaneScroll(channel: string, event: { detail: { scrollTop: number; preserve?: boolean } }) {
+  if (paneChannelId(channel) !== activeChannel.value) return
+  onScroll(event)
+  // Search and main-tab hiding keep this channel selected. Preserve its real
+  // offset as the activation target, rather than the previous scroll command.
+  if (event.detail.preserve) requestedTop.value = event.detail.scrollTop
+}
+function panePosts(channel: string): Post[] {
+  if (channel === activeChannel.value) return nativeMinePosts.value
+  const rows = channelSnapshots.get(channel)?.posts ?? []
+  return channel === 'favorite' ? rows.filter(post => post.detail?.favorited) : channel === 'like' ? rows.filter(post => post.detail?.liked) : rows
+}
+const paneLoading = (channel: string) => channel === activeChannel.value
+  ? loading.value || (pageNum === 1 && !error.value)
+  : !channelSnapshots.get(channel)?.updated && !channelSnapshots.get(channel)?.error
+const paneError = (channel: string) => channel === activeChannel.value ? error.value : channelSnapshots.get(channel)?.error ?? ''
+const paneHasMore = (channel: string) => channel === activeChannel.value ? hasMore.value : channelSnapshots.get(channel)?.hasMore ?? true
+const paneLabel = (channel: string) => channel === 'favorite' ? '收藏' : channel === 'like' ? '赞过' : '发布内容'
+const panePublishes = (channel: string) => paneChannelId(channel) === 'publish' ? minePublishTasks() : []
+function minePaneStyle(channel: string) {
+  const selected = paneChannelId(channel) === activeChannel.value
+  const shown = (uxNative ? nativeVisibleChannels.value.includes(channel) : selected) && !(searchOpen.value && searchReady.value)
+  return uxNative ? { position: 'absolute', left: '0px', top: '0px', width: '100%', height: '100%', zIndex: selected ? 1 : 0, visibility: shown ? 'visible' : 'hidden', opacity: shown ? 1 : 0, pointerEvents: selected && shown ? 'auto' : 'none' } : { visibility: shown ? 'visible' : 'hidden' }
+}
+
+const nativeMineMinimum = computed(() => props.statusBarHeight + LAYOUT.profileHeader * props.viewportWidth / 750 + uni.getWindowInfo().windowHeight)
+const collapseOffset = computed(() => (LAYOUT.profileHeader + (mineEntries.value.length ? LAYOUT.quickEntries : 0) - LAYOUT.compactHeader) * props.viewportWidth / 750)
+const collapsed = computed(() => offset.value >= collapseOffset.value)
+const compactProgress = computed(() => {
+  const distance = LAYOUT.compactHeader * props.viewportWidth / 750
+  return Math.max(0, Math.min(1, (offset.value - collapseOffset.value + distance) / distance))
+})
+const paneStyle = computed(() => {
+  // #ifdef MP-WEIXIN
+  return { '--pane-progress': compactProgress.value }
+  // #endif
+  // #ifndef MP-WEIXIN
+  return {}
+  // #endif
+})
+const open = (kind: NavigationKind, title: string) => openDestination({ kind, title })
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.mine-view { background: #d2d2d2; }
+.compact-header { opacity: var(--pane-progress, 0); }
+.profile-header { position: relative; padding-bottom: 32rpx; }
+.profile-background { position: absolute; inset: 0; background-image: url('~@/static/images/assets/my_background.jpg'); background-size: 112.5% auto; background-position: left 20.2%; }
+.profile-blur { position: absolute; inset: 0; background-image: url('~@/static/images/performance/profile-blurred.jpg'); background-size: 112.5% auto; background-position: left 20.2%; -webkit-mask-image: linear-gradient(to bottom, transparent 0%, transparent 44%, black 70%, black 100%); mask-image: linear-gradient(to bottom, transparent 0%, transparent 44%, black 70%, black 100%); pointer-events: none; }
+.profile-dim { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.10) 44%, rgba(0,0,0,0.22) 60%, rgba(0,0,0,0.32) 100%); pointer-events: none; }
+.profile-body { position: relative; height: 744rpx; }
+.signature { display: block; min-height: 30rpx; margin: 39rpx 34rpx 0; font-size: 19rpx; line-height: 30rpx; color: #fff; }
+.add-tag { display: flex; align-items: center; gap: 6rpx; height: 40rpx; width: fit-content; border: 2rpx solid rgba(255,255,255,0.8); border-radius: 9rpx; padding: 0 10rpx; margin: 30rpx 34rpx 0; font-size: 20rpx; color: #fff; flex-direction: row; }
+.user-tags { display: flex; flex-wrap: wrap; gap: 13rpx; min-height: 39rpx; margin: 30rpx 34rpx 0; flex-direction: row; }
+.user-tag { height: 39rpx; border-radius: 7rpx; padding: 0 10rpx; background: rgba(255,255,255,0.14); font-size: 16rpx; line-height: 39rpx; color: #fff; }
+.stats { display: flex; gap: 28rpx; align-items: center; margin: 32rpx 34rpx 0; height: 36rpx; flex-direction: row; }
+.stats button { display: flex; align-items: baseline; gap: 10rpx; font-size: 15rpx; color: rgba(255,255,255,0.8); flex-direction: row; }
+.stat-value { font-size: 24rpx; color: #fff; }
+.role-scroll { height: 184rpx; margin-top: 40rpx; }
+.role-track { display: flex; gap: 16rpx; padding: 0 34rpx; flex-direction: row; }
+.role-card::before { content: ''; position: absolute; inset: 0; z-index: 1; background: linear-gradient(to bottom, rgba(0,92,188,0.04) 12%, rgba(0,68,158,0.48) 100%), linear-gradient(105deg, rgba(0,80,179,0.78) 0%, rgba(0,119,215,0.62) 44%, rgba(0,94,184,0.36) 100%); pointer-events: none; }
+.role-card::after { content: ''; position: absolute; width: 250rpx; height: 150rpx; right: -46rpx; top: -88rpx; z-index: 2; border-radius: 50%; background: rgba(55,211,255,0.17); filter: blur(18rpx); pointer-events: none; }
+.role-card-bg { position: absolute; inset: 0; background-size: cover; background-position: center; filter: saturate(0.86) brightness(0.9); transform: scale(1.02); pointer-events: none; }
+.profile-panel { position: relative; margin-top: -32rpx; background: #fff; border-radius: 41.667rpx 41.667rpx 0 0; min-height: 100vh; overflow: hidden; }
+.mine-compact { position: absolute; top: 0; left: 0; right: 0; z-index: 10; visibility: hidden; pointer-events: none; }
+.mine-compact.is-visible { visibility: visible; }
+.compact-header { background: #0755a1; color: #fff; transition: opacity 80ms linear; }
+.is-visible .compact-header { pointer-events: auto; }
+.compact-channels { background: #0755a1; opacity: 0; visibility: hidden; transform: translateY(6rpx); pointer-events: none; transition: opacity 180ms ease, transform 180ms ease, visibility 180ms; }
+.is-collapsed .compact-channels { opacity: 1; visibility: visible; transform: translateY(0); pointer-events: auto; }
+.compact-channels-panel { border-radius: 41.667rpx 41.667rpx 0 0; overflow: hidden; background: #fff; }
+.mine-channel-content { background: #fff; min-height: 100vh; overflow-anchor: none; }
+@media (prefers-reduced-motion: reduce) {
+  .compact-header, .compact-channels { transition: none; }
+}
+.mine-status { position: absolute; top: 0; left: 0; right: 0; background: transparent; }
+.empty-copy { text-align: center; padding: 72rpx 24rpx; color: #aaa; }
+.retry-button { width: fit-content; margin: 20rpx auto 0; padding: 10rpx 28rpx; border-radius: 10rpx; background: #f4f4f4; color: #555; }
+.empty-panel { min-height: 900rpx; padding: 100rpx 34rpx; text-align: center; color: #aaa; }
+.empty-panel button { width: fit-content; margin: 28rpx auto; padding: 12rpx 28rpx; border-radius: 10rpx; background: #f4f4f4; color: #555; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux19{color:var(--text-main);font-size:26rpx;}
+.ux20{font-size:32rpx;color:#fff;}
+.ux30{font-size:20rpx;color:#fff;}
+
+.ux43{text-align:left;}
+.ux44{font-size:23rpx;font-weight:600;line-height:27.599999999999998rpx;color:#fff;text-shadow:0 2rpx 6rpx rgba(0,42,104,0.24);}
+.ux49{font-size:17rpx;line-height:18.700000000000003rpx;color:rgba(225,244,255,0.70);}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ux112{font-size:22rpx;color:#707577;white-space:nowrap;}
+
+
+
+
+
+
+
+
+
+
+
+.ux124{color:#00afd9;font-weight:600;}
+.ux125{text-align:center;color:#aaa;}
+.ux126{color:#555;}
+
+
+
+
+
+.ux132{color:#555;}
+.ux133{text-align:center;color:var(--text-sub);font-size:22rpx;}
+.ux134{text-align:center;color:#aaa;}
+.ux4{}
+.ux35{}
+.ux21{}
+.ux14{}
+
+.ux23{display:flex;flex-direction:row;align-items:center;justify-content:center;width:64rpx;height:64rpx;flex-shrink:0;}
+.ux5{position:absolute;top:0;right:0;bottom:0;left:0;background-color:var(--surface);overflow:hidden;}
+.ux7{width:100%;height:100%;}
+
+.ux55{text-align:center;color:var(--text-sub);font-size:22rpx;padding:30rpx 0 40rpx;}
+.ux6{background-color:#d2d2d2;}
+.mine-compact-controls{opacity:0;transition:opacity 80ms linear;}
+.ux8{position:relative;padding-bottom:32rpx;}
+.ux11{position:absolute;top:0;right:0;bottom:0;left:0;background-image:linear-gradient(to bottom, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.10) 44%, rgba(0,0,0,0.22) 60%, rgba(0,0,0,0.32) 100%);pointer-events:none;}
+.ux12{position:relative;z-index:1;height:744rpx;}
+.ux13{height:120rpx;display:flex;flex-direction:row;align-items:center;margin:34rpx 34rpx 0;}
+.ux15{flex-shrink:0;}
+.ux17{min-width:0;flex:1;}
+.ux18{display:flex;flex-direction:row;align-items:center;font-size:32rpx;color:#fff;}
+.ux25{display:flex;flex-direction:column;font-size:19rpx;color:rgba(255,255,255,0.75);margin-top:12rpx;}
+.ux26{display:flex;flex-direction:column;min-height:30rpx;margin:39rpx 34rpx 0;font-size:19rpx;line-height:30rpx;color:#fff;}
+.ux29{display:flex;flex-direction:row;align-items:center;height:40rpx;align-self:flex-start;border:2rpx solid rgba(255,255,255,0.8);border-radius:9rpx;padding:0 10rpx;margin:30rpx 34rpx 0;font-size:20rpx;color:#fff;}
+.ux27{display:flex;flex-direction:row;flex-wrap:wrap;min-height:39rpx;margin:30rpx 34rpx 0;}
+.ux28{height:39rpx;border-radius:7rpx;padding:0 10rpx;background-color:rgba(255,255,255,0.14);font-size:16rpx;line-height:39rpx;color:#fff;}
+.ux31{display:flex;flex-direction:row;align-items:center;margin:32rpx 34rpx 0;height:36rpx;}
+
+.ux36{height:184rpx;margin-top:40rpx;}
+.ux37{display:flex;flex-direction:row;padding:0 34rpx;}
+/* Override ActionButton's horizontal, centered native layout for the two card rows. */
+.native-mine-footer{background-color:#ffffff;}
+.ux52{position:relative;margin-top:-32rpx;background-color:#fff;border-radius:41.667rpx 41.667rpx 0 0;overflow:hidden;}
+.ux57{height:102rpx;padding-top:10rpx;}
+.ux58{display:flex;flex-direction:row;padding:0 34rpx;}
+.ux59{padding:14rpx 22rpx;border-radius:12rpx;font-size:22rpx;background-color:#f7f7f7;color:#707577;white-space:nowrap;flex-shrink:0;}
+.ux60{position:absolute;top:0;left:0;right:0;z-index:10;visibility:hidden;pointer-events:none;}
+.ux61{background-color:#172e50;color:#fff;}
+/* Keep both backing surfaces opaque while posts move beneath the overlay. */
+.ux62{height:0;overflow:hidden;background-color:#172e50;visibility:hidden;pointer-events:none;}
+.ux63{border-radius:0;overflow:hidden;background-color:#fff;}
+.ux64{transition:none;}
+.ux65{transition:none;}
+.ux66{position:absolute;top:0;left:0;right:0;background-color:transparent;}
+.ux67{text-align:center;padding:72rpx 24rpx;color:#aaa;}
+.ux68{align-self:center;margin:20rpx auto 0;padding:10rpx 28rpx;border-radius:10rpx;background-color:#f4f4f4;color:#555;}
+.ux69{min-height:900rpx;padding:100rpx 34rpx;text-align:center;color:#aaa;}
+
+
+
+
+
+.ux16{display:flex;flex-direction:column;width:118rpx;height:118rpx;border-radius:50%;}
+.ux22{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.ux32{display:flex;flex-direction:row;align-items:center;font-size:15rpx;color:rgba(255,255,255,0.8);}
+.ux45{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.ux51{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.ux81{align-self:center;margin:28rpx auto;padding:12rpx 28rpx;border-radius:10rpx;background-color:#f4f4f4;color:#555;}
+.ux24{width:44rpx;height:44rpx;}
+.ux70{background-color:#e5faff;color:#00afd9;font-weight:600;}
+.ux71{visibility:visible;pointer-events:auto;}
+.ux82{pointer-events:auto;}
+.ux83{height:76rpx;visibility:visible;pointer-events:auto;}
+.ux72{}
+.ux73{}
+.ux74{}
+.ux75{}
+/* #endif */
+</style>
+
+<style scoped>
+/* Frames extend past the photo; uni-app x views otherwise clip their children. */
+.identity { display: flex; flex-direction: row; align-items: center; height: 118rpx; margin: 41rpx 34rpx 0; overflow: visible; }
+.identity-avatar { position: relative; top: 0; width: 117rpx; height: 117rpx; flex-shrink: 0; overflow: visible; }
+.identity-avatar-art { position: absolute; left: -21rpx; top: -21rpx; }
+.identity-info { display: flex; flex-direction: column; flex: 1; min-width: 0; margin-left: 54rpx; }
+.nickname-row { display: flex; flex-direction: row; align-items: center; height: 54rpx; }
+.mine-user-name { display: flex; flex-direction: row; flex-shrink: 1; min-width: 0; }
+.identity-edit { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 44rpx; height: 44rpx; margin-left: 8rpx; flex-shrink: 0; }
+.identity-edit-glyph { position: relative; width: 36rpx; height: 36rpx; transform: scale(0.78); }
+.identity-edit-pen { position: absolute; left: 13rpx; top: 0; width: 12rpx; height: 28rpx; border-radius: 5rpx 5rpx 2rpx 2rpx; background-color: #fff; transform: rotate(45deg); }
+.identity-edit-line { position: absolute; left: 5rpx; bottom: 2rpx; width: 30rpx; height: 5rpx; border-radius: 3rpx; background-color: #fff; }
+.identity-meta { font-size: 19rpx; font-weight: 400; line-height: 28rpx; color: rgba(255,255,255,0.60); }
+.identity-uid { margin-top: -4rpx; }
+.identity-ip { margin-top: 5rpx; }
+</style>
+
+<style scoped>
+/* Screenshot_20261023: all values are original pixels * 750 / 1080. */
+.reference-compact-header { background-color: #172e50; }
+.reference-compact-panel { border-radius: 0; }
+.role-value.coin-balance-compact { font-size: 14rpx; line-height: 22rpx; }
+</style>
+
+<style scoped>
+/* Reserve the full 79rpx avatar frame footprint inside the header. */
+.role-card { position: relative; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; width: 542rpx; height: 184rpx; flex-shrink: 0; padding: 6rpx 16rpx 16rpx 6rpx; border-width: 0; border-radius: 24rpx; background-color: rgba(13,91,173,0.28); box-shadow: 0 12rpx 30rpx rgba(0,61,143,0.16); text-align: left; overflow: hidden; }
+.role-top { position: relative; z-index: 3; display: flex; flex-direction: row; align-items: center; height: 79rpx; flex-shrink: 0; overflow: visible; }
+.role-avatar-window { position: relative; width: 79rpx; height: 79rpx; flex-shrink: 0; overflow: visible; }
+.role-avatar-art { position: absolute; left: 0; top: 0; }
+.role-name { display: flex; flex-direction: column; flex: 1; min-width: 0; margin-left: 9rpx; }
+.role-nickname { font-size: 21rpx; font-weight: 600; line-height: 27rpx; color: #fff; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.role-server { margin-top: 5rpx; font-size: 18rpx; font-weight: 400; line-height: 23rpx; color: rgba(235,248,255,0.76); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.role-stats { position: relative; z-index: 3; display: flex; flex-direction: row; align-items: center; height: 77rpx; flex-shrink: 0; margin-top: 5rpx; margin-left: 10rpx; padding: 0 4rpx; border-radius: 14rpx; background-color: rgba(0,61,143,0.38); }
+.role-stat { display: flex; flex: 1; min-width: 0; flex-direction: column; align-items: center; justify-content: center; }
+.role-value { max-width: 125.5rpx; font-size: 18rpx; font-weight: 400; line-height: 22rpx; color: #fff; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.role-label { max-width: 125.5rpx; margin-top: 11rpx; font-size: 17rpx; line-height: 22rpx; color: rgba(225,244,255,0.70); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* #ifndef APP */
+.role-stats { -webkit-backdrop-filter: blur(12rpx); backdrop-filter: blur(12rpx); }
+/* #endif */
+</style>
+
+<style scoped>
+.mine-search-overlay { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 20; display: flex; flex-direction: column; background-color: #172e50; opacity: 0; }
+.mine-search-profile-bar { flex-shrink: 0; background-color: #172e50; }
+</style>

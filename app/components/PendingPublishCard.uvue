@@ -1,0 +1,60 @@
+<template>
+  <view :id="'ct-pending-post-'+task.key" class="pending-post-card">
+    <view class="pending-date-row"><text class="pending-date">{{ date }}</text><text class="pending-state">{{ state }}</text></view>
+    <text v-if="task.data.title" class="pending-title">{{ task.data.title }}</text>
+    <text v-if="body" class="pending-body">{{ body }}</text>
+    <view v-if="media.length" class="pending-media-grid">
+      <view v-for="asset in media" :key="asset.id" class="pending-media-item">
+        <image v-if="asset.mediaType==='image'||asset.coverUrl" class="pending-media-image" :src="preview(asset)" mode="aspectFill" />
+        <view v-else class="pending-video-placeholder"><text class="pending-video-label">视频</text></view>
+        <text v-if="asset.mediaType==='video'" class="pending-video-badge">视频</text>
+      </view>
+    </view>
+    <view class="pending-upload-row">
+      <UploadProgress v-if="task.phase!=='complete'" :progress="stats.progress" :speed="stats.speed" :label="stats.label" :failed="task.phase==='failed'&&!task.deleting" @retry="retryPublish(task)" />
+      <text v-else class="pending-complete">{{ task.postStatus===0?'待审核':'发布成功，正在同步' }}</text>
+      <ActionButton v-if="task.phase==='failed'" class="pending-delete" aria-label="删除发布任务" :disabled="task.deleting===true" @tap="remove"><text class="pending-delete-text">{{ task.deleting?'删除中…':'删除' }}</text></ActionButton>
+    </view>
+    <text v-if="task.error" class="pending-error">{{ task.error }}</text>
+  </view>
+</template>
+<script setup lang="uts">
+import { computed } from 'vue'
+import type { Asset } from '@/types/publish'
+import type { PublishSession } from '@/utils/publish-tasks'
+import { deletePublishTask, publishUploadStats, retryPublish, selectedPublishAssets } from '@/utils/publish-tasks'
+import { mediaUrl } from '@/utils/media-cache'
+import UploadProgress from './UploadProgress.uvue'
+import ActionButton from './ActionButton.uvue'
+const props=defineProps<{task:PublishSession}>()
+const stats=computed(()=>publishUploadStats(props.task)),media=computed(()=>selectedPublishAssets(props.task.data))
+const body=computed(()=>props.task.data.mode==='post'?props.task.data.postText:props.task.data.content)
+const state=computed(()=>props.task.phase==='failed'?'发布失败':props.task.phase==='complete'?(props.task.postStatus===0?'待审核':'已发布'):props.task.phase==='submitting'?'发布中':'上传中')
+const date=computed(()=>{const d=new Date(props.task.createdAt);return (d.getMonth()+1)+'月'+d.getDate()+'日'})
+function preview(asset:Asset){return asset.mediaType==='image'?(asset.localPath||mediaUrl(asset.previewUrl||asset.url)):mediaUrl(asset.coverUrl)}
+function remove(){
+  if(props.task.deleting||props.task.phase!=='failed')return
+  uni.showModal({title:'删除发布任务',content:'确定删除这条发布失败的内容及对应草稿？删除后无法恢复。',confirmText:'删除',success:async result=>{
+    if(result.confirm){try{await deletePublishTask(props.task)}catch{/* The request layer displays the failure; keep the card for retry. */}}
+  }})
+}
+</script>
+<style>
+.pending-post-card{display:flex;flex-direction:column;background-color:#ffffff;padding:28rpx 34rpx 26rpx;border-bottom:12rpx solid #f7f8f9;}
+.pending-date-row{display:flex;flex-direction:row;align-items:center;justify-content:space-between;margin-bottom:16rpx;}
+.pending-date{color:#92999e;font-size:22rpx;line-height:32rpx;}
+.pending-state{color:#92999e;font-size:22rpx;line-height:32rpx;}
+.pending-title{color:#242729;font-size:29rpx;line-height:42rpx;margin-bottom:8rpx;}
+.pending-body{color:#697279;font-size:25rpx;line-height:38rpx;max-height:114rpx;overflow:hidden;}
+.pending-media-grid{display:flex;flex-direction:row;flex-wrap:wrap;margin-top:18rpx;}
+.pending-media-item{position:relative;width:208rpx;height:208rpx;border-radius:14rpx;overflow:hidden;margin-right:12rpx;margin-bottom:12rpx;background-color:#f0f2f4;}
+.pending-media-image{width:208rpx;height:208rpx;}
+.pending-video-placeholder{width:208rpx;height:208rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;background-color:#e9eef2;}
+.pending-video-label{color:#8c979e;font-size:26rpx;}
+.pending-video-badge{position:absolute;right:10rpx;bottom:10rpx;color:#ffffff;background-color:rgba(0,0,0,.45);border-radius:6rpx;padding:4rpx 8rpx;font-size:20rpx;}
+.pending-upload-row{display:flex;flex-direction:row;align-items:center;min-height:72rpx;margin-top:14rpx;}
+.pending-complete{color:#8c979e;font-size:23rpx;line-height:34rpx;}
+.pending-delete{margin:0 0 0 auto;padding:8rpx 12rpx;min-height:48rpx;background-color:transparent;flex-shrink:0;}
+.pending-delete-text{color:#d66666;font-size:22rpx;line-height:32rpx;}
+.pending-error{color:#d66666;font-size:22rpx;line-height:32rpx;margin-top:8rpx;}
+</style>

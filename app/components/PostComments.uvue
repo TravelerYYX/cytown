@@ -1,0 +1,110 @@
+<template>
+  <view id="post-comments" class="post-comments" :class="[uxNative?'ux1':'',uxNative?'ux2':'']">
+    <view class="comment-heading" :class="[uxNative?'ux1':'',uxNative?'ux3':'']">
+      <view class="comment-sort" :class="[uxNative?'ux1':'',uxNative?'ux4':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'']" :style="uxLayout(uxNodePrefix+'-g1000',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'">全部{{ count }}条评论</text><AppIcon class="sort-arrow" name="chevron-round" tone="muted" :size="25"  :class="[uxNative?'ux8':'']" :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1001'"/></view>
+      <view class="comment-sort" :class="[uxNative?'ux1':'',uxNative?'ux4':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1002'">热门</text><AppIcon class="sort-arrow" name="chevron-round" tone="muted" :size="25"  :class="[uxNative?'ux8':'']" :style="uxLayout(uxNodePrefix+'-g1003',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1003'"/></view>
+    </view>
+    <view v-for="(comment, __uxIndex0) in comments" :key="comment.id" class="comment-item" :class="[uxNative?'ux1':'',uxNative?'ux9':'']">
+      <SkeletonBlock :width="76" :height="76" circle label="评论头像占位"  :style="uxLayout(uxNodePrefix+'-g1004'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1004'+'-'+[__uxIndex0].join('-')"/>
+      <view class="comment-body" :class="[uxNative?'ux1':'',uxNative?'ux10':'']" :style="uxLayout(uxNodePrefix+'-g1005'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1005'+'-'+[__uxIndex0].join('-')">
+        <view class="comment-name" :class="[uxNative?'ux1':'',uxNative?'ux11':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux12':'',uxNative?'ux7':'']" :style="uxLayout(uxNodePrefix+'-g1006'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1006'+'-'+[__uxIndex0].join('-')">{{ comment.name }}</text><text class="comment-level" :class="[uxNative?'ux5':'',uxNative?'ux12':'',uxNative?'ux7':'',uxNative?'ux13':'']" :style="uxLayout(uxNodePrefix+'-g1007'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1007'+'-'+[__uxIndex0].join('-')">{{ comment.level }}</text></view>
+        <text class="comment-text" :class="[uxNative?'ux5':'',uxNative?'ux7':'',uxNative?'ux14':'']">{{ comment.content }}</text>
+        <view class="comment-meta" :class="[uxNative?'ux1':'',uxNative?'ux15':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux16':'',uxNative?'ux7':'']" :style="uxLayout(uxNodePrefix+'-g1008'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;10rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1008'+'-'+[__uxIndex0].join('-')">{{ comment.meta }}</text><text class="reply-label" :class="[uxNative?'ux5':'',uxNative?'ux16':'',uxNative?'ux7':'',uxNative?'ux17':'']" :style="uxLayout(uxNodePrefix+'-g1009'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;10rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1009'+'-'+[__uxIndex0].join('-')">回复</text><view class="comment-votes" :class="[uxNative?'ux1':'',uxNative?'ux18':'']" :style="uxLayout(uxNodePrefix+'-g1010'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;10rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1010'+'-'+[__uxIndex0].join('-')"><InteractionIcon kind="like" variant="feed" :active="false" :size="30" /><text :class="[uxNative?'ux5':'',uxNative?'ux16':'',uxNative?'ux19':'',uxNative?'ux7':'']" :style="uxLayout(uxNodePrefix+'-g1012'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1012'+'-'+[__uxIndex0].join('-')">{{ comment.likes }}</text></view></view>
+        <text v-if="comment.pinned" class="pinned-comment" :class="[uxNative?'ux5':'',uxNative?'ux7':'',uxNative?'ux21':'']">置顶评论</text>
+        <view v-if="comment.reply" class="nested-reply" :class="[uxNative?'ux1':'',uxNative?'ux22':'']">
+          <SkeletonBlock :width="50" :height="50" circle label="回复头像占位"  :style="uxLayout(uxNodePrefix+'-g1014'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1014'+'-'+[__uxIndex0].join('-')"/>
+          <view class="nested-body" :class="[uxNative?'ux1':'',uxNative?'ux23':'']" :style="uxLayout(uxNodePrefix+'-g1015'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1015'+'-'+[__uxIndex0].join('-')">
+            <view class="comment-name" :class="[uxNative?'ux1':'',uxNative?'ux11':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux24':'',uxNative?'ux7':'']" :style="uxLayout(uxNodePrefix+'-g1016'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1016'+'-'+[__uxIndex0].join('-')">{{ comment.name }}</text><text class="comment-level" :class="[uxNative?'ux5':'',uxNative?'ux24':'',uxNative?'ux7':'',uxNative?'ux13':'']" :style="uxLayout(uxNodePrefix+'-g1017'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1017'+'-'+[__uxIndex0].join('-')">{{ comment.level }}</text></view>
+            <view v-if="comment.reply.sticker" class="sticker-placeholder" :class="[uxNative?'ux1':'',uxNative?'ux25':'']"><SkeletonBlock :width="58" :height="58" label="评论贴图占位" /></view>
+            <text v-else class="comment-text" :class="[uxNative?'ux5':'',uxNative?'ux7':'',uxNative?'ux14':'']">{{ comment.reply.content }}</text>
+            <view class="comment-meta" :class="[uxNative?'ux1':'',uxNative?'ux15':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux26':'',uxNative?'ux7':'']" :style="uxLayout(uxNodePrefix+'-g1018'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;10rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1018'+'-'+[__uxIndex0].join('-')">{{ comment.meta }}</text><text class="reply-label" :class="[uxNative?'ux5':'',uxNative?'ux26':'',uxNative?'ux7':'',uxNative?'ux17':'']" :style="uxLayout(uxNodePrefix+'-g1019'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;10rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1019'+'-'+[__uxIndex0].join('-')">回复</text><view class="comment-votes" :class="[uxNative?'ux1':'',uxNative?'ux18':'']" :style="uxLayout(uxNodePrefix+'-g1020'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;10rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1020'+'-'+[__uxIndex0].join('-')"><InteractionIcon kind="like" variant="feed" :active="false" :size="30" /><text :class="[uxNative?'ux5':'',uxNative?'ux26':'',uxNative?'ux27':'',uxNative?'ux7':'']" :style="uxLayout(uxNodePrefix+'-g1022'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1022'+'-'+[__uxIndex0].join('-')">{{ comment.reply.likes }}</text></view></view>
+          </view>
+        </view>
+        <view v-if="comment.replyCount" class="reply-preview" :class="[uxNative?'ux1':'',uxNative?'ux28':'']"><view class="reply-line"  :class="[uxNative?'ux1':'',uxNative?'ux29':'']" :style="uxLayout(uxNodePrefix+'-g1024'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;10rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1024'+'-'+[__uxIndex0].join('-')"/><text :class="[uxNative?'ux5':'',uxNative?'ux30':'',uxNative?'ux7':'']" :style="uxLayout(uxNodePrefix+'-g1025'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;10rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1025'+'-'+[__uxIndex0].join('-')">查看{{ comment.replyCount }}条回复</text><AppIcon name="chevron-round" tone="muted" :size="27"  :style="uxLayout(uxNodePrefix+'-g1026'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;10rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1026'+'-'+[__uxIndex0].join('-')"/></view>
+      </view>
+    </view>
+    <EmptyState v-if="!count" />
+  </view>
+</template>
+<script setup lang="uts">
+import InteractionIcon from './InteractionIcon.uvue'
+import EmptyState from '@/components/EmptyState.uvue'
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed } from 'vue'
+import AppIcon from './AppIcon.uvue'
+import SkeletonBlock from './SkeletonBlock.uvue'
+import { imageComments, videoComments } from '@/mock/post-comments'
+const props = defineProps<{ count: number; video?: boolean }>()
+const comments = computed(() => props.count ? (props.video ? videoComments : imageComments) : [])
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.post-comments { border-top: 2rpx solid #f5f5f5; background: #fff; }
+.comment-heading { display: flex; align-items: center; justify-content: space-between; padding: 32rpx 34rpx; min-height: 96rpx; flex-direction: row; }
+.comment-sort { display: flex; align-items: center; gap: 12rpx; font-size: 26rpx; flex-direction: row; }
+.sort-arrow { transform: rotate(90deg); }
+.comment-item { display: flex; gap: 16rpx; padding: 28rpx 34rpx 34rpx; border-bottom: 1rpx solid #f1f1f1; flex-direction: row; }
+.comment-body, .nested-body { flex: 1; min-width: 0; }
+.comment-name { display: flex; align-items: center; gap: 12rpx; color: #a6aaac; font-size: 22rpx; min-height: 34rpx; overflow-wrap: anywhere; flex-direction: row; }
+.comment-level { border: 2rpx solid #b9bdbf; border-radius: 50%; padding: 0 4rpx; font-size: 18rpx; flex-shrink: 0; }
+.comment-text { display: block; white-space: pre-line; line-height: 1.85; font-size: 25rpx; color: #363a3c; margin: 12rpx 0 18rpx; overflow-wrap: anywhere; }
+.comment-meta { display: flex; flex-wrap: wrap; gap: 10rpx; align-items: center; font-size: 18rpx; color: #b9bdbf; min-height: 38rpx; flex-direction: row; }
+.reply-label { color: #64696b; margin-left: 8rpx; }
+.comment-votes { display: flex; align-items: center; gap: 9rpx; margin-left: auto; color: #94999b; flex-direction: row; }
+.comment-votes > :last-child { margin-left: 26rpx; }
+.nested-reply { display: flex; align-items: flex-start; gap: 12rpx; margin-top: 28rpx; flex-direction: row; }
+.reply-preview { display: flex; gap: 10rpx; align-items: center; margin-top: 28rpx; color: #696e70; font-size: 24rpx; flex-direction: row; }
+.reply-line { width: 48rpx; height: 2rpx; background: #f2f2f2; }
+.pinned-comment { display: inline-block; margin-top: 18rpx; border: 1rpx solid #ddd; border-radius: 5rpx; color: #909596; font-size: 18rpx; padding: 1rpx 8rpx; }
+.sticker-placeholder { margin: 14rpx 0 24rpx; }
+.comment-empty { padding: 60rpx 30rpx; text-align: center; color: #aaa; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux5{color:var(--text-main);font-size:26rpx;}
+.ux6{font-size:26rpx;}
+.ux12{color:#a6aaac;font-size:22rpx;}
+.ux16{font-size:18rpx;color:#b9bdbf;}
+.ux19{color:#94999b;}
+.ux24{color:#a6aaac;font-size:22rpx;}
+.ux26{font-size:18rpx;color:#b9bdbf;}
+.ux27{color:#94999b;}
+.ux30{color:#696e70;font-size:24rpx;}
+.ux32{text-align:center;color:#aaa;}
+.ux1{}
+.ux7{}
+.ux2{border-top:2rpx solid #f5f5f5;background-color:#fff;}
+.ux3{display:flex;flex-direction:row;align-items:center;justify-content:space-between;padding:32rpx 34rpx;min-height:96rpx;}
+.ux4{display:flex;flex-direction:row;align-items:center;font-size:26rpx;}
+.ux8{transform:rotate(90deg);}
+.ux9{display:flex;flex-direction:row;padding:28rpx 34rpx 34rpx;border-bottom:1rpx solid #f1f1f1;}
+.ux10{flex:1;min-width:0;}
+.ux23{flex:1;min-width:0;}
+.ux11{display:flex;flex-direction:row;align-items:center;color:#a6aaac;font-size:22rpx;min-height:34rpx;}
+.ux13{border:2rpx solid #b9bdbf;border-radius:50%;padding:0 4rpx;font-size:18rpx;flex-shrink:0;}
+.ux14{display:flex;flex-direction:column;white-space:pre-line;line-height:46.25rpx;font-size:25rpx;color:#363a3c;margin:12rpx 0 18rpx;}
+.ux15{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;font-size:18rpx;color:#b9bdbf;min-height:38rpx;}
+.ux17{color:#64696b;margin-left:8rpx;}
+.ux18{display:flex;flex-direction:row;align-items:center;margin-left:auto;color:#94999b;}
+.ux22{display:flex;flex-direction:row;align-items:flex-start;margin-top:28rpx;}
+.ux28{display:flex;flex-direction:row;align-items:center;margin-top:28rpx;color:#696e70;font-size:24rpx;}
+.ux29{width:48rpx;height:2rpx;background-color:#f2f2f2;}
+.ux21{display:flex;flex-direction:column;margin-top:18rpx;border:1rpx solid #ddd;border-radius:5rpx;color:#909596;font-size:18rpx;padding:1rpx 8rpx;}
+.ux25{margin:14rpx 0 24rpx;}
+.ux31{padding:60rpx 30rpx;text-align:center;color:#aaa;}
+.ux20{margin-left:26rpx;}
+/* #endif */
+</style>

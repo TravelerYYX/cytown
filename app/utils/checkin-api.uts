@@ -1,0 +1,12 @@
+import {GET,POST} from './request'
+import type {CheckinConfig,CheckinState,CheckinDay,CheckinRecommendation,OwnedFrame} from '@/types/checkin'
+import type {LevelProgress} from '@/types/level'
+export interface CheckinClaim {alreadySigned:boolean;gained:number;reward:CheckinDay|null;state:CheckinState;progress:LevelProgress}
+export const fetchCheckinState=()=>GET<CheckinState>('/app/checkin/me')
+export const fetchCheckinConfig=()=>GET<CheckinConfig>('/app/checkin/config')
+export const claimCheckin=()=>POST<CheckinClaim>('/app/checkin/sign')
+export const makeupCheckin=(date:string,version:number)=>POST<CheckinClaim>('/app/checkin/makeup',{date,version})
+export const fetchCheckinRecommendations=()=>GET<CheckinRecommendation[]>('/app/checkin/recommendations')
+export const fetchOwnedFrames=()=>Promise.all([GET<OwnedFrame[]>('/app/checkin/frames/owned'),GET<OwnedFrame[]>('/app/membership/frames/owned')]).then(results=>{const merged=new Map<string,OwnedFrame>();for(const f of [...results[0],...results[1]]){const old=merged.get(f.frameId);if(!old||old.expiresAt!=null&&(f.expiresAt==null||f.expiresAt>old.expiresAt))merged.set(f.frameId,f)}return [...merged.values()]})
+export interface CheckinHistory {records:{signDate:string;makeup:boolean;rewardJson:string;claimedAt:string}[];total:number;current:number;pages:number}
+export const fetchCheckinHistory=(pageNum=1)=>GET<CheckinHistory>('/app/checkin/history',{pageNum,pageSize:20})

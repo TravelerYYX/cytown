@@ -1,0 +1,33 @@
+import { getUserInfo } from './auth'
+import type { ChatMessage, ChatOperation, ChatReply } from '@/types/chat'
+export const chatOwner = () => getUserInfo()?.userId || ''
+export const chatKey = (suffix:string) => 'ct.chat.'+chatOwner()+'.'+suffix
+export function chatStored<T>(suffix:string,fallback:T):T { try {const value=uni.getStorageSync(chatKey(suffix));return value==null||value===''?fallback:value as T}catch{return fallback} }
+export const chatStore = (suffix:string,value:unknown) => uni.setStorageSync(chatKey(suffix),value)
+export function cloudChatHidden(message:ChatMessage):boolean{return !!message.deleted||chatStored<string[]>('cloudDeleted.'+message.conversationId,[]).includes(message.id)||chatStored<string[]>('cloudClients.'+message.conversationId,[]).includes(chatClientMarker(message))||/^\d+$/.test(message.id)&&Number(message.id)<=chatStored<number>('cleared.'+message.conversationId,0)}
+export function markCloudChatDeleted(message:ChatMessage){const ids=chatStored<string[]>('cloudDeleted.'+message.conversationId,[]);if(!ids.includes(message.id))ids.push(message.id);chatStore('cloudDeleted.'+message.conversationId,ids);const clients=chatStored<string[]>('cloudClients.'+message.conversationId,[]),marker=chatClientMarker(message);if(!clients.includes(marker))clients.push(marker);chatStore('cloudClients.'+message.conversationId,clients);deleteChatLocal(message)}
+export function markCloudChatCleared(conversation:string,through:number){chatStore('cleared.'+conversation,Math.max(through,chatStored<number>('cleared.'+conversation,0)))}
+export const chatAssetRemoved=(id:string)=>chatStored<boolean>('removedAsset.'+id,false)
+export function markChatAssetRemoved(id:string){if(id)chatStore('removedAsset.'+id,true)}
+export function chatDeleted(conversation:string):string[]{return chatStored<string[]>('deleted.'+conversation,[])}
+export const chatClientMarker=(message:ChatMessage)=>'client:'+message.senderId+':'+message.clientId
+export function deleteChatLocal(message:ChatMessage){const ids=chatDeleted(message.conversationId);for(const marker of [message.id,chatClientMarker(message)])if(!ids.includes(marker))ids.push(marker);chatStore('deleted.'+message.conversationId,ids);const rows=localChatRows(message.conversationId).filter(x=>x.id!==message.id);chatStore('messages.'+message.conversationId,rows)}
+// Resolve tombstones before displaying or persisting any quoted text, including old server responses.
+export function normalizeChatReply(message:ChatMessage):ChatMessage {
+ const reply=message.reply;if(!reply)return message;
+ return {...message,reply:normalizeChatReplyValue(reply,message.conversationId)};
+}
+export function normalizeChatReplyValue(reply:ChatReply,conversation:string):ChatReply {
+ let status=reply.status;
+ if(Number(reply.messageId)<=chatStored<number>('cleared.'+conversation,0)||chatStored<string[]>('cloudDeleted.'+conversation,[]).includes(reply.messageId))status='deleted';
+ else if(chatDeleted(conversation).includes(reply.messageId))status='local-deleted';
+ else if(chatStored<boolean>('replyRevoked.'+reply.messageId,false))status='revoked';
+ return {...reply,status,summary:status==='available'?Array.from(reply.summary).slice(0,200).join(''):''};
+}
+export function localChatRows(conversation:string):ChatMessage[]{const deleted=new Set(chatDeleted(conversation));return chatStored<ChatMessage[]>('messages.'+conversation,[]).filter(x=>!cloudChatHidden(x)&&!deleted.has(x.id)&&!deleted.has(chatClientMarker(x))).map(normalizeChatReply)}
+export function saveChatRows(conversation:string,rows:ChatMessage[]){const deleted=new Set(chatDeleted(conversation));chatStore('messages.'+conversation,rows.filter(x=>!cloudChatHidden(x)&&!deleted.has(x.id)&&!deleted.has(chatClientMarker(x))).map(normalizeChatReply))}
+export const pendingChatOperations = () => chatStored<ChatOperation[]>('operations',[])
+export function persistChatOperation(operation:ChatOperation){const rows=pendingChatOperations().filter(x=>x.operationId!==operation.operationId);rows.push(operation);chatStore('operations',rows)}
+export function finishChatOperation(id:string){chatStore('operations',pendingChatOperations().filter(x=>x.operationId!==id))}
+
+export function chatTime(value:number):string{if(!value)return '';const d=new Date(value),two=(n:number)=>String(n).padStart(2,'0');return two(d.getMonth()+1)+'-'+two(d.getDate())+' '+two(d.getHours())+':'+two(d.getMinutes())}

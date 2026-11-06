@@ -1,0 +1,52 @@
+<template>
+  <view class="native-image-zoom" @touchstart="start" @touchmove="move" @touchend="end" @touchcancel="end">
+    <view class="native-image-zoom-content" :style="{transform:'translate('+x+'px, '+y+'px) scale('+scale+')'}"><slot /></view>
+  </view>
+</template>
+<script setup lang="uts">
+import { ref } from 'vue'
+const emit = defineEmits<{ (e: 'zoom', active: boolean): void }>()
+const scale = ref(1), x = ref(0), y = ref(0)
+let distance = 0, initialScale = 1, lastX = 0, lastY = 0
+type Point = { clientX: number; clientY: number }
+type Touch = { touches: Point[]; stopPropagation: () => void }
+function span(points: Point[]): number {
+  return Math.hypot(points[0].clientX-points[1].clientX, points[0].clientY-points[1].clientY)
+}
+function constrain() {
+  const info = uni.getWindowInfo()
+  const limitX = info.windowWidth*(scale.value-1)/2, limitY = info.windowHeight*(scale.value-1)/2
+  x.value = Math.max(-limitX, Math.min(limitX, x.value))
+  y.value = Math.max(-limitY, Math.min(limitY, y.value))
+}
+function start(event: Touch) {
+  if (event.touches.length > 1) {
+    distance = span(event.touches); initialScale = scale.value
+    emit('zoom', true); event.stopPropagation()
+  } else if (event.touches.length === 1) {
+    lastX = event.touches[0].clientX; lastY = event.touches[0].clientY
+    if (scale.value > 1) event.stopPropagation()
+  }
+}
+function move(event: Touch) {
+  if (event.touches.length > 1 && distance > 0) {
+    scale.value = Math.max(1, Math.min(5, initialScale*span(event.touches)/distance))
+    constrain()
+    event.stopPropagation()
+  } else if (event.touches.length === 1 && scale.value > 1) {
+    const point = event.touches[0]
+    x.value += point.clientX-lastX; y.value += point.clientY-lastY; constrain()
+    lastX = point.clientX; lastY = point.clientY; event.stopPropagation()
+  }
+}
+function end(event: Touch) {
+  distance = 0
+  if (scale.value <= 1) { x.value = 0; y.value = 0 }
+  emit('zoom', scale.value > 1)
+  if (event.touches.length > 0) start(event)
+}
+</script>
+<style>
+.native-image-zoom{width:100%;height:100%;overflow:hidden;}
+.native-image-zoom-content{width:100%;height:100%;}
+</style>

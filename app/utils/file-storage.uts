@@ -1,0 +1,52 @@
+/** File APIs used by the native and mini-program adapters; never browser DOM. */
+import { IMAGE_DOWNLOAD_TIMEOUT } from './image-loading'
+export function fileSize(filePath: string): Promise<number> {
+  return new Promise((resolve, reject) => uni.getFileSystemManager().stat({ path: filePath, recursive: false, success(result) {
+    // uni-app x returns FileStats[]; WeChat can return the Stats object.
+    const entry = Array.isArray(result.stats) ? result.stats[0] : result.stats
+    const value = entry?.stats ?? entry
+    if (value == null || typeof value.size !== 'number') { reject(new Error('无法读取文件大小')); return }
+    resolve(value.size)
+  }, fail: reject }))
+}
+let savedFileSequence = 0
+function imageFilePath(source: string): string {
+  const extension = source.split(/[?#]/)[0].match(/\.[a-zA-Z0-9]+$/)?.[0] || ''
+  return uni.env.USER_DATA_PATH + '/ct-image-' + Date.now() + '-' + (++savedFileSequence) + '-' + Math.random().toString(36).slice(2) + extension
+}
+/** Isolate downloads before receiving bytes: native temporary basenames can collide. */
+export async function downloadImageFile(url: string): Promise<{ path: string; size: number }> {
+  const filePath = imageFilePath(url)
+  try {
+    const result = await new Promise<DownloadFileSuccess>((resolve, reject) => {
+      let settled = false
+      let task: DownloadTask | null = null
+      const timer = setTimeout(() => {
+        if (settled) return
+        settled = true
+        reject(new Error('图片下载超时'))
+        task?.abort()
+      }, IMAGE_DOWNLOAD_TIMEOUT)
+      try {
+        task = uni.downloadFile({ url, filePath, timeout: IMAGE_DOWNLOAD_TIMEOUT,
+          success: value => { if (!settled) { settled = true; clearTimeout(timer); resolve(value) } },
+          fail: error => { if (!settled) { settled = true; clearTimeout(timer); reject(error) } }
+        })
+      } catch (error) { settled = true; clearTimeout(timer); reject(error) }
+    })
+    if (result.statusCode !== 200) throw new Error('图片下载失败：HTTP ' + result.statusCode)
+    // Android reports a raw private filesystem path here. Keep the requested
+    // unifile URI, which the native image component can resolve as well.
+    return { path: filePath, size: await fileSize(filePath) }
+  } catch (error) {
+    await deleteFile(filePath).catch(() => {})
+    throw error
+  }
+}
+export function persistFile(tempFilePath: string): Promise<string> {
+  const filePath = imageFilePath(tempFilePath)
+  return new Promise((resolve, reject) => uni.getFileSystemManager().saveFile({ tempFilePath, filePath, success: result => resolve(result.savedFilePath), fail: reject }))
+}
+export function deleteFile(filePath: string): Promise<void> {
+  return new Promise((resolve, reject) => uni.getFileSystemManager().unlink({ filePath, success: () => resolve(), fail: reject }))
+}

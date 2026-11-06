@@ -1,0 +1,30 @@
+import { GET, POST } from './request'
+import { memberChannel } from './membership-api'
+import type { PayData } from './membership-api'
+import type { ChatProductCard } from '@/types/chat'
+
+export interface ShopPrice { amountFen: number; coins: number; discount: number; minimumCoinConfirmation: boolean }
+export interface ShopProduct {
+  id: string; version: number; name: string; description: string; images: string[]
+  priceFen: number; enabled: boolean; price: ShopPrice; owned: boolean; soldCount: number
+}
+export interface ShopOrder {
+  id: string; productId: string; productName: string; method: string; channel: string | null
+  amountFen: number; coins: number; status: string; errorMessage: string
+}
+export interface ShopProductView { product: ShopProduct; pending: ShopOrder | null; alipayAvailable: boolean }
+export interface ShopCheckout { order: ShopOrder; payment: PayData | null }
+
+export const shopList = (q: string, page: number) =>
+  GET<{ records: ChatProductCard[]; more: boolean }>('/app/shop/products', { q, page }, true)
+export const shopDetail = (id: string) => GET<ShopProductView>('/app/shop/products/' + id, { channel: memberChannel() }, true)
+export const shopShareLink = (id: string) => GET<{ url: string; text: string }>('/app/shop/products/' + id + '/share', undefined, true)
+export const shopCreate = (product: ShopProduct, method: string, requestKey: string, minimumConfirmed: boolean) =>
+  POST<ShopCheckout>('/app/shop/orders', {
+    productId: product.id, version: product.version, method, requestKey, minimumConfirmed,
+    price: product.price, channel: method === 'ALIPAY' ? memberChannel() : null
+  })
+export const shopPay = (id: string) => POST<ShopCheckout>('/app/shop/orders/' + id + '/pay')
+export const shopRefresh = (id: string) => POST<ShopOrder>('/app/shop/orders/' + id + '/refresh', undefined, true)
+export const shopYuan = (fen: number): string => (fen / 100).toFixed(2)
+export const shopCoins = (coins: number): string => coins.toFixed(1)

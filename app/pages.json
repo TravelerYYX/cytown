@@ -1,0 +1,397 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "次元町",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/shop/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "次元町商铺",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/shop/detail",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "商品详情",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/scan/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "扫码",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false,
+        "backgroundColor": "#000000"
+      }
+    },
+    {
+      "path": "pages/search/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "搜索",
+        "disableScroll": true
+      }
+    },
+    {
+      "path": "pages/user-profile/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "个人主页",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/checkin/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "次元町每日签到",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/browse-history/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "浏览历史",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/coin/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "我的次元币",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/coin/ledger",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "明细查询",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/membership/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "会员商品",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/membership/subscription",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "我的订阅",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/relationships/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "粉丝与关注",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "登录次元町",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/profile-edit/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "编辑资料",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/profile-edit/avatar",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "修改头像",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/profile-edit/nickname",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "昵称",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/profile-edit/signature",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "个性签名",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/profile-edit/tags",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "个性标签",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/profile-edit/card-background",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "卡片背景",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/settings/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "设置",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/settings/about",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "关于次元町",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false,
+        "backgroundColor": "#f6f7f8"
+      }
+    },
+    {
+      "path": "pages/settings/avatar-frame",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "头像框",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/settings/account-security/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "通行证账号与安全",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/switch-account/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "切换账号",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/post/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "帖子详情",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/publish/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "发布",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/publish/topic",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "选择话题",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/publish/drafts",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "草稿箱",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/publish/cover",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "设置封面",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/webview/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "网页",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/notice/list",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "通知列表",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/level/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "我的等级",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/notice/detail",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "通知详情",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/app-update/index",
+      "style": {
+        "navigationStyle": "custom",
+        "disableScroll": true,
+        "backgroundColor": "transparent"
+      }
+    },
+    {
+      "path": "pages/chat/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "私聊",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/chat/media",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "聊天媒体",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/social/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "互动通知",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    },
+    {
+      "path": "pages/report/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "举报",
+        "disableScroll": true,
+        "bounces": false,
+        "androidOverscroll": false
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#ffffff"
+  }
+}

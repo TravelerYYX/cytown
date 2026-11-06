@@ -1,0 +1,7 @@
+const {spawnSync}=require('node:child_process'),path=require('node:path'),fs=require('node:fs')
+const root=path.resolve(__dirname,'..')
+const result=spawnSync(process.execPath,[path.join(__dirname,'uniapp-x.cjs'),'build','h5','--mode',process.env.CT_BUILD_MODE||'production'],{cwd:root,env:{...process.env,CT_POST_PREVIEW_BUILD:'1'},stdio:'inherit'})
+if(result.status!==0)process.exit(result.status||1)
+const target=path.join(root,'unpackage/dist/build/h5')
+fs.cpSync(path.join(root,'static'),path.join(target,'static'),{recursive:true})
+console.log('H5 phone preview ready at /post-preview/')

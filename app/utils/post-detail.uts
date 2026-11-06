@@ -1,0 +1,11 @@
+import { GET } from './request'
+import { toPost } from './post-api'
+import type { PostResponse } from '@/types/post-api'
+import { interactionRevision } from './interactions'
+import { postPreviewMode,previewRead } from './post-preview'
+
+export async function findPost(id: string) {
+  if (!/^[1-9]\d*$/.test(id)) throw new Error('帖子不存在或已下架')
+  const revision = interactionRevision.value
+  return toPost(await (postPreviewMode.value?previewRead<PostResponse>('detail',id):GET<PostResponse>('/app/post/' + encodeURIComponent(id))), revision)
+}

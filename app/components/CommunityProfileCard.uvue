@@ -1,0 +1,39 @@
+<template>
+  <view class="community-profile-card">
+    <NativeRoleBackdrop :source="cardBackgroundUrl(profile.cardBackground)" />
+    <view class="community-card-top">
+      <view class="community-card-avatar"><UserAvatar :src="profile.avatar" :user-id="profile.userId" :frame-id="profile.avatarFrame" :frame-expires-at="profile.avatarFrameExpiresAt ?? undefined" :size="58" :radius="12" /></view>
+      <view class="community-card-name"><text class="community-card-nickname" :max-lines="1">{{ profile.nickname }}</text><text class="community-card-server">次元町{{ profile.level }}级</text></view>
+    </view>
+    <view id="community-card-stats" class="community-card-stats">
+      <view v-for="stat in stats" :key="stat.label" class="community-card-stat"><text class="community-card-value" :class="{'community-card-small':String(stat.value).length>8}" :max-lines="1">{{ stat.value }}</text><text class="community-card-label">{{ stat.label }}</text></view>
+    </view>
+  </view>
+</template>
+<script setup lang="uts">
+import { computed } from 'vue'
+import UserAvatar from './UserAvatar.uvue'
+import NativeRoleBackdrop from './NativeRoleBackdrop.uvue'
+import { cardBackgroundUrl } from '@/config/assets'
+import type { UserProfile } from '@/utils/user-profile'
+const props = defineProps<{ profile: UserProfile }>()
+const stats = computed(() => [
+  {label:'活跃天数',value:String(props.profile.statistics.activeDays ?? '—')},
+  {label:'当前称号',value:props.profile.title || '—'},
+  {label:'次元币',value:String(props.profile.coinBalance ?? '—')},
+  {label:'幻想剧诗',value:'-'}
+])
+</script>
+<style scoped>
+.community-profile-card{position:relative;display:flex;flex-direction:column;align-items:stretch;flex-shrink:0;width:542rpx;height:184rpx;padding:6rpx 16rpx 16rpx 6rpx;border-radius:24rpx;overflow:hidden;background-color:#145b9b;}
+.community-card-top{position:relative;display:flex;flex-direction:row;align-items:center;height:79rpx;flex-shrink:0;overflow:visible;}
+.community-card-avatar{position:relative;width:79rpx;height:79rpx;flex-shrink:0;overflow:visible;}
+.community-card-name{display:flex;flex-direction:column;flex:1;min-width:0;margin-left:9rpx;}
+.community-card-nickname{color:#fff;font-size:21rpx;font-weight:600;line-height:27rpx;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.community-card-server{color:rgba(235,248,255,0.76);font-size:18rpx;line-height:23rpx;margin-top:5rpx;}
+.community-card-stats{position:relative;display:flex;flex-direction:row;align-items:center;height:77rpx;flex-shrink:0;margin-top:5rpx;margin-left:10rpx;padding:0 4rpx;border-radius:14rpx;background-color:rgba(0,61,143,0.38);}
+.community-card-stat{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;min-width:0;}
+.community-card-value{max-width:125.5rpx;color:#fff;font-size:18rpx;line-height:22rpx;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.community-card-small{font-size:14rpx;}
+.community-card-label{margin-top:11rpx;color:rgba(225,244,255,0.70);font-size:17rpx;line-height:22rpx;}
+</style>

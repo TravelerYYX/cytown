@@ -1,0 +1,153 @@
+import { ref, watch } from 'vue'
+import { authRevision, getToken, getUserInfo, isLoggedIn, getSessionGeneration } from '@/utils/auth'
+import { API_BASE_URL } from '@/config/env'
+import { receiveChatPush } from '@/utils/chat-state'
+import { GET, POST } from '@/utils/request'
+import type { NoticeSummary, NoticeSummaryCategory, NoticeDetail } from '@/types/home'
+
+export const noticeSummary = ref<{ unreadCount:number; categories:NoticeSummaryCategory[] }>({ unreadCount: 0, categories: [] })
+export const noticePushCid = ref('')
+export const noticeSyncError = ref('')
+let foreground = false
+let launched = false
+let timer: ReturnType<typeof setInterval> | null = null
+let inFlight: Promise<void> | null = null
+let identity = ''
+let bindingOwner = ''
+let bindingToken = ''
+let bindingFlight: Promise<void> | null = null
+let registered = false
+let opening = false
+let pending: { noticeId: number; categoryId: number } | null = null
+const PENDING = 'ct.notice.pending.v1'
+function owner(): string { return getUserInfo()?.userId || '' }
+
+export async function refreshNotices(): Promise<void> {
+  if (inFlight != null) return inFlight!
+  const session = getSessionGeneration(), user = owner()
+  const flight = (async () => {
+    try {
+      const value = await GET<NoticeSummary>('/app/notice/summary',undefined,true)
+      if (session === getSessionGeneration() && user === owner()) { noticeSummary.value = value; noticeSyncError.value = '' }
+    } catch { if (session === getSessionGeneration()) noticeSyncError.value = '通知刷新失败，稍后重试' }
+  })()
+  inFlight = flight
+  try { await flight } finally { if (inFlight === flight) inFlight = null }
+}
+export async function readNoticeCategory(categoryId: number, publicationIds: number[]): Promise<void> {
+  if (!isLoggedIn() || publicationIds.length === 0) return
+  // The server checks every id against this category and current recipient permissions.
+  await POST<void>('/app/notice/read/category', { categoryId, publicationIds })
+  await refreshNotices()
+}
+export async function readNoticeOne(notice: NoticeDetail): Promise<void> {
+  if (!isLoggedIn() || !notice.publicationId) return
+  await POST<void>('/app/notice/read/one', { id: notice.id, publicationId: notice.publicationId })
+  await refreshNotices()
+}
+function releaseBinding(): void {
+  if (bindingToken && noticePushCid.value) uni.request({ url: API_BASE_URL + '/app/notice/device/unbind', method: 'POST', data: { cid: noticePushCid.value }, header: { Authorization: 'Bearer ' + bindingToken }, timeout: 5000 })
+  bindingOwner = ''; bindingToken = ''
+}
+async function bindDevice(): Promise<void> {
+  // #ifdef APP-ANDROID
+  if (!isLoggedIn() || !noticePushCid.value) return
+  if (bindingFlight != null) {
+    await bindingFlight!
+    if (isLoggedIn() && bindingOwner !== owner()) await bindDevice()
+    return
+  }
+  const user = owner(), token = getToken() || ''
+  const flight = POST<void>('/app/notice/device/bind', { cid: noticePushCid.value })
+  bindingFlight = flight
+  try {
+    await flight
+    if (user === owner()) { bindingOwner = user; bindingToken = getToken() || token }
+    else uni.request({ url: API_BASE_URL + '/app/notice/device/unbind', method: 'POST', data: { cid: noticePushCid.value }, header: { Authorization: 'Bearer ' + token }, timeout: 5000 })
+  } catch (error) {
+    if (user === owner()) throw error
+    uni.request({ url: API_BASE_URL + '/app/notice/device/unbind', method: 'POST', data: { cid: noticePushCid.value }, header: { Authorization: 'Bearer ' + token }, timeout: 5000 })
+  } finally { if (bindingFlight === flight) bindingFlight = null }
+  if (isLoggedIn() && bindingOwner !== owner()) await bindDevice()
+  // #endif
+}
+async function initPush(requestPermission = false): Promise<void> {
+  // #ifdef APP-ANDROID
+  // SDK initialization follows an accepted login agreement, including remembered sessions.
+  if (!isLoggedIn() && uni.getStorageSync('ct.push-consent') !== true) return
+  if (!registered) {
+    uni.onPushMessage(event => {
+      void refreshNotices()
+      const data = event.data as Record<string, unknown>
+      let raw = data['payload']
+      if (typeof raw === 'string') { try { raw = JSON.parse(raw) } catch { return } }
+      if (raw == null || typeof raw !== 'object') return
+      const payload = raw as Record<string, unknown>
+      if(receiveChatPush(payload,event.type==='click'))return
+      if(event.type!=='click')return
+      const noticeId = Number(payload['noticeId']), categoryId = Number(payload['categoryId'])
+      if (payload['type'] !== 'notice' || !Number.isSafeInteger(noticeId) || noticeId < 1 || !Number.isSafeInteger(categoryId) || categoryId < 1) return
+      pending = { noticeId, categoryId }; uni.setStorageSync(PENDING, JSON.stringify(pending)); void openPendingNotice()
+    }, { requestPermission })
+    registered = true
+    const manager = uni.getPushChannelManager()
+    manager.setPushChannel({ channelId: 'ct-notice', channelDesc: '次元町通知', importance: 3, enableVibration: true, lockscreenVisibility: 0 })
+  }
+  const config = await GET<{ enabled: boolean }>('/app/notice/push-config',undefined,true)
+  if (!config.enabled) return
+  if (!noticePushCid.value) await new Promise<void>((resolve, reject) => uni.getPushClientId({ success: result => { noticePushCid.value = result.cid; resolve() }, fail: error => reject(error) }))
+  await bindDevice()
+  // #endif
+}
+export async function enableNoticePush(): Promise<void> {
+  // #ifdef APP-ANDROID
+  if (!isLoggedIn()) { uni.navigateTo({ url: '/pages/login/index' }); return }
+  uni.setStorageSync('ct.push-consent', true)
+  // Request only on this deliberate action; subsequent starts never repeatedly prompt.
+  if (registered) { uni.openAppAuthorizeSetting({}); return }
+  await initPush(true)
+  // #endif
+}
+export async function openPendingNotice(): Promise<void> {
+  if (!foreground || opening || pending == null || getCurrentPages().length === 0) return
+  const pages = getCurrentPages(), current = pages[pages.length - 1]
+  if (!isLoggedIn()) {
+    if (current.route !== 'pages/login/index') uni.navigateTo({ url: '/pages/login/index' })
+    return
+  }
+  if (current.route === 'pages/login/index') return
+  opening = true
+  const intent = pending!
+  try {
+    // Never trust a push payload for content or access rights.
+    const detail = await GET<NoticeDetail>('/app/notice/' + intent.noticeId)
+    if (pending?.noticeId !== intent.noticeId) return
+    const target = '/pages/notice/detail?id=' + detail.id + '&fromPush=1'
+    pending = null; uni.removeStorageSync(PENDING)
+    if (current.route === 'pages/notice/detail' && Number(current.options['id']) === detail.id) return
+    uni.navigateTo({ url: target, fail: () => { pending = intent; uni.setStorageSync(PENDING, JSON.stringify(intent)) } })
+  } catch { pending = null; uni.removeStorageSync(PENDING) }
+  finally { opening = false }
+}
+export function launchNotices(): void {
+  if (launched) return
+  launched = true; identity = owner()
+  try { const value = uni.getStorageSync(PENDING); if (typeof value === 'string' && value) pending = JSON.parse(value) as {noticeId:number;categoryId:number} } catch {}
+  watch(authRevision, () => {
+    const next = owner()
+    if (next !== identity) {
+      releaseBinding(); identity = next; inFlight = null
+      noticeSummary.value = { unreadCount: 0, categories: [] }
+      if (foreground) void refreshNotices()
+    } else if (bindingOwner === next) bindingToken = getToken() || ''
+    if (isLoggedIn()) { void initPush().catch(() => {}); setTimeout(() => { void openPendingNotice() }, 500) }
+  }, { flush: 'sync' })
+}
+export function showNotices(): void {
+  foreground = true; void refreshNotices(); void initPush().catch(() => {})
+  setTimeout(() => { void openPendingNotice() }, 300)
+  if (timer == null) timer = setInterval(() => { void refreshNotices(); void initPush().catch(() => {}) }, 60000)
+}
+export function hideNotices(): void {
+  foreground = false; if (timer != null) clearInterval(timer!); timer = null
+}

@@ -1,0 +1,79 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  config:
+    # 加载项目根目录 .env（按 properties 解析，等号后不要加引号）；OS 环境变量优先级更高
+    import: optional:file:.env[.properties]
+  mail:
+    host: ${SMTP_HOST:smtp.qq.com}
+    port: ${SMTP_PORT:587}
+    # SMTP 凭据优先来自环境变量，其次为项目 .env；dev.ps1 仅在未配置时回退历史凭据。
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.ssl.enable: false
+      mail.smtp.starttls.enable: true
+      mail.smtp.starttls.required: true
+      mail.smtp.ssl.checkserveridentity: true
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
+  application:
+    name: ciyuantown-back
+  servlet:
+    multipart:
+      # 业务上限由 publish_rule 动态校验；这里仅保留 Android chooseVideo 的平台级保护上限。
+      max-file-size: ${MULTIPART_MAX_FILE_SIZE:500MB}
+      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:510MB}
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DB_URL:jdbc:mysql://127.0.0.1:3306/ciyuantown?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  data:
+    redis:
+      # 设计文档 docs/redis-architecture-redesign.md：db0 业务缓存 / db1 计数与关系 / db2 会话·限流·验证码
+      # 连接为惰性建立（Lettuce），服务未启动时不影响应用启动，仅在实际读写时失败
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: ${REDIS_POOL_MAX_ACTIVE:8}
+          max-idle: ${REDIS_POOL_MAX_IDLE:8}
+          min-idle: ${REDIS_POOL_MIN_IDLE:0}
+          max-wait: 3000ms
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+
+ciyuantown:
+  redis:
+    # Redis 功能总开关（落地第 1 步）：true 时装配 RedisTemplate/RedisCacheManager/@EnableCaching；
+    # false（默认）时保持现状零依赖 Redis。后续步骤的业务降级统一以此开关为准。
+    enabled: ${REDIS_ENABLED:true}
+  verify-code:
+    expire-minutes: 5
+    resend-interval-seconds: 60
+    daily-limit: 10
+  # 上传文件根目录（头像等），静态资源经 /uploads/** 访问
+  upload-dir: ${UPLOAD_DIR:./uploads}
+  ffmpeg:
+    path: ${FFMPEG_PATH:}
+    ffprobe-path: ${FFPROBE_PATH:}
+    font-path: ${FFMPEG_FONT_PATH:}
+  # 允许跨域的前端来源。H5 开发服务器端口 15273（见 次元町/manifest.json 的 h5.devServer.port）
+  # 必须在列，否则浏览器会拦截跨域请求，现象像“接口挂了”，实为 CORS 拒绝。
+  cors-origins: ${CORS_ORIGINS:http://localhost:9527,http://localhost:9528,http://localhost:15273,http://127.0.0.1:9527,http://127.0.0.1:9528,http://127.0.0.1:15273,http://192.168.1.10:9527,http://192.168.1.10:9528,http://192.168.1.10:15273}
+  jwt:
+    # HS256 签名密钥
+    secret: ${JWT_SECRET}
+    # access token 有效期（秒），默认 2 小时
+    access-token-expire-seconds: 7200
+    # refresh token 有效期（秒），默认 7 天
+    refresh-token-expire-seconds: 604800

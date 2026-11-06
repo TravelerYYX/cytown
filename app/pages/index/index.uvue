@@ -1,0 +1,164 @@
+<template>
+	<view id="ct-main-shell" class="app-shell" :class="[uxNative?'ux0':'',uxNative?'ux1':'']">
+		<view class="panes" :class="[uxNative?'ux0':'',uxNative?'ux2':'']">
+			<swiper class="main-tab-swiper" :current="mainTabs.indexOf(activeTab)" :duration="300"
+				easing-function="easeOutCubic" :disable-touch="true">
+				<swiper-item>
+					<HomeView ref="homeRef" :active="activeTab === 'home'"
+						:status-bar-height="statusBarHeight" :viewport-width="viewportWidth"
+						@collapse="homeCollapsed = $event" />
+				</swiper-item>
+				<swiper-item>
+					<FollowView v-if="visited.follow" :active="activeTab === 'follow'"
+						:status-bar-height="statusBarHeight" :viewport-width="viewportWidth" />
+				</swiper-item>
+				<swiper-item>
+					<MessageView v-if="visited.message" :active="activeTab === 'message'"
+						:status-bar-height="statusBarHeight" :viewport-width="viewportWidth" />
+				</swiper-item>
+				<swiper-item>
+					<!-- Keep the native profile laid out before its first tab selection. -->
+					<MineView ref="mineRef" @post-menu="managedPost = $event" @menu="openMineMenu" v-if="uxNative || visited.mine" :active="activeTab === 'mine'"
+						:status-bar-height="statusBarHeight" :viewport-width="viewportWidth" />
+				</swiper-item>
+			</swiper>
+		</view>
+		<CustomTabBar :active="activeTab" :badge="messageBadge" :follow-dot="true" :bottom-inset="bottomInset"
+			:home-mode="homeCollapsed ? 'top' : 'home'" :guest-style="guestMine" @change="onTabTap" />
+		<MinePostActions :post="managedPost" @close="managedPost = null" @changed="mineRef?.refreshManagedPosts()" />
+		<MineMenuDrawer ref="mineMenuRef" :visible="mineMenuOpen" :entries="mineMenuEntries" :status-bar-height="statusBarHeight" :bottom-inset="bottomInset" :viewport-width="viewportWidth" @close="mineMenuOpen = false" @favorites="mineRef?.openFavorites()" />
+		<EyeCareOverlay />
+	</view>
+</template>
+<script setup lang="uts">
+	import { notifyWindowResize } from '@/utils/window-events'
+	onResize(notifyWindowResize)
+	onShow(notifyWindowResize)
+
+	import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+	import { computed, ref, watch } from 'vue'
+	import { socialSummary } from '@/utils/social-inbox'
+	import { noticeSummary } from '@/utils/notice-state'
+	import { chatUnread } from '@/utils/chat-state'
+	const messageBadge=computed(()=>socialSummary.value.unreadCount+noticeSummary.value.unreadCount+chatUnread.value)
+	import { setStatusBar } from '@/utils/platform'
+
+	import HomeView from '@/components/views/HomeView.uvue'
+	import FollowView from '@/components/views/FollowView.uvue'
+	import MinePostActions from '@/components/MinePostActions.uvue'
+	import MineMenuDrawer from '@/components/MineMenuDrawer.uvue'
+	import type { MineEntry, Post } from '@/types/home'
+	const managedPost = ref<Post | null>(null)
+	const mineMenuRef = ref<InstanceType<typeof MineMenuDrawer> | null>(null)
+	const mineMenuOpen = ref(false)
+	const mineMenuEntries = ref<MineEntry[]>([])
+	function openMineMenu(entries: MineEntry[]) { mineMenuEntries.value = entries; mineMenuOpen.value = true }
+	onHide(() => { mineMenuOpen.value = false })
+	onBackPress(() => {
+		if (mineMenuRef.value?.dismiss()) return true
+		if (managedPost.value) { managedPost.value = null; return true }
+		return activeTab.value === 'mine' && !!mineRef.value?.closeWorkSearch()
+	})
+	const mineRef = ref<InstanceType<typeof MineView> | null>(null)
+	import MineView from '@/components/views/MineView.uvue'
+	import MessageView from '@/components/views/MessageView.uvue'
+	import CustomTabBar from '@/components/CustomTabBar.uvue'
+	import { useWindowInsets } from '@/composables/useWindowInsets'
+	import { openDestination, entryTabRequest } from '@/utils/navigation'
+	import { authRevision, isLoggedIn } from '@/utils/auth'
+	import { openLoginFromBottom } from '@/utils/login-navigation'
+	import type { MainTabKey, TabItemKey } from '@/types/home'
+	const { statusBarHeight, bottomInset, viewportWidth } = useWindowInsets()
+	const mainTabs: MainTabKey[] = ['home', 'follow', 'message', 'mine']
+	const activeTab = ref<MainTabKey>('home')
+	const visited = ref<Record<MainTabKey, boolean>>({ home: true, follow: false, message: false, mine: false })
+	function selectEntryTab(key:MainTabKey){visited.value[key]=true;activeTab.value=key}
+	function consumeEntryTab(){if(entryTabRequest.value){selectEntryTab(entryTabRequest.value);entryTabRequest.value=null}}
+	onLoad(options=>{const tab=options?.tab;if(tab==='home'||tab==='follow'||tab==='message'||tab==='mine')selectEntryTab(tab as MainTabKey);consumeEntryTab()})
+	onShow(consumeEntryTab)
+	watch(entryTabRequest,consumeEntryTab,{immediate:true})
+	const guestMine = computed(() => { void authRevision.value; return activeTab.value === 'mine' && !isLoggedIn() })
+	const homeRef = ref<InstanceType<typeof HomeView>>()
+	const homeCollapsed = ref(false)
+	const syncStatusBar = () => {
+		const style = mineMenuOpen.value ? 'dark' : activeTab.value === 'home' || guestMine.value ? 'light' : 'dark'
+		setStatusBar(style)
+	}
+	onShow(syncStatusBar)
+	watch(activeTab, syncStatusBar)
+	// #ifdef APP
+	watch(mineMenuOpen, syncStatusBar)
+	// #endif
+	watch(activeTab, () => { mineMenuOpen.value = false })
+	watch(authRevision, syncStatusBar)
+	const onTabTap = (key : TabItemKey) => {
+		if (key === 'publish') { openDestination({ kind: 'publish', title: '发布' }); return }
+		if (key === 'message' && !isLoggedIn()) { openLoginFromBottom(); return }
+		if (key === 'home' && activeTab.value === 'home') { homeRef.value?.scrollToTop(); return }
+		selectEntryTab(key)
+	}
+</script>
+<style scoped>
+	/* #ifndef APP */
+	@import '@/styles/legacy-layout-base.css';
+	/* #endif */
+
+	/* #ifndef APP */
+
+	.app-shell {
+		position: fixed;
+		inset: 0;
+		display: flex;
+		flex-direction: column;
+		background: #fff;
+		overflow: hidden;
+		padding-left: env(safe-area-inset-left, 0px);
+		padding-right: env(safe-area-inset-right, 0px);
+	}
+
+	.panes {
+		position: relative;
+		flex: 1;
+		min-height: 0;
+		width: 100%;
+		overflow: hidden;
+	}
+
+	/* #endif */
+
+	.main-tab-swiper {
+		width: 100%;
+		height: 100%;
+	}
+</style>
+
+<style>
+	/* ct-native-cascade: generated from the original selectors */
+	/* #ifdef APP */
+	.ux0 {}
+
+	.ux1 {
+		position: fixed;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		display: flex;
+		flex-direction: column;
+		background-color: #fff;
+		overflow: hidden;
+		padding-left: env(safe-area-inset-left, 0px);
+		padding-right: env(safe-area-inset-right, 0px);
+	}
+
+	.ux2 {
+		position: relative;
+		flex: 1;
+		min-height: 0;
+		width: 100%;
+		overflow: hidden;
+	}
+
+	/* #endif */
+</style>

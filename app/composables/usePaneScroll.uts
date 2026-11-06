@@ -1,0 +1,43 @@
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import type { Post } from '@/types/home'
+
+/** Keep a pane's own scroll position, including native scroll-view remount/display changes. */
+export function usePaneScroll(active: () => boolean) {
+  const offset = ref(0)
+  const requestedTop = ref(0)
+  let restoring = false
+  let revision = 0
+  const onScroll = (event: { detail: { scrollTop: number; preserve?: boolean } }) => {
+    if ((active() || event.detail.preserve) && !restoring) offset.value = Math.max(0, event.detail.scrollTop)
+  }
+  const restore = async (top: number) => {
+    const token = ++revision
+    restoring = true
+    requestedTop.value = top + .1
+    await nextTick()
+    if (token !== revision) return
+    requestedTop.value = top
+    offset.value = top
+    await nextTick()
+    if (token === revision) restoring = false
+  }
+  // App/H5 PaneScroll restores in the view layer after display/layout settles.
+  // #ifdef MP-WEIXIN
+  watch(active, async shown => {
+    if (shown) { await nextTick(); await restore(offset.value) }
+  })
+  // #endif
+  onBeforeUnmount(() => { revision++ })
+  return { offset, requestedTop, onScroll, scrollToTop: () => restore(0) }
+}
+
+export function useSkeletonFeed(seed: Post[]) {
+  const posts = ref(seed.map(post => ({ ...post })))
+  const round = ref(0)
+  const loadMore = () => {
+    if (round.value >= 2) return
+    round.value++
+    posts.value.push(...seed.map(post => ({ ...post, id: post.id + '-page-' + round.value })))
+  }
+  return { posts, round, loadMore }
+}

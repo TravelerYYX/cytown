@@ -1,0 +1,28 @@
+export interface CommentPreview {
+  id: string
+  name: string
+  level: number
+  content: string
+  meta: string
+  likes: number
+  pinned?: boolean
+  reply?: { content: string; likes: number; sticker?: boolean }
+  replyCount?: number
+}
+
+export const imageComments: CommentPreview[] = [
+  {
+    id: 'image-comment-1', name: 'Féole稚屿', level: 9,
+    content: '想外观的话就专武吧，我就是00补的01（还歪了个狼歌没人用。。。），专武还有回能。\n二命的话是减雷抗好像，伤害提升应该更大一点，但是你卡充能的话，原石够就下武器池吧，毕竟能开出大最重要。',
+    meta: '08-28 · 江苏', likes: 36,
+    reply: { content: '但是原石不够还是二命吧，其实差别不大，武器池有点毒', likes: 13 }, replyCount: 6
+  },
+  { id: 'image-comment-2', name: 'AAA鸽鸽提瓦美批发', level: 15, content: '2命提升大，专武有很多下位选择，充能也有很多解决办法', meta: '09-02 · 江西', likes: 22 },
+  { id: 'image-comment-3', name: 'Zeroā', level: 12, content: '充能够2命，充能不够武器\n这次的武器池不错', meta: '09-02 · 江苏', likes: 15 },
+  { id: 'image-comment-4', name: '梦林TGJZ', level: 16, content: '要伤害还是颜值呢？二命提升还是很不错的，专武的颜值也很好看。', meta: '09-02 · 山东', likes: 9 }
+]
+export const videoComments: CommentPreview[] = [
+  { id: 'video-comment-1', name: '仒仒仝氽仝命剑', level: 8, content: '比我六加五仆慢', meta: '17小时前 · 河南', likes: 34, pinned: true, reply: { content: '', likes: 14, sticker: true }, replyCount: 34 },
+  { id: 'video-comment-2', name: '小软妮', level: 9, content: '这个视角很好看', meta: '13小时前 · 江苏', likes: 12 },
+  { id: 'video-comment-3', name: '红玉OvO', level: 13, content: '记录这一刻', meta: '10小时前 · 山东', likes: 8 }
+]

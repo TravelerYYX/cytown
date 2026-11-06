@@ -1,0 +1,123 @@
+<template>
+  <view class="level-page" :style="{ paddingTop: statusBarHeight + 'px' }">
+    <view class="level-nav"><ActionButton class="level-back" aria-label="返回" @tap="back"><AppIcon name="back" :size="42" /></ActionButton><text class="nav-title">我的等级</text><view class="nav-space" /></view>
+    <scroll-view class="level-scroll" direction="vertical" :show-scrollbar="false" @scrolltolower="moreHistory">
+      <view v-if="error" class="level-panel"><text class="level-error">{{ error }}</text><ActionButton class="level-retry" aria-label="重试" @tap="load"><text class="level-retry-text">重新加载</text></ActionButton></view>
+      <view v-if="loading && !progress" class="level-panel"><text class="level-muted">加载等级中…</text></view>
+      <template v-if="progress">
+        <view class="level-panel level-hero">
+          <LevelBadge :level="current.level" :size="180" />
+          <text class="level-title" :style="{ color: current.color }">{{ current.fullTitle }}</text>
+          <text class="level-subtitle">Lv.{{ current.level }} · {{ current.description }}</text>
+          <text class="level-exp">累计经验 {{ current.experience }}</text>
+          <view class="level-track"><view class="level-fill" :style="{ width: percentage + '%', backgroundColor: current.color }" /></view>
+          <text class="level-muted">{{ current.maxLevel ? '已达到最高等级 · 感谢一路同行' : '距离 Lv.' + (current.level + 1) + ' 还需 ' + current.remainingExp + ' 经验' }}</text>
+          <ActionButton class="level-sign" :style="{backgroundColor: current.signedToday ? '#e7eef7' : '#2a9fe9'}" :disabled="signing || current.signedToday" :loading="signing" :aria-label="current.signedToday ? '今日已签到' : '每日签到'" @tap="sign"><text class="level-sign-text" :style="{color: current.signedToday ? '#60748d' : '#ffffff'}">{{ current.signedToday ? '今日已签到' : '每日签到' }}</text></ActionButton>
+          <text class="level-muted">已连续签到 {{ current.streakDays }} 天 · 每满7天额外奖励</text>
+        </view>
+        <view class="level-panel"><text class="section-title">获取经验</text>
+          <view v-for="rule in current.rules" :key="rule.action" class="level-rule"><text class="rule-name">{{ rule.name }}</text><view class="rule-copy"><text class="rule-exp">{{rule.action==='sign_in'?'按签到日历领取':rule.enabled && rule.dailyLimit > 0 ? '+' + rule.experience + ' / 次' : '已关闭'}}</text><text class="level-muted">今日 {{ earned(rule.action) }}{{rule.action==='sign_in'?'':' / '+rule.dailyLimit}}</text></view></view>
+        </view>
+        <view v-if="config" class="level-panel"><text class="section-title">星旅途程</text>
+          <view v-for="tier in tiers" :key="tier.id" class="level-tier"><LevelBadge :level="tier.minLevel" :size="84" /><view class="tier-copy"><text class="tier-title" :style="{ color: tier.color }">{{ tier.fullTitle }}</text><text class="level-muted">Lv.{{ tier.minLevel }}–{{ tier.maxLevel }} · {{ tier.description }}</text><text v-if="tier.entryBonus > 0" class="level-muted">晋升此段额外 +{{ tier.entryBonus }} 经验</text></view></view>
+          <view class="badge-gallery"><view v-for="item in levels" :key="item.level" class="gallery-item"><LevelBadge :level="item.level" :size="76" /><text class="gallery-label">{{ item.requiredExp }} 经验</text></view></view>
+        </view>
+        <view class="level-panel"><text class="section-title">经验记录</text><EmptyState v-if="!history.length && !historyLoading && !historyError" compact />
+          <view v-for="item in history" :key="item.id" class="level-rule"><view class="tier-copy"><text class="rule-name">{{ actionName(item.action) }}</text><text class="level-muted">{{ formatTime(item.createTime) }}</text></view><text class="rule-exp">{{ item.amount >= 0 ? '+' : '' }}{{ item.amount }}</text></view>
+          <ActionButton v-if="historyError || historyHasMore" class="level-retry" :disabled="historyLoading" aria-label="加载经验记录" @tap="moreHistory"><text class="level-retry-text">{{ historyError ? '记录加载失败，点击重试' : historyLoading ? '加载中…' : '加载更多' }}</text></ActionButton>
+        </view>
+      </template>
+      <view class="level-bottom" />
+    </scroll-view>
+    <EyeCareOverlay />
+  </view>
+</template>
+<script setup lang="uts">
+import EmptyState from '@/components/EmptyState.uvue'
+import { computed, ref } from 'vue'
+import ActionButton from '@/components/ActionButton.uvue'
+import AppIcon from '@/components/AppIcon.uvue'
+import EyeCareOverlay from '@/components/EyeCareOverlay.uvue'
+import LevelBadge from '@/components/LevelBadge.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { getUserInfo, isLoggedIn, saveUserInfo, getSessionGeneration } from '@/utils/auth'
+import { fetchLevelConfig, fetchLevelProgress, signInLevel, fetchLevelHistory } from '@/utils/level-api'
+import type { LevelConfig, LevelProgress, LevelHistory } from '@/types/level'
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+const { statusBarHeight } = useWindowInsets()
+const progress = ref<LevelProgress | null>(null), config = ref<LevelConfig | null>(null)
+const current = computed(() => progress.value as LevelProgress)
+const tiers = computed(() => config.value?.tiers || []), levels = computed(() => config.value?.levels || [])
+const loading = ref(false), signing = ref(false), error = ref('')
+const history = ref<LevelHistory[]>([]), historyLoading = ref(false), historyHasMore = ref(true), historyError = ref(false)
+let pageNum = 1, revision = 0, historyRevision = 0, disposed = false, activeUser = '', activeSession = -1
+const percentage = computed(() => {
+  const p = progress.value
+  return !p ? 0 : p.maxLevel ? 100 : Math.min(100, Math.max(0, (p.experience - p.levelStartExp) / ((p.nextLevelExp || 1) - p.levelStartExp) * 100))
+})
+function back() { getCurrentPages().length > 1 ? uni.navigateBack() : uni.reLaunch({ url: '/pages/index/index' }) }
+function sync(p: LevelProgress) { progress.value = p; const user = getUserInfo(); if (user != null && user.level !== p.level) { user.level = p.level; saveUserInfo(user) } }
+function resetHistory() {
+  historyRevision++; historyLoading.value = false; historyError.value = false
+  history.value = []; pageNum = 1; historyHasMore.value = true
+}
+async function load() {
+  if (loading.value) return
+  const current = ++revision, session = getSessionGeneration()
+  loading.value = true; error.value = ''
+  try {
+    const values = await Promise.all([fetchLevelProgress(), fetchLevelConfig(true)])
+    if (disposed || current !== revision || session !== getSessionGeneration()) return
+    sync(values[0]); config.value = values[1]
+    resetHistory(); void moreHistory()
+  } catch { if (!disposed && current === revision) error.value = '等级加载失败，请稍后重试' }
+  finally { if (current === revision) loading.value = false }
+}
+async function sign() {
+  if (signing.value || progress.value?.signedToday) return
+  const session = getSessionGeneration(), current = revision
+  signing.value = true
+  try {
+    const result = await signInLevel()
+    if (disposed || session !== getSessionGeneration() || current !== revision) return
+    sync(result.progress); uni.showToast({ title: '签到成功，获得 ' + result.gained + ' 经验', icon: 'none' })
+    resetHistory(); void moreHistory()
+  } catch { /* Request layer reports errors. */ } finally { if (current === revision) signing.value = false }
+}
+async function moreHistory() {
+  if (historyLoading.value || !historyHasMore.value || progress.value == null) return
+  const current = revision, historyRequest = historyRevision, session = getSessionGeneration()
+  historyLoading.value = true; historyError.value = false
+  try {
+    const page = await fetchLevelHistory(pageNum)
+    if (disposed || current !== revision || historyRequest !== historyRevision || session !== getSessionGeneration()) return
+    const ids = new Set(history.value.map(item => item.id)); history.value.push(...page.records.filter(item => !ids.has(item.id)))
+    historyHasMore.value = pageNum < page.pages; pageNum++
+  } catch { if (!disposed && current === revision && historyRequest === historyRevision) historyError.value = true }
+  finally { if (current === revision && historyRequest === historyRevision) historyLoading.value = false }
+}
+function earned(action: string): number { return progress.value?.today.find(item => item.action === action)?.earned || 0 }
+function actionName(action: string): string { return action === 'admin_adjust' ? '管理员调整' : action === 'tier_bonus' ? '跨段晋升奖励' : config.value?.rules.find(item => item.action === action)?.name || '经验奖励' }
+function formatTime(value: string): string { return value.replace('T', ' ').slice(0, 19) }
+onShow(() => {
+  const userId = getUserInfo()?.userId || '', session = getSessionGeneration()
+  if (activeUser !== userId || activeSession !== session) {
+    revision++; resetHistory(); progress.value = null; config.value = null; loading.value = false; signing.value = false
+    activeUser = userId; activeSession = session
+  }
+  if (!isLoggedIn()) { uni.redirectTo({ url: '/pages/login/index' }); return }
+  void load()
+})
+onUnload(() => { disposed = true; revision++; historyRevision++ })
+</script>
+<style scoped>
+.level-page{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;background-color:#f4f6fa;}
+.level-nav{height:96rpx;flex-shrink:0;display:flex;flex-direction:row;align-items:center;justify-content:space-between;padding:0 24rpx;background-color:#fff;}
+.level-back,.nav-space{width:64rpx;height:64rpx;}.level-back{padding:0;margin:0;border-width:0;background-color:transparent;display:flex;align-items:center;justify-content:center;}.nav-title{font-size:30rpx;font-weight:600;color:#252d3d;}
+.level-scroll{flex:1;min-height:0;height:0;}.level-panel{margin:24rpx;padding:28rpx;border-radius:24rpx;background-color:#fff;display:flex;flex-direction:column;flex-shrink:0;}
+.level-hero{align-items:center;padding-top:36rpx;}.level-title{font-size:36rpx;font-weight:700;margin-top:12rpx;}.level-subtitle{font-size:22rpx;color:#747e91;margin-top:12rpx;text-align:center;}.level-exp{font-size:28rpx;font-weight:600;color:#313c52;margin-top:28rpx;}
+.level-track{height:12rpx;width:100%;border-radius:6rpx;background-color:#eef1f6;margin:20rpx 0 12rpx;overflow:hidden;}.level-fill{height:12rpx;border-radius:6rpx;}.level-muted{font-size:21rpx;color:#8b93a3;line-height:32rpx;}
+.level-sign{margin:28rpx 0 12rpx;width:100%;height:80rpx;padding:0;border-width:0;border-radius:18rpx;background-color:#2a9fe9;display:flex;align-items:center;justify-content:center;}.level-sign-text{font-size:26rpx;color:#fff;font-weight:600;}
+.section-title{font-size:28rpx;color:#26324a;font-weight:600;margin-bottom:12rpx;}.level-rule{display:flex;flex-direction:row;align-items:center;justify-content:space-between;padding:20rpx 0;border-bottom-width:1rpx;border-bottom-style:solid;border-bottom-color:#f0f2f6;}.rule-name{font-size:25rpx;color:#444e62;}.rule-copy{display:flex;flex-direction:column;align-items:flex-end;}.rule-exp{font-size:25rpx;color:#289ee7;font-weight:600;}.level-tier{display:flex;flex-direction:row;align-items:center;padding:16rpx 0;}.tier-copy{display:flex;flex-direction:column;flex:1;margin-left:12rpx;}.tier-title{font-size:25rpx;font-weight:600;}.badge-gallery{display:flex;flex-direction:row;flex-wrap:wrap;margin-top:20rpx;}.gallery-item{width:20%;display:flex;flex-direction:column;align-items:center;padding:10rpx 0;}.gallery-label{font-size:16rpx;color:#8b93a3;}.level-bottom{height:50rpx;}.level-error{font-size:24rpx;color:#d75b70;}.level-retry{margin-top:16rpx;border-width:0;background-color:#eef5fc;border-radius:12rpx;padding:12rpx;}.level-retry-text{font-size:22rpx;color:#379ce3;}
+</style>

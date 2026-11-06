@@ -1,0 +1,20 @@
+import { GET, POST, upload } from './request'
+import type { ChatAsset, ChatMessage, ChatConversation, ChatEvent, ChatKind } from '@/types/chat'
+export const chatList = () => GET<ChatConversation[]>('/app/chat/conversations',undefined,true)
+export const chatHistory = (id:string,before='0') => GET<{records:ChatMessage[];nextCursor:string}>('/app/chat/conversations/'+id+'/messages',{before},true)
+export const chatMessage = (id:string) => GET<ChatMessage>('/app/chat/messages/'+id,undefined,true)
+export const chatSend = (peerId:string,clientId:string,kind:ChatKind,content:string,assetId='',replyToId='',postId='',productId='') => POST<ChatMessage>('/app/chat/messages',{peerId,clientId,kind,content,assetId,replyToId:replyToId||undefined,postId:postId||undefined,productId:productId||undefined})
+export const chatRead = (conversation:string,messageId:string) => POST<void>('/app/chat/conversations/'+conversation+'/read',{messageId})
+export const chatRevoke = (id:string) => POST<ChatMessage>('/app/chat/messages/'+id+'/revoke')
+export const chatSync = (cursor:number) => GET<{events:ChatEvent[];cursor:number;more:boolean}>('/app/chat/sync',{cursor},true)
+export const chatTicket = () => POST<{ticket:string}>('/app/chat/ticket')
+export const chatImageUpload = (path:string,original:boolean) => upload<ChatAsset>('/app/chat/assets/image?original='+String(original),path)
+export const chatVideoUpload = (path:string) => upload<ChatAsset>('/app/chat/assets/video',path)
+export const chatEmojiUpload = (emojiId:string) => POST<ChatAsset>('/app/chat/assets/emoji',{emojiId})
+export const chatAsset = (id:string) => GET<ChatAsset>('/app/chat/assets/'+id,undefined,true)
+export const chatAssetRetry = (id:string) => POST<ChatAsset>('/app/chat/assets/'+id+'/retry')
+export const chatReceipt = (messageId:string,operationId:string,kind:string,action:string) => POST<{operationId:string;state:string}>('/app/chat/messages/'+messageId+'/receipt',{operationId,kind,action})
+export const chatEmojis = () => GET<{id:number;name:string;imageUrl:string;groupId:number;groupName:string}[]>('/app/chat/emojis')
+export const chatId = () => 'c'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2)+'_'+Math.random().toString(36).slice(2)
+
+export const chatConversation = (id:string) => GET<ChatConversation>('/app/chat/conversations/'+encodeURIComponent(id),undefined,true)

@@ -1,0 +1,73 @@
+import { onBeforeUnmount } from 'vue'
+import { uxMedia } from '@/utils/native-styles'
+
+/** Animate only compositor properties; interruption starts at the current pose. */
+export function useMineSearchMotion(rootId: () => string, sheetId: () => string) {
+  let origin = 0, target = 0, started = 0, duration = 320, revision = 0
+  // #ifdef APP
+  let motions: UniAnimation[] = []
+  // #endif
+  // #ifdef WEB
+  let motions: Animation[] = []
+  // #endif
+  function sample(): number {
+    const t = Math.max(0, Math.min(1, (Date.now() - started) / duration))
+    return origin + (target - origin) * (1 - Math.pow(1 - t, 3))
+  }
+  function stop(reset: boolean = false) {
+    revision++
+    // #ifdef APP || WEB
+    motions.forEach(motion => motion.cancel()); motions = []
+    // #endif
+    if (reset) { origin = 0; target = 0 }
+  }
+  function play(open: boolean, finish: () => void) {
+    // #ifdef APP || WEB
+    const current = motions.length ? sample() : target
+    const root = uni.getElementById(rootId()), sheet = uni.getElementById(sheetId())
+    // Commit before canceling, so reversing a transition never flashes.
+    root?.style.setProperty('opacity', String(current))
+    sheet?.style.setProperty('transform', 'translateY(' + ((1 - current) * uni.rpx2px(64)) + 'px)')
+    stop()
+    origin = current; target = open ? 1 : 0; started = Date.now(); duration = open ? 320 : 240
+    const token = revision
+    let reduced = false
+    // #ifdef APP
+    reduced = uxMedia('(prefers-reduced-motion: reduce)')
+    // #endif
+    // #ifdef WEB
+    reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // #endif
+    if (root == null || sheet == null || reduced) {
+      root?.style.setProperty('opacity', String(target)); sheet?.style.setProperty('transform', 'translateY(0px)')
+      finish(); return
+    }
+    const opacityFrames: {opacity: number; offset: number}[] = []
+    const shiftFrames: {transform: string; offset: number}[] = []
+    for (let i = 0; i <= 24; i++) {
+      const t = i / 24, progress = origin + (target - origin) * (1 - Math.pow(1 - t, 3))
+      opacityFrames.push({opacity: progress, offset: t})
+      shiftFrames.push({transform: 'translateY(' + ((1 - progress) * uni.rpx2px(64)) + 'px)', offset: t})
+    }
+    const fade = root.animate(opacityFrames, {duration, easing: 'linear', fill: 'forwards'})
+    const shift = sheet.animate(shiftFrames, {duration, easing: 'linear', fill: 'forwards'})
+    if (fade == null || shift == null) {
+      fade?.cancel(); shift?.cancel()
+      root.style.setProperty('opacity', String(target)); sheet.style.setProperty('transform', 'translateY(0px)')
+      finish(); return
+    }
+    motions = [fade, shift]
+    fade.onfinish = () => {
+      if (revision !== token) return
+      root.style.setProperty('opacity', String(target))
+      sheet.style.setProperty('transform', 'translateY(' + ((1 - target) * uni.rpx2px(64)) + 'px)')
+      motions.forEach(motion => motion.cancel()); motions = []; finish()
+    }
+    // #endif
+    // #ifndef APP || WEB
+    target = open ? 1 : 0; finish()
+    // #endif
+  }
+  onBeforeUnmount(() => stop(true))
+  return { play, stop }
+}

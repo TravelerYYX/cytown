@@ -1,0 +1,21 @@
+// #ifdef APP-ANDROID
+import { readImageInfo } from '@/uni_modules/ct-platform'
+// #endif
+
+/** Optional confirmation for native cache hits whose renderer load event is lost. */
+export function probeImageInfo(src: string, success: (width: number, height: number) => void, fail: (error: unknown) => void): void {
+  // #ifdef APP-ANDROID
+  // Do not enter getImageInfo's native callback: it crashes when outMimeType
+  // is null. The adapter reads bounds and keeps MIME metadata optional.
+  if (!src) return
+  readImageInfo(src).then(value => {
+    const info = JSON.parse(value) as UTSJSONObject
+    const width = info.getNumber('width') ?? 0, height = info.getNumber('height') ?? 0
+    if (width > 0 && height > 0) success(width, height)
+    else fail(new Error('无法读取图片尺寸'))
+  }).catch(error => fail(error))
+  // #endif
+  // #ifndef APP-ANDROID
+  uni.getImageInfo({ src, success: info => success(info.width, info.height), fail: error => fail(error) })
+  // #endif
+}

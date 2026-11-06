@@ -1,0 +1,25 @@
+import { ref } from 'vue'
+import { allowsFeedAutoplay } from './feed-autoplay-policy'
+import { videoAutoplayMode } from './app-settings'
+
+export const feedNetwork = ref('unknown')
+let users = 0, revision = 0
+function changed(event: { isConnected: boolean; networkType: string }) {
+  revision++
+  feedNetwork.value = event.isConnected ? event.networkType : 'none'
+}
+export function refreshFeedNetwork() {
+  const token = ++revision
+  feedNetwork.value = 'unknown'
+  uni.getNetworkType({
+    success: result => { if (users && token === revision) feedNetwork.value = result.networkType },
+    fail: () => { if (users && token === revision) feedNetwork.value = 'unknown' }
+  })
+}
+export function retainFeedNetwork(): () => void {
+  if (++users === 1) { uni.onNetworkStatusChange(changed); refreshFeedNetwork() }
+  return () => {
+    if (--users === 0) { revision++; uni.offNetworkStatusChange(changed); feedNetwork.value = 'unknown' }
+  }
+}
+export function feedNetworkAllowsAutoplay() { return allowsFeedAutoplay(videoAutoplayMode.value, feedNetwork.value) }

@@ -1,0 +1,33 @@
+<template><view class="webview-page" :class="[uxNative?'ux0':'',uxNative?'ux1':'']"><view v-if="topbar" class="webview-header" :style="{paddingTop:statusBarHeight+'px'}" :class="[uxNative?'ux0':'',uxNative?'ux2':'']"><ActionButton :aria-label="&quot;返回&quot;" class="header-action" @tap="back" :class="[uxNative?'ux3':'',uxNative?'ux4':'']"><AppIcon name="back" :size="40" /></ActionButton><text class="header-title" :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'']">{{title}}</text><ActionButton :aria-label="&quot;分享&quot;" class="header-action" @tap="share" :class="[uxNative?'ux3':'',uxNative?'ux4':'']"><AppIcon name="share" :size="38" /></ActionButton></view><web-view class="web-content" :src="url"  :class="[uxNative?'ux8':'']"/><EyeCareOverlay /></view></template>
+<script setup lang="uts">
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+import {ref} from 'vue';import AppIcon from '@/components/AppIcon.uvue';import {useWindowInsets} from '@/composables/useWindowInsets';const {statusBarHeight}=useWindowInsets();const url=ref(''),title=ref(''),topbar=ref(true);onLoad(q=>{url.value=decodeURIComponent(q?.url??'')!;title.value=decodeURIComponent(q?.title??'')!;topbar.value=q?.topbar!=='0'});const back=()=>getCurrentPages().length>1?uni.navigateBack():uni.reLaunch({url:'/pages/index/index'});const share=()=>uni.showToast({title:'分享功能即将上线',icon:'none'});</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+.webview-page{position:fixed;inset:0;display:flex;flex-direction:column;background:#fff}.webview-header{flex-shrink:0;min-height:88rpx;display:flex;align-items:flex-end;border-bottom:1rpx solid #eee;flex-direction:row}.header-action{width:96rpx;height:88rpx;display:flex;align-items:center;justify-content:center;background:transparent;border:0;flex-direction:row}.header-action::after{border:0}.header-title{height:88rpx;line-height:88rpx;flex:1;min-width:0;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:30rpx;font-weight:600}.web-content{flex:1;width:100%;height:0}
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux5{color:var(--text-main);font-size:26rpx;}
+.ux0{}
+.ux6{}
+.ux3{}
+.ux1{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;background-color:#fff;}
+.ux2{flex-shrink:0;min-height:88rpx;display:flex;flex-direction:row;align-items:flex-end;border-bottom:1rpx solid #eee;}
+.ux4{width:96rpx;height:88rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;background-color:transparent;border:0px;}
+.ux7{height:88rpx;line-height:88rpx;flex:1;min-width:0;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:30rpx;font-weight:600;}
+.ux8{flex:1;width:100%;height:0;}
+/* #endif */
+</style>

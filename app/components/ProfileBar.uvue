@@ -1,0 +1,35 @@
+<template>
+  <view class="profile-bar">
+    <ActionButton class="profile-icon-button" aria-label="扫一扫" @tap="openScanner"><AppIcon name="scan" :size="compact ? 50 : 42" tone="white" /></ActionButton>
+    <ActionButton v-if="compact" class="compact-identity" aria-label="个人资料" @tap="open('author', nickname)">
+      <view class="compact-avatar-window"><UserAvatar class="compact-avatar-art" :src="avatar" :user-id="userId" :frame-id="frameId" :frame-expires-at="frameExpiresAt ?? undefined" :size="50" /></view>
+      <view class="compact-user-name"><UserName :user-id="userId" :nickname="nickname" :level="level" :size="24" color="#ffffff" /></view>
+    </ActionButton>
+    <view v-else class="bar-space" />
+    <ActionButton class="profile-icon-button" :style="{marginLeft:(compact?26.389:20)+'rpx'}" aria-label="设置" @tap="open('settings', '设置')"><AppIcon name="settings" :size="compact ? 52 : 44" tone="white" /></ActionButton>
+    <ActionButton class="profile-icon-button" :style="{marginLeft:(compact?26.389:20)+'rpx'}" aria-label="个人菜单" @tap="emit('menu')"><AppIcon name="menu" :size="compact ? 52 : 44" tone="white" /></ActionButton>
+  </view>
+</template>
+<script setup lang="uts">
+import ActionButton from './ActionButton.uvue'
+import AppIcon from './AppIcon.uvue'
+import UserAvatar from './UserAvatar.uvue'
+import UserName from './UserName.uvue'
+import { openDestination, openScanner } from '@/utils/navigation'
+import type { NavigationKind } from '@/types/home'
+withDefaults(defineProps<{compact?:boolean;nickname:string;avatar?:string;userId?:string;frameId?:string;frameExpiresAt?:number;level?:number}>(),{compact:false,avatar:''})
+const emit = defineEmits<{ menu: [] }>()
+const open = (kind: NavigationKind, title: string) => openDestination({kind,title})
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+.profile-bar { overflow: visible; height: 96rpx; padding: 0 28rpx; display: flex; flex-direction: row; align-items: center; }
+.profile-icon-button { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 64rpx; height: 64rpx; flex-shrink: 0; padding: 0; border-width: 0; background-color: transparent; }
+.bar-space { flex: 1; margin-left: 20rpx; }
+.compact-identity { overflow: visible; flex: 1; min-width: 0; margin-left: 16.667rpx; display: flex; flex-direction: row; align-items: center; padding: 0; border-width: 0; background-color: transparent; }
+.compact-avatar-window { position: relative; flex-shrink: 0; width: 50rpx; height: 50rpx; overflow: visible; }
+.compact-avatar-art { position: absolute; left: -9rpx; top: -9rpx; }
+.compact-user-name { flex: 1; min-width: 0; margin-left: 16.667rpx; }
+</style>

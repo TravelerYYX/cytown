@@ -1,0 +1,97 @@
+<template>
+ <view v-if="message.revoked" class="chat-revoked"><text class="chat-revoked-text">{{own?'你撤销了一条消息':'对方撤销了一条消息'}}</text></view>
+ <view v-else class="chat-row" :class="own?'chat-row-own':'chat-row-peer'">
+  <view class="chat-avatar"><view class="chat-avatar-decoration"><UserAvatar navigable :src="avatar" :user-id="message.senderId" :frame-id="avatarFrame" :frame-expires-at="avatarFrameExpiresAt" :size="76" /></view></view>
+  <view class="chat-message-body" :style="{maxWidth:String(maxWidth+(own&&message.localState?28:0))+'px'}" :class="own?'chat-body-own':'chat-body-peer'">
+   <ChatSending v-if="own&&message.localState==='sending'" />
+   <ActionButton v-if="own&&message.localState==='failed'" class="chat-failed" :aria-label="message.error||'重试发送'" @tap="emit('retry',message)"><text class="chat-failed-text">!</text></ActionButton>
+   <view :id="'chat-bubble-'+message.id" class="chat-bubble" :style="{maxWidth:String(maxWidth)+'px',backgroundColor:message.kind==='text'?(own?'#0099ff':'#f5f5f5'):'transparent'}" :class="[message.kind==='text'?'chat-text-bubble':'chat-media-bubble',message.kind==='emoji'?'chat-emoji-bubble':'',message.reply?'chat-bubble-with-reply':'']" @longpress="showMenu" @tap="open">
+    <ActionButton v-if="message.reply" :id="'chat-quote-'+message.id" class="chat-quote" :class="own?'chat-quote-own':''" :aria-label="'定位引用消息：'+chatReplyLabel(message.reply)" @tap.stop="emit('locate',message.reply)"><view class="chat-quote-header"><text class="chat-quote-meta" :class="own?'chat-quote-light':''">{{message.reply.senderName||'原消息'}} {{chatReplyTime(message.reply.sentAt)}}</text><image class="chat-quote-arrow" :src="uiAsset('/static/chat-icons/'+(own?'quote-up-white':'quote-up')+'.svg')" mode="aspectFit" /></view><text class="chat-quote-summary" :class="own?'chat-quote-light':''">{{chatReplyLabel(message.reply)}}</text></ActionButton>
+    <text v-if="message.kind==='text'" class="chat-text" :class="own?'chat-text-own':''">{{message.content}}</text>
+    <ChatPostCard v-else-if="message.kind==='post'&amp;&amp;message.post" :post="message.post" :width="Math.min(maxWidth,viewportWidth*0.583)" />
+    <text v-else-if="message.kind==='post'" class="chat-media-placeholder">帖子分享暂不可用</text>
+    <ChatProductCard v-else-if="message.kind==='product'&amp;&amp;message.product" :product="message.product" :width="Math.min(maxWidth,viewportWidth*0.583)" />
+    <text v-else-if="message.kind==='product'" class="chat-media-placeholder">商品分享暂不可用</text>
+    <view v-else class="chat-picture-box" :class="message.kind==='emoji'?'chat-emoji-picture':''" :style="dimensions">
+     <image v-if="source" :key="source" class="chat-picture" :src="source" mode="aspectFit" @load="imageLoaded" @error="imageFailed" />
+     <ActionButton v-if="loadError" class="chat-media-retry" aria-label="重新加载媒体" @tap.stop="retrySource"><text class="chat-media-placeholder">加载失败，点击重试</text></ActionButton>
+     <text v-else-if="!source&&message.localState==='failed'" class="chat-media-placeholder">发送失败，点击重试</text>
+     <view v-else-if="showLoading&&!imageReady" class="chat-media-loading"><ChatSending :size="24" :centered="true" label="媒体加载中" /></view>
+     <view v-if="message.kind==='video'&&!message.localState&&imageReady&&!loadError" class="chat-play"><text class="chat-play-text">▶</text></view>
+    </view>
+   </view>
+  </view>
+ </view>
+</template>
+<script setup lang="uts">
+import {computed,ref,watch,nextTick,onBeforeUnmount} from 'vue'
+import ActionButton from './ActionButton.uvue'
+import ChatSending from './ChatSending.uvue'
+import ChatPostCard from './ChatPostCard.uvue'
+import ChatProductCard from './ChatProductCard.uvue'
+import UserAvatar from './UserAvatar.uvue'
+import {chatOwner} from '@/utils/chat-local'
+import {chatCachedImage,chatCachedImageSource} from '@/utils/chat-cache'
+import {chatCover,chatCoverSource} from '@/utils/chat-state'
+import {chatMediaSize} from '@/utils/chat-layout'
+import {chatReplyLabel,chatReplyTime} from '@/utils/chat-reply'
+import {uiAsset} from '@/utils/ui-assets'
+import {probeImageInfo} from '@/utils/image-info'
+import type {ChatMessage,ChatReply} from '@/types/chat'
+const props=defineProps<{message:ChatMessage;avatar:string;avatarFrame?:string;avatarFrameExpiresAt?:number;maxWidth:number;viewportWidth:number}>()
+const emit=defineEmits<{menu:[message:ChatMessage];retry:[message:ChatMessage];open:[message:ChatMessage];locate:[reply:ChatReply]}>()
+const own=computed(()=>props.message.senderId===chatOwner()),source=ref(''),loadError=ref(false),imageReady=ref(false),showLoading=ref(false),loadedWidth=ref(0),loadedHeight=ref(0)
+const dimensions=computed(()=>{const a=props.message.asset;const size=chatMediaSize(loadedWidth.value||a?.width||props.message.localWidth||0,loadedHeight.value||a?.height||props.message.localHeight||0,props.viewportWidth,props.message.kind==='emoji');return {width:size.width+'px',height:size.height+'px'}})
+let generation=0
+let loadingTimer:ReturnType<typeof setTimeout>|null=null
+function stopLoading(){if(loadingTimer!==null)clearTimeout(loadingTimer);loadingTimer=null;showLoading.value=false}
+function scheduleLoading(){stopLoading();loadingTimer=setTimeout(()=>{loadingTimer=null;if(!imageReady.value&&!loadError.value)showLoading.value=true},150)}
+async function loadSource(retry=false){
+ const token=++generation;stopLoading();loadError.value=false;imageReady.value=false
+ if(props.message.revoked||props.message.kind==='text'||props.message.kind==='post'||props.message.kind==='product'){source.value='';return}
+ // Local cache reads and decoding normally finish before a loading indicator is needed.
+ scheduleLoading()
+ // Only a manual retry unmounts the image. Cached files must be bound before the first render.
+ if(retry){source.value='';await nextTick();if(token!==generation)return}
+ const asset=props.message.asset
+ source.value=(asset?(props.message.kind==='video'?chatCoverSource(asset):chatCachedImageSource(asset)):'')||(props.message.kind!=='video'?props.message.localPath||'':'')
+ try{
+  let url=source.value
+  if(props.message.asset)url=props.message.kind==='video'?await chatCover(props.message.asset):await chatCachedImage(props.message.asset)
+  if(token===generation){if(source.value!==url){if(imageReady.value||loadError.value)scheduleLoading();imageReady.value=false;loadError.value=false}source.value=url}
+ }catch{if(token===generation&&!source.value)imageFailed()}
+}
+function retrySource(){void loadSource(true)}
+// History sync replaces message objects. Compare media values so identical resources stay mounted.
+watch(()=>JSON.stringify([props.message.kind,props.message.asset?.id,props.message.asset?.version,props.message.asset?.coverId,props.message.localPath,props.message.revoked]),()=>{loadedWidth.value=0;loadedHeight.value=0;void loadSource()},{immediate:true})
+function markImageReady(width:number,height:number){if(width>0&&height>0){loadedWidth.value=width;loadedHeight.value=height}loadError.value=false;imageReady.value=true;stopLoading()}
+function imageLoaded(event:UniImageLoadEvent){markImageReady(event.detail.width,event.detail.height)}
+function imageFailed(){loadError.value=true;imageReady.value=false;stopLoading()}
+// Native memory-cache hits may finish before the image's load listener is attached.
+// Confirm local decoding after binding, and ignore callbacks for an older resource.
+// #ifdef APP
+async function verifyNativeImage(){
+ const token=generation,expected=source.value;if(!expected||/^https?:/.test(expected))return
+ await nextTick();if(token!==generation||expected!==source.value)return
+ probeImageInfo(expected,(width,height)=>{if(token===generation&&expected===source.value)markImageReady(width,height)},()=>{if(token===generation&&expected===source.value&&!imageReady.value)imageFailed()})
+}
+watch(source,()=>{void verifyNativeImage()},{flush:'post',immediate:true})
+// #endif
+onBeforeUnmount(()=>{generation++;stopLoading()})
+let suppressTapUntil=0
+function showMenu(){suppressTapUntil=Date.now()+600;emit('menu',props.message)}
+function open(){if(Date.now()<suppressTapUntil)return;if(props.message.localState==='failed'){emit('retry',props.message);return}if(loadError.value){retrySource();return}if(props.message.localState||props.message.kind==='text')return;emit('open',props.message)}
+</script>
+<style scoped>
+.chat-row{display:flex;align-items:flex-start;margin-bottom:36rpx;padding:0 34rpx;flex-direction:row;overflow:visible}.chat-row-own{flex-direction:row-reverse}.chat-row-peer{flex-direction:row}.chat-avatar{position:relative;width:76rpx;height:76rpx;flex-shrink:0;overflow:visible}.chat-avatar-decoration{position:absolute;left:-13.5rpx;top:-13.5rpx;overflow:visible}.chat-message-body{display:flex;flex-direction:row;align-items:center;min-width:0px}.chat-body-own{margin-right:24rpx}.chat-body-peer{margin-left:24rpx}
+.chat-bubble{border-radius:16rpx;overflow:hidden;flex-shrink:0;background-color:transparent}.chat-text-bubble{padding:15rpx 16rpx}.chat-media-bubble{padding:0;background-color:transparent}.chat-emoji-bubble{border-radius:0}
+.chat-text{color:#232323;font-size:26rpx;line-height:32rpx;white-space:pre-wrap}.chat-text-own{color:#fff}
+.chat-bubble-with-reply{min-width:220rpx;display:flex;flex-direction:column}.chat-quote{display:flex;flex-direction:column;align-items:stretch;align-self:stretch;min-width:0;padding:12rpx 16rpx;margin:0 0 20rpx;background-color:#f0f0f2;border-width:0;border-radius:8rpx;text-align:left;line-height:32rpx}.chat-quote-own{background-color:#008bdf}.chat-quote-header{display:flex;flex-direction:row;align-items:center;margin-bottom:8rpx}.chat-quote-meta{flex:1;min-width:0;font-size:22rpx;line-height:30rpx;color:#6d737a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.chat-quote-arrow{width:24rpx;height:24rpx;margin-left:20rpx;flex-shrink:0}.chat-quote-summary{font-size:24rpx;line-height:32rpx;color:#6d737a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.chat-quote-light{color:#fff}
+.chat-picture-box{position:relative;display:flex;align-items:center;justify-content:center;border-radius:16rpx;overflow:hidden;background-color:transparent}.chat-emoji-picture{border-radius:0}.chat-picture{width:100%;height:100%;background-color:transparent}
+.chat-media-loading{position:absolute;top:0;right:0;bottom:0;left:0;display:flex;align-items:center;justify-content:center;background-color:transparent;pointer-events:none}
+.chat-media-placeholder{font-size:22rpx;color:#919a9f;padding:16rpx}.chat-media-retry{position:absolute;top:0;right:0;bottom:0;left:0;display:flex;align-items:center;justify-content:center;background-color:transparent;border-width:0;padding:0;margin:0}
+.chat-play{position:absolute;width:64rpx;height:64rpx;border-radius:32rpx;background-color:#00000066;display:flex;align-items:center;justify-content:center}.chat-play-text{font-size:28rpx;color:#fff}.chat-failed{width:40rpx;height:48rpx;margin-right:8rpx;padding:0;background-color:transparent;border-width:0;display:flex;align-items:center;justify-content:center}.chat-failed-text{font-size:30rpx;color:#ee6580}.chat-revoked{padding:8rpx 20rpx 30rpx;display:flex;align-items:center;justify-content:center}.chat-revoked-text{font-size:24rpx;line-height:34rpx;color:#999}
+/* #ifndef APP */
+.chat-failed:after,.chat-media-retry:after{border:0}
+/* #endif */
+</style>

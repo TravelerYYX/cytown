@@ -1,0 +1,112 @@
+<template>
+  <view class="mine-work-search" :id="motionId">
+    <MineSearchBar v-model="draft" :focused="focused" @submit="submit" @cancel="emit('cancel')" />
+    <view class="mine-search-scopes">
+      <ActionButton v-for="item in scopes" :key="item.id" class="mine-search-scope" :aria-label="'搜索范围：'+item.name" :aria-pressed="scope===item.id" @tap="switchScope(item.id)">
+        <text class="mine-search-scope-label" :class="{'mine-search-scope-selected':scope===item.id}">{{ item.name }}</text>
+        <view class="mine-search-scope-line" :style="{opacity:scope===item.id?1:0}" />
+      </ActionButton>
+    </view>
+    <view class="mine-search-results">
+      <PaneScroll class="mine-search-scroll" :post-items="uxNative ? posts : undefined" post-variant="mine" :manage-posts="scope==='publish'"
+        :active="active && ready" :viewport-width="viewportWidth" :scroll-top="scrollTop" :show-scrollbar="false"
+        :lower-threshold="160" @scrolltolower="loadMore" @post-menu="emit('postMenu', $event)">
+        <!-- #ifndef APP -->
+        <VirtualPostColumn :posts="posts" variant="mine" :manage-posts="scope==='publish'" :active="active && ready" :viewport-width="viewportWidth" @post-menu="emit('postMenu', $event)" />
+        <!-- #endif -->
+        <view v-if="keyword && ready" class="mine-search-status">
+          <PaginationLoading v-if="loading" :active="active" label="正在搜索…" />
+          <ActionButton v-else-if="error" class="mine-search-retry" aria-label="重试搜索作品" @tap="loadMore"><text class="mine-search-status-text">{{ error }}，点击重试</text></ActionButton>
+          <text v-else-if="!posts.length" class="mine-search-status-text">暂无匹配作品</text>
+          <text v-else class="mine-search-status-text">{{ hasMore ? '上拉加载更多' : '已经到底了' }}</text>
+        </view>
+      </PaneScroll>
+    </view>
+  </view>
+</template>
+<script setup lang="uts">
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import MineSearchBar from './MineSearchBar.uvue'
+import PaneScroll from './PaneScroll.uvue'
+import ActionButton from './ActionButton.uvue'
+import PaginationLoading from './PaginationLoading.uvue'
+// #ifndef APP
+import VirtualPostColumn from './VirtualPostColumn.uvue'
+// #endif
+import { uxNative } from '@/utils/native-styles'
+import { searchMinePosts, toPost } from '@/utils/post-api'
+import { authRevision, getSessionGeneration } from '@/utils/auth'
+import { usePostOwnership } from '@/composables/usePostOwnership'
+import { publishRevision } from '@/utils/publish-tasks'
+import { membershipRevision } from '@/utils/interactions'
+import type { Post } from '@/types/home'
+const props = withDefaults(defineProps<{ active: boolean; ready: boolean; motionId: string; viewportWidth: number; initialScope?: string }>(), { initialScope: 'publish' })
+const emit = defineEmits<{ cancel: []; postMenu: [post: Post] }>()
+const draft = ref(''), keyword = ref(''), posts = ref<Post[]>([])
+const focused = ref(false), loading = ref(false), error = ref(''), hasMore = ref(false), scrollTop = ref(0)
+const scopes = [{id:'publish',name:'作品'},{id:'favorite',name:'收藏'},{id:'like',name:'赞过'}]
+const scope = ref(props.initialScope)
+let revision = 0, pageNum = 1, timer: ReturnType<typeof setTimeout> | null = null
+usePostOwnership(() => posts.value)
+function clearTimer() { if (timer != null) clearTimeout(timer); timer = null }
+function reset() {
+  revision++; posts.value = []; pageNum = 1; loading.value = false; error.value = ''; hasMore.value = !!keyword.value
+  scrollTop.value = .1
+  void nextTick(() => { scrollTop.value = 0 })
+}
+function submit() {
+  clearTimer(); keyword.value = draft.value.trim(); reset(); uni.hideKeyboard(); focused.value = false
+  void loadMore()
+}
+function switchScope(value: string) {
+  if (scope.value === value) return
+  clearTimer(); scope.value = value; reset(); void loadMore()
+}
+watch(draft, () => {
+  clearTimer(); keyword.value = draft.value.trim(); reset()
+  // Invalidate the previous response immediately, before the debounce expires.
+  if (keyword.value) timer = setTimeout(() => { timer = null; void loadMore() }, 300)
+})
+async function loadMore() {
+  if (!props.active || !props.ready || !keyword.value || loading.value || !hasMore.value) return
+  const token = revision, session = getSessionGeneration(), query = keyword.value
+  loading.value = true; error.value = ''
+  try {
+    const page = await searchMinePosts(query, pageNum, 10, scope.value)
+    if (token !== revision || session !== getSessionGeneration()) return
+    const ids = new Set(posts.value.map(post => post.id))
+    posts.value.push(...page.records.filter(post => !ids.has(post.id)).map(post => toPost(post)))
+    hasMore.value = pageNum < page.pages && page.records.length > 0; pageNum++
+  } catch (e) {
+    if (token === revision && session === getSessionGeneration()) error.value = e instanceof Error ? e.message : '搜索失败'
+  } finally { if (token === revision) loading.value = false }
+}
+watch(() => props.ready && props.active, active => {
+  focused.value = active
+  if (active && !posts.value.length) void loadMore()
+  else if (!active) { clearTimer(); revision++; loading.value = false }
+}, { immediate: true })
+watch(() => { void authRevision.value; return getSessionGeneration() }, () => { clearTimer(); draft.value = ''; keyword.value = ''; reset() })
+watch(publishRevision, () => { reset(); void loadMore() })
+watch(() => [membershipRevision.favorites, membershipRevision.likes], (next, previous) => {
+  if ((scope.value === 'favorite' && next[0] !== previous[0]) || (scope.value === 'like' && next[1] !== previous[1])) { reset(); void loadMore() }
+})
+onBeforeUnmount(() => { clearTimer(); revision++ })
+defineExpose({ refresh: () => { reset(); void loadMore() } })
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+.mine-work-search { display: flex; flex-direction: column; flex: 1; min-height: 0; background-color: #fafafa; border-radius: 18rpx 18rpx 0 0; overflow: hidden; }
+.mine-search-results { position: relative; flex: 1; min-height: 0; }
+.mine-search-scopes { display: flex; flex-direction: row; flex-shrink: 0; height: 76rpx; background-color: #fff; padding: 0 34rpx; }
+.mine-search-scope { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; height: 76rpx; }
+.mine-search-scope-label { font-size: 27rpx; color: #999; line-height: 46rpx; }
+.mine-search-scope-selected { color: #242729; font-weight: 600; }
+.mine-search-scope-line { height: 6rpx; width: 30rpx; margin-top: 4rpx; border-radius: 4rpx; background-color: #13a8f7; }
+.mine-search-scroll { width: 100%; height: 100%; }
+.mine-search-status { display: flex; flex-direction: column; align-items: center; padding: 48rpx 24rpx; }
+.mine-search-status-text { font-size: 24rpx; color: #999; text-align: center; }
+.mine-search-retry { padding: 16rpx; }
+</style>

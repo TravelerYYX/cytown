@@ -1,0 +1,231 @@
+<template>
+  <view class="page">
+    <scroll-view class="scroll" direction="vertical" :show-scrollbar="false">
+      <view class="hero" :style="{paddingTop: statusBarHeight + 'px'}">
+        <view class="nav">
+          <ActionButton class="nav-side" aria-label="返回" @tap="back"><image class="nav-icon" src="/static/images/coin/back-white.svg" /></ActionButton>
+          <text class="title">我的次元币</text>
+          <ActionButton class="nav-side" aria-label="打卡规则" @tap="rules"><image class="nav-icon" src="/static/images/coin/help.svg" /></ActionButton>
+        </view>
+        <image class="pattern" src="/static/images/coin/pattern.svg" mode="scaleToFill" />
+        <view class="hero-row">
+          <view class="wallet" @tap="openLedger">
+            <image class="gold" src="/static/images/coin/gold.svg" />
+            <text class="balance" :class="balanceLabel.length > 8 ? 'balance-compact' : ''">{{ balanceLabel }}</text>
+            <view class="record-link"><text class="hero-label record-label">获取记录</text><image class="record-arrow" src="/static/images/coin/chevron-white.svg" mode="aspectFit" /></view>
+          </view>
+          <view class="shop" @tap="unavailable">
+            <image class="shop-icon" src="/static/images/coin/shop.svg" />
+            <text class="hero-label">兑换中心</text>
+          </view>
+        </view>
+      </view>
+      <view class="body" :style="{paddingBottom: bottomInset + 'px'}">
+        <view class="tabs">
+          <view class="tab">
+            <text class="tab-text selected">次元币任务</text><view class="indicator" />
+          </view>
+          <view class="tab" @tap="unavailable">
+            <text class="tab-text">次元币活动</text><view class="dot" />
+          </view>
+        </view>
+        <view class="tasks">
+          <text class="heading">每日任务</text>
+          <view class="quota">
+            <text class="muted">今日获取次元币上限</text>
+            <text class="earned">{{ earnedCoins }}</text>
+            <text class="muted">/{{ rewardCoins }}</text>
+          </view>
+          <view v-if="error.length > 0" class="error" @tap="load"><text class="muted">{{ error }} · 点击重试</text></view>
+          <view class="card" @tap="punch">
+            <image class="task-icon" src="/static/images/coin/calendar.svg" />
+            <view class="card-copy">
+              <view class="task-top">
+                <text class="task-name">打卡</text>
+                <text class="rule" @tap.stop="rules">奖励规则 ⓘ</text>
+              </view>
+              <view class="reward">
+                <image class="reward-icon" src="/static/images/coin/gold.svg" />
+                <text class="reward-value">+{{ rewardCoins }}</text>
+              </view>
+            </view>
+            <view v-if="punched" class="streak">
+              <text class="muted">已连续打卡</text>
+              <view class="streak-count"><text class="blue">{{ streakDays }}</text><text class="muted"> 天</text></view>
+            </view>
+            <view v-else class="task-button active">
+              <text class="button-text">{{ busy ? '领取中' : (loading ? '加载中' : '打卡') }}</text>
+            </view>
+          </view>
+          <text class="heading more-heading">更多任务</text>
+          <view v-for="task in moreTasks" :key="task.title" class="card more-card" @tap="unavailable">
+            <image class="task-icon" :src="task.icon" />
+            <view class="card-copy">
+              <text class="task-name disabled">{{ task.title }}</text>
+              <view class="reward">
+                <image class="reward-icon" src="/static/images/coin/silver.svg" />
+                <text class="muted disabled">+80</text>
+              </view>
+            </view>
+            <view class="task-button"><text class="button-text">已完成</text></view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import ActionButton from '@/components/ActionButton.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { isLoggedIn, getSessionGeneration } from '@/utils/auth'
+import { setStatusBar } from '@/utils/platform'
+import { fetchCoinState, claimCoinPunch } from '@/utils/coin-api'
+import type { CoinState } from '@/utils/coin-api'
+
+const { statusBarHeight, bottomInset } = useWindowInsets()
+const state = ref<CoinState | null>(null)
+const loading = ref(false)
+const busy = ref(false)
+const error = ref('')
+const balanceLabel = computed(() => state.value == null ? '—' : String(state.value?.balance ?? 0))
+const rewardCoins = computed(() => state.value == null ? '—' : String(state.value?.coins ?? 0))
+const punched = computed(() => state.value?.punched ?? false)
+const earnedCoins = computed(() => punched.value ? state.value?.coins ?? 0 : 0)
+const streakDays = computed(() => state.value?.streakDays ?? 0)
+const moreTasks = [
+  { title: '绑定游戏角色', icon: '/static/images/coin/game.svg' },
+  { title: '修改个性签名', icon: '/static/images/coin/edit.svg' }
+]
+let ready = false
+let disposed = false
+let visibleSession = -1
+let timer: ReturnType<typeof setTimeout> | null = null
+
+function loggedIn(): boolean {
+  if (isLoggedIn()) return true
+  state.value = null
+  uni.redirectTo({ url: '/pages/login/index' })
+  return false
+}
+
+function scheduleRefresh() {
+  if (timer != null) clearTimeout(timer)
+  const day = 86400000
+  timer = setTimeout(() => { void load() }, day - (Date.now() + 28800000) % day + 100)
+}
+
+async function load() {
+  if (loading.value || busy.value || !loggedIn()) return
+  const session = getSessionGeneration()
+  if (session != visibleSession) {
+    visibleSession = session
+    state.value = null
+  }
+  loading.value = true
+  error.value = ''
+  try {
+    const result = await fetchCoinState()
+    if (!disposed && session == getSessionGeneration()) {
+      state.value = result
+      scheduleRefresh()
+    }
+  } catch (e) {
+    if (!disposed && session == getSessionGeneration()) {
+      error.value = e instanceof Error ? e.message : '余额加载失败'
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+async function punch() {
+  const current = state.value
+  if (busy.value || loading.value || current == null || current.punched || !loggedIn()) return
+  const session = getSessionGeneration()
+  busy.value = true
+  try {
+    const result = await claimCoinPunch()
+    if (!disposed && session == getSessionGeneration()) {
+      state.value = result
+      error.value = ''
+      scheduleRefresh()
+    }
+  } catch (e) {
+    if (!disposed && session == getSessionGeneration()) {
+      uni.showToast({ title: e instanceof Error ? e.message : '打卡失败，请重试', icon: 'none' })
+    }
+  } finally {
+    busy.value = false
+  }
+}
+
+function rules() {
+  const current = state.value
+  const reward = current == null ? '' : '。' + (current.punched ? '今日已领 ' : '今日可领 ') + current.points + ' 积分和 ' + current.coins + ' 次元币'
+  uni.showModal({ title: '奖励规则', content: '北京时间每天可打卡一次，奖励与每日签到分别领取' + reward + '。', showCancel: false })
+}
+function unavailable() { uni.showToast({ title: '暂未开放', icon: 'none' }) }
+function openLedger() { if (loggedIn()) uni.navigateTo({ url: '/pages/coin/ledger' }) }
+function back() { uni.navigateBack({ fail: () => { uni.reLaunch({ url: '/pages/index/index?tab=mine' }) } }) }
+
+onReady(() => { ready = true; void load() })
+onShow(() => { setStatusBar('light'); if (ready) void load() })
+onUnload(() => { disposed = true; if (timer != null) clearTimeout(timer) })
+</script>
+
+<style scoped>
+.page { position: fixed; top: 0; bottom: 0; left: 0; right: 0; background-color: #f6f7fb; }
+.scroll { height: 100%; }
+.hero { position: relative; background-color: #009cfe; }
+.nav { height: 192rpx; padding: 96rpx 30rpx 0; display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+.nav-side { margin: 0; padding: 0; border-width: 0; background-color: transparent; display: flex; flex-direction: column; width: 42rpx; height: 48rpx; align-items: center; justify-content: center; }
+/* #ifndef APP */
+.nav-side::after { border-width: 0; }
+/* #endif */
+.nav-icon { width: 39rpx; height: 39rpx; }
+.title { color: #fff; font-size: 34rpx; }
+.pattern { position: absolute; bottom: 0; width: 750rpx; height: 159rpx; }
+.hero-row { margin: 40rpx 30rpx 0; padding-bottom: 55rpx; display: flex; flex-direction: row; }
+.wallet, .shop { height: 81rpx; padding: 0 20rpx; background-color: #0584db; border-radius: 15rpx; display: flex; flex-direction: row; align-items: center; }
+.wallet { flex: 1; min-width: 0; }
+.shop { width: 221rpx; margin-left: 29rpx; justify-content: space-between; }
+.gold, .shop-icon { width: 49rpx; height: 49rpx; flex-shrink: 0; }
+.balance { color: #fff; flex: 1; margin-left: 8rpx; font-size: 37rpx; }
+.balance-compact { font-size: 22rpx; }
+.hero-label { color: #fff; font-size: 25rpx; }
+.record-link { display: flex; flex-direction: row; align-items: center; flex-shrink: 0; margin-left: 8rpx; }
+.record-label { font-size: 22rpx; }
+.record-arrow { width: 13rpx; height: 21rpx; margin-left: 9rpx; flex-shrink: 0; }
+.body { background-color: #f6f7fb; border-radius: 16rpx 16rpx 0 0; margin-top: -16rpx; }
+.tabs { display: flex; flex-direction: row; justify-content: center; padding: 0 98rpx; }
+.tab { position: relative; display: flex; flex-direction: column; height: 116rpx; flex: 1; align-items: center; padding-top: 40rpx; }
+.tab-text { font-size: 31rpx; color: #858b97; }
+.selected { color: #232d40; }
+.indicator { width: 32rpx; height: 10rpx; border-radius: 6rpx; background-color: #009cfe; margin-top: 14rpx; }
+.dot { width: 16rpx; height: 16rpx; border-radius: 8rpx; background-color: #fb5051; position: absolute; right: 24rpx; top: 37rpx; }
+.tasks { padding: 19rpx 30rpx 32rpx; }
+.heading { font-size: 28rpx; font-weight: 700; color: #232d40; }
+.quota { display: flex; flex-direction: row; align-items: center; margin-top: 10rpx; margin-bottom: 24rpx; }
+.muted, .rule { color: #858b97; font-size: 22rpx; }
+.earned { color: #f28846; font-size: 22rpx; margin-left: 15rpx; }
+.card { height: 116rpx; padding: 0 30rpx; background-color: #fff; border-radius: 14rpx; display: flex; flex-direction: row; align-items: center; }
+.task-icon { width: 41rpx; height: 41rpx; flex-shrink: 0; margin-right: 30rpx; }
+.card-copy { flex: 1; min-width: 0; }
+.task-top, .reward, .streak-count { display: flex; flex-direction: row; align-items: center; }
+.task-name { font-size: 29rpx; color: #232d40; }
+.rule { margin-left: 13rpx; }
+.reward { margin-top: 9rpx; }
+.reward-icon { width: 24rpx; height: 24rpx; margin-right: 6rpx; }
+.reward-value { color: #e4ac22; font-size: 22rpx; }
+.streak { display: flex; flex-direction: column; align-items: flex-end; }
+.streak-count { margin-top: 8rpx; }
+.blue { color: #009cfe; font-size: 22rpx; }
+.more-heading { margin-top: 30rpx; margin-bottom: 24rpx; }
+.more-card { margin-bottom: 20rpx; }
+.disabled { color: #babec5; }
+.task-button { display: flex; flex-direction: column; background-color: #9bd7ff; width: 120rpx; height: 44rpx; border-radius: 7rpx; align-items: center; justify-content: center; }
+.active { background-color: #009cfe; }
+.button-text { color: #fff; font-size: 24rpx; }
+.error { margin-bottom: 12rpx; }
+</style>

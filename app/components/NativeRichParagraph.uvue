@@ -1,0 +1,28 @@
+<template><rich-text class="native-paragraph" mode="native" :nodes="nodes" @itemclick="open" /></template>
+<script setup lang="uts">
+import { computed } from 'vue'
+import type { RichRun } from '@/types/publish'
+import { mediaUrl } from '@/utils/media-cache'
+import { uiAsset } from '@/utils/ui-assets'
+import { openWebLink } from '@/utils/navigation'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+const props = defineProps<{ runs: RichRun[] }>()
+const { viewportWidth } = useWindowInsets()
+const nodes = computed(() => {
+  const scale = viewportWidth.value / 750
+  return [{ name: 'div', attrs: { style: 'font-size:' + 26 * scale + 'px;line-height:' + 49.4 * scale + 'px;color:#555b5e;white-space:pre-wrap;' }, children: props.runs.map((run,index) => {
+    if (run.type === 'emoji') return { name: 'img', attrs: { src: mediaUrl(run.imageUrl), style: 'width:' + 52 * scale + 'px;height:' + 52 * scale + 'px;vertical-align:middle;' } }
+    if (run.type === 'mention') return { name: 'span', attrs: { style:'color:#0aaee5;' }, children:[{type:'text',text:'@'+run.nickname}] }
+    if (run.type === 'link') return { name:'a', attrs:{ href:'ct-link:'+index,style:'color:#0aaee5;text-decoration:none;' }, children:[{type:'text',text:run.text},{name:'img',attrs:{src:uiAsset('/static/icons/chevron-round-cyan.svg'),style:'width:'+23*scale+'px;height:'+23*scale+'px;vertical-align:middle;'}}] }
+    return { name:'span',attrs:{style:'color:'+(run.colorValue||'#555b5e')+';'},children:[{type:'text',text:run.text}] }
+  }) }]
+})
+function open(event: { detail: { href?: string } }) { const href=event.detail.href||'';if(!href.startsWith('ct-link:'))return;const run=props.runs[Number(href.slice(8))];if(run?.type==='link')openWebLink(run.url,run.text,run.openMode) }
+</script>
+<style>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+.native-paragraph { width: 100%; }
+</style>

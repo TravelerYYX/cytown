@@ -1,0 +1,49 @@
+<template>
+  <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(a11yPrefix+'-0',{&quot;aria-label&quot;:label})" class="skeleton-block" :class="[{circle,dark},uxNative?'ux0':'',uxNative?'ux7':'',uxNative&amp;&amp;!!dark?'ux8':'']" :style="blockStyle"  />
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :aria-label="label" class="skeleton-block" :class="[{circle,dark},uxNative?'ux0':'',uxNative?'ux7':'',uxNative&amp;&amp;!!dark?'ux8':'']" :style="blockStyle"  />
+<!-- #endif -->
+</template>
+<script setup lang="uts">
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed } from 'vue'
+const props = withDefaults(defineProps<{ width?: number; height?: number; circle?: boolean; dark?: boolean; radius?: number; label?: string }>(), { circle: false, dark: false, radius: 12, label: '媒体占位' })
+const blockStyle = computed(() => ({
+  width: props.width === undefined ? '100%' : props.width + 'rpx',
+  height: props.height === undefined ? '100%' : props.height + 'rpx',
+  borderRadius: props.circle ? '50%' : props.radius + 'rpx'
+}))
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.skeleton-block { display: block; flex-shrink: 0; background: #e6e6e6; }
+.skeleton-block.dark { background: #d2d2d2; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+
+.ux0{}
+
+
+
+
+
+
+.ux7{display:flex;flex-direction:column;flex-shrink:0;background-color:#e6e6e6;}
+.ux8{background-color:#d2d2d2;}
+/* #endif */
+</style>

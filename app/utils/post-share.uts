@@ -1,0 +1,9 @@
+import type {Post} from '@/types/home'
+import type {ChatPostCard} from '@/types/chat'
+import {GET} from './request'
+
+export function postShareCard(post:Post):ChatPostCard {
+ const first=post.media[0],video=post.mode==='video'||first?.type==='video'
+ return {id:post.id,title:post.title||post.content||'分享帖子',coverUrl:(video?first?.coverUrl:first?.previewUrl||first?.url)||'',authorId:post.author.id,authorName:post.author.nickname,authorAvatar:post.author.avatar||'',authorAvatarFrame:post.author.avatarFrame,authorAvatarFrameExpiresAt:post.author.avatarFrameExpiresAt,video}
+}
+export const postShareLink=(id:string)=>GET<{url:string;text:string}>('/app/share/posts/'+encodeURIComponent(id),undefined,true)

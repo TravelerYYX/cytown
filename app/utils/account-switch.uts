@@ -1,0 +1,33 @@
+import type { AppLoginResult } from '@/types/auth'
+import { API_BASE_URL } from '@/config/env'
+import { forgetAccount, getRememberedAccounts, getSessionGeneration, getUserInfo, saveLogin } from './auth'
+
+/** 先验证目标帐号，失败时保留原会话；切换完成后由页面重建导航栈。 */
+export async function switchAccount(userId: string): Promise<void> {
+  if (getUserInfo()?.userId === userId) return
+  const account = getRememberedAccounts().find(item => item.userInfo.userId === userId)
+  if (!account) throw new Error('帐号未保存，请重新登录')
+  const generation = getSessionGeneration()
+  const result = await new Promise<AppLoginResult>((resolve, reject) => {
+    uni.request({
+      url: API_BASE_URL + '/app/auth/refreshToken', method: 'POST',
+      data: { refreshToken: account.refreshToken }, timeout: 15000,
+      success(response) {
+        if (generation !== getSessionGeneration()) { reject(new Error('登录状态已改变，请重试')); return }
+        try {
+          const body = (typeof response.data === 'string' ? JSON.parse(response.data) : response.data) as { code: string; data: AppLoginResult }
+          if (response.statusCode < 200 || response.statusCode >= 300) throw new Error('服务暂不可用，请重试')
+          if (body?.code === '8888' || body?.code === '9999') {
+            forgetAccount(userId)
+            throw new Error('该帐号登录已失效，请点击“登录其他账号”重新登录')
+          }
+          if (body?.code !== '0000' || !body.data?.token || !body.data?.refreshToken || body.data?.userInfo?.userId !== userId) throw new Error('帐号验证失败，请重试')
+          resolve(body.data)
+        } catch (error) { reject(error) }
+      },
+      fail() { reject(new Error('无法连接服务器，请重试')) }
+    })
+  })
+  if (generation !== getSessionGeneration()) throw new Error('登录状态已改变，请重试')
+  saveLogin(result)
+}

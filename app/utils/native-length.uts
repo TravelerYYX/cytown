@@ -1,0 +1,46 @@
+export interface LengthContext { width: number; height: number; viewportWidth: number; viewportHeight: number; safeBottom: number }
+export function nativeStyleLength(property:string,input:string,context:LengthContext):string {
+  if(['padding','margin','border-radius','borderRadius'].includes(property)){
+    const parts:string[]=[];let depth=0,start=0
+    for(let i=0;i<input.length;i++){
+      const char=input[i]
+      if(char==='(')depth++
+      else if(char===')')depth--
+      else if(/\s/.test(char!)&&depth===0){if(i>start)parts.push(input.slice(start,i));start=i+1}
+    }
+    if(start<input.length)parts.push(input.slice(start))
+    return parts.map(part=>part==='auto'?part:nativeLength(part,'width',context)+'px').join(' ')
+  }
+  return nativeLength(input,/height|^(top|bottom)$/i.test(property)?'height':'width',context)+'px'
+}
+/** Evaluate the CSS arithmetic used by this client, without eval or DOM APIs. */
+export function nativeLength(input: string, axis: 'width' | 'height', context: LengthContext): number {
+  const source = input.replace(/env\(safe-area-inset-bottom(?:,\s*[^)]+)?\)/g, context.safeBottom + 'px')
+  const tokens = source.match(/(?:\d*\.\d+|\d+)(?:rpx|px|vw|vh|%)?|[a-zA-Z-]+|[()+*/,-]/g) || []
+  let index = 0
+  function primary(): number {
+    const token = tokens[index++]
+    if (token === '-') return -primary()
+    if (token === '+') return primary()
+    if (token === '(') { const value = sum(); if (tokens[index++] !== ')') throw new Error('Invalid CSS arithmetic: ' + input); return value }
+    if (token === 'calc' || token === 'max' || token === 'min') {
+      if (tokens[index++] !== '(') throw new Error('Invalid CSS function: ' + input)
+      const values = [sum()]
+      while (tokens[index] === ',') { index++; values.push(sum()) }
+      if (tokens[index++] !== ')') throw new Error('Invalid CSS function: ' + input)
+      return token === 'max' ? Math.max(...values) : token === 'min' ? Math.min(...values) : values[0]!
+    }
+    if (!token || !/^[\d.]/.test(token)) throw new Error('Unsupported CSS arithmetic: ' + input)
+    const value = parseFloat(token)
+    if (token.endsWith('rpx')) return value * context.viewportWidth / 750
+    if (token.endsWith('vw')) return value * context.viewportWidth / 100
+    if (token.endsWith('vh')) return value * context.viewportHeight / 100
+    if (token.endsWith('%')) return value * context[axis] / 100
+    return value
+  }
+  function product(): number { let value = primary(); while (tokens[index] === '*' || tokens[index] === '/') { const operator = tokens[index++], right = primary(); value = operator === '*' ? value * right : value / right } return value }
+  function sum(): number { let value = product(); while (tokens[index] === '+' || tokens[index] === '-') { const operator = tokens[index++], right = product(); value = operator === '+' ? value + right : value - right } return value }
+  const value = sum()
+  if (index !== tokens.length || !Number.isFinite(value)) throw new Error('Invalid CSS length: ' + input)
+  return value
+}

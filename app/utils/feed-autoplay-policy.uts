@@ -1,0 +1,48 @@
+export function allowsFeedAutoplay(mode: string, network: string): boolean {
+  if (!network || network === 'none' || network === 'unknown') return false
+  return mode === 'all-networks' || (mode === 'wifi-only' && network === 'wifi')
+}
+
+export interface AutoplayRect { top: number; left: number; width: number; height: number }
+export interface AutoplayCandidate { key: string; rect: AutoplayRect; order: number }
+export function chooseFeedVideo(candidates: AutoplayCandidate[], viewport: AutoplayRect, current: string | null): string | null {
+  const center = viewport.top + viewport.height / 2
+  const eligible = candidates.filter(({ rect }) => {
+    const width = Math.max(0, Math.min(rect.left + rect.width, viewport.left + viewport.width) - Math.max(rect.left, viewport.left))
+    const height = Math.max(0, Math.min(rect.top + rect.height, viewport.top + viewport.height) - Math.max(rect.top, viewport.top))
+    return rect.width > 0 && rect.height > 0 && width * height >= rect.width * rect.height * .5
+  })
+  eligible.sort((a, b) => {
+    const distance = Math.abs(a.rect.top + a.rect.height / 2 - center) - Math.abs(b.rect.top + b.rect.height / 2 - center)
+    if (Math.abs(distance) > .01) return distance
+    if (a.key === current) return -1
+    if (b.key === current) return 1
+    return a.rect.top - b.rect.top || a.rect.left - b.rect.left || a.order - b.order
+  })
+  return eligible[0]?.key ?? null
+}
+
+/** Pure timing/state controller; DOM measurements stay in the pane composable. */
+export class FeedAutoplaySelection {
+  current: string | null = null
+  private pending: string | null = null
+  private timer: ReturnType<typeof setTimeout> | undefined
+  constructor(private change: (key: string | null) => void) {}
+  update(candidates: AutoplayCandidate[], viewport: AutoplayRect) {
+    const eligibleCurrent = candidates.find(candidate => candidate.key === this.current)
+    if (this.current && (!eligibleCurrent || chooseFeedVideo([eligibleCurrent], viewport, this.current) == null)) {
+      this.current = null; this.change(null)
+    }
+    const next = chooseFeedVideo(candidates, viewport, this.current)
+    if (next === this.current) { this.cancelPending(); return }
+    if (next === this.pending) return
+    this.cancelPending()
+    if (!next) return
+    this.pending = next
+    this.timer = setTimeout(() => {
+      this.pending = null; this.current = next; this.change(next)
+    }, 180)
+  }
+  private cancelPending() { clearTimeout(this.timer); this.timer = undefined; this.pending = null }
+  reset() { this.cancelPending(); this.current = null; this.change(null) }
+}

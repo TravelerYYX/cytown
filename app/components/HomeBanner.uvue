@@ -1,0 +1,38 @@
+<template>
+  <view class="home-banner" :class="[uxNative?'ux0':'',uxNative?'ux1':'']">
+    <image class="banner-image" src="/static/images/home-banner.jpg" mode="aspectFill" :class="[uxNative?'ux2':'']" />
+  </view>
+</template>
+<script setup lang="uts">
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.home-banner { position: absolute; inset: 0; overflow: hidden; pointer-events: none; background: #103970; }
+.banner-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: .08;
+}
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+
+.ux0{}
+.ux1{position:absolute;top:0;right:0;bottom:0;left:0;overflow:hidden;pointer-events:none;background-color:#103970;}
+.ux2{position:absolute;top:0;left:0;width:100%;height:100%;opacity:.08;}
+/* #endif */
+</style>

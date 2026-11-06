@@ -1,0 +1,19 @@
+<template>
+  <view class="user-name-row" :style="{ height: rowHeight + 'rpx' }">
+    <text class="user-name-text" :style="{ fontSize: size + 'rpx', lineHeight: rowHeight + 'rpx', color }" :max-lines="1">{{ nickname }}</text>
+    <MemberBadge :user-id="userId" :size="size" />
+    <LevelBadge v-if="level > 0" :level="level" :size="badgeSize" :style="{ marginLeft: Math.round(size * 0.36) + 'rpx' }" />
+  </view>
+</template>
+<script setup lang="uts">
+import { computed } from 'vue'
+import LevelBadge from './LevelBadge.uvue'
+import MemberBadge from './MemberBadge.uvue'
+const props = withDefaults(defineProps<{ nickname: string; userId?:string; level?: number; size?: number; color?: string }>(), { level: 0, size: 28, color: '#999d9f' })
+const badgeSize = computed(() => Math.round(props.size * 36 / 28))
+const rowHeight = computed(() => Math.round(props.size * 1.5))
+</script>
+<style scoped>
+.user-name-row { display: flex; flex-direction: row; align-items: center; min-width: 0; flex-shrink: 1; overflow: hidden; }
+.user-name-text { min-width: 0; flex-shrink: 1; font-weight: 400; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+</style>

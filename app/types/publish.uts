@@ -1,0 +1,22 @@
+import type { PublishMode } from './home'
+// Local media IDs stay stable until the editor session is released.
+export interface PublishRule { mode: PublishMode; titleMin: number; titleMax: number; contentMin: number; contentMax: number; imageMax: number; videoMax: number; totalMediaMax: number; maxVideoMb: number }
+export interface PublishChannel { id: number; name: string; isDefault: boolean; adminOnly: boolean }
+export interface Topic { id: number; name: string; description: string; coverUrl: string; hot: boolean; recommended: boolean; viewCount: number; status?: number; enabled?: boolean }
+export interface CreatorPolicy { defaultValue: boolean; userEditable: boolean }
+export interface EmojiGroup { id: number; name: string }
+export interface PublishEmoji { id: number; groupId: number; name: string; imageUrl: string }
+export interface TextColor { id: number; name: string; colorValue: string }
+export interface DividerStyle { id: number; name: string; previewText: string }
+export interface PublishConfig {
+  rules: PublishRule[]; channels: PublishChannel[]; defaultChannelId: number | null
+  creatorPolicies: Record<'allowDownload' | 'downloadWatermark' | 'original', CreatorPolicy>
+  reviewRequired: boolean; featureFlags: Record<string, boolean>; pollRule: { minOptions: number; maxOptions: number }
+  topics: Topic[]; emojiGroups: EmojiGroup[]; emojis: PublishEmoji[]; colors: TextColor[]; dividers: DividerStyle[]
+}
+export interface Asset { previewUrl?: string; originalUrl?: string; hlsUrl?: string; qualities?: import('./home').VideoQuality[]; resourceVersion?: string; id: number; serverId?: number; mediaType: 'image' | 'video'; url: string; coverUrl: string; status: string; errorMessage: string; sizeBytes: number; width: number; height: number; durationMs: number; coverTimeMs: number; cropJson: string; localPath?: string; progress?: number }
+export type RichRun = { type: 'text'; text: string; colorId?: number; colorValue?: string } | { type: 'emoji'; emojiId: number; name: string; imageUrl: string } | { type: 'mention'; userId: number | string; publicUid: string; nickname: string } | { type: 'link'; text: string; url: string; openMode: 'inapp' | 'browser' }
+export type RichBlock = { type: 'paragraph'; runs: RichRun[] } | { type: 'image' | 'video'; assetId: number } | { type: 'divider'; styleId: number; previewText?: string } | { type: 'poll' }
+export interface PollDraft { question: string; options: string[]; endsAt?: string }
+export interface DraftView { id: number; revision: number; mode: PublishMode; title: string; summary: string; coverUrl: string; payload: Record<string, unknown>; updateTime: string }
+export interface FollowingUser { userId: string; publicUid: string; nickname: string; avatar: string }

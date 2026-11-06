@@ -1,0 +1,174 @@
+import { reactive, ref, watch } from 'vue'
+import { postPreviewMode } from './post-preview'
+import { authRevision, getUserInfo, isLoggedIn } from './auth'
+import { toggleLike, toggleFavorite, toggleFollow } from './auth-api'
+import { GET } from './request'
+import type { Post } from '@/types/home'
+import type { PostResponse, Page } from '@/types/post-api'
+import type { InteractionResult, UserRelationship, UserStatistics } from '@/types/auth'
+
+const posts = new Map<string, Post>()
+const authorPosts = new Map<string, Set<Post>>()
+const references = new Map<Post, number>()
+let sweepQueued = false
+function forgetPost(post: Post) {
+  if (posts.get(post.id) !== post) return
+  posts.delete(post.id)
+  const authored = authorPosts.get(post.author.id)
+  authored?.delete(post)
+  if (!authored?.size) { authorPosts.delete(post.author.id); delete relationshipStates[post.author.id] }
+}
+export function retainPost(post: Post) { references.set(post, (references.get(post) || 0) + 1) }
+export function releasePost(post: Post) {
+  const count = (references.get(post) || 0) - 1
+  if (count > 0) references.set(post, count)
+  else { references.delete(post); forgetPost(post) }
+}
+function scheduleSweep() {
+  if (sweepQueued) return
+  sweepQueued = true
+  setTimeout(() => {
+    sweepQueued = false
+    for (const post of posts.values()) if (!references.has(post)) forgetPost(post)
+  }, 0)
+}
+export const relationshipStates = reactive<Record<string, { following: boolean; followedBy: boolean }>>({})
+export const interactionBusy = reactive(new Set<string>())
+const flights = new Map<string, symbol>()
+export const interactionRevision = ref(0)
+export const membershipRevision = reactive({ following: 0, favorites: 0, likes: 0 })
+const identity = () => isLoggedIn() ? getUserInfo()?.userId || '' : ''
+let account = identity()
+function syncCurrentAuthor(post: Post) {
+  const user = isLoggedIn() ? getUserInfo() : null
+  if (user && post.author.id === user.userId) {
+    post.author.nickname = user.nickname
+    post.author.avatarFrame = user.avatarFrame
+    post.author.avatarFrameExpiresAt=user.avatarFrameExpiresAt
+  }
+}
+watch(authRevision, () => {
+  const next = identity()
+  if (next === account) {
+    for (const post of posts.values()) syncCurrentAuthor(post)
+    return
+  }
+  account = next
+  for (const post of posts.values()) {
+    if (post.detail) Object.assign(post.detail, { liked: false, favorited: false, following: false, followedBy: false })
+  }
+  posts.clear()
+  authorPosts.clear()
+  references.clear()
+  for (const key of Object.keys(relationshipStates)) delete relationshipStates[key]
+  interactionBusy.clear()
+  flights.clear()
+  interactionRevision.value++
+})
+
+export function setRelationship(userId: string, following: boolean, followedBy: boolean) {
+  const old = relationshipStates[userId]
+  if (old?.following === following && old.followedBy === followedBy) return
+  relationshipStates[userId] = { following, followedBy }
+  for (const post of authorPosts.get(userId) || []) {
+    Object.assign(post.detail ??= {}, { following, followedBy })
+  }
+}
+export function registerPost(next: Post, requestRevision = interactionRevision.value): Post {
+  const existing = posts.get(next.id)
+  if (requestRevision !== interactionRevision.value) {
+    if (existing) {
+      next.likeCount = existing.likeCount
+      next.detail = { ...next.detail, liked: existing.detail?.liked, favorited: existing.detail?.favorited, favoriteCount: existing.detail?.favoriteCount }
+    }
+    const relation = relationshipStates[next.author.id]
+    if (relation) next.detail = { ...next.detail, ...relation }
+  }
+  const detail = { ...existing?.detail }
+  for (const [key, value] of Object.entries(next.detail || {})) if (value !== undefined) (detail as Record<string, unknown>)[key] = value
+  const post = existing || reactive(next)
+  if (existing && existing.author.id !== next.author.id) authorPosts.get(existing.author.id)?.delete(existing)
+  Object.assign(post, next, { detail })
+  syncCurrentAuthor(post)
+  posts.set(post.id, post)
+  let authored = authorPosts.get(post.author.id)
+  if (!authored) authorPosts.set(post.author.id, authored = new Set())
+  authored.add(post)
+  if (post.author.id) setRelationship(post.author.id, !!detail.following, !!detail.followedBy)
+  scheduleSweep()
+  return post
+}
+export function ensureInteractionLogin() {
+  if(postPreviewMode.value)return false
+  if (isLoggedIn()) return true
+  uni.showToast({ title: '请先登录', icon: 'none' })
+  uni.navigateTo({ url: '/pages/login/index' })
+  return false
+}
+export function applyPostInteraction(post: Post, kind: 'like' | 'favorite', result: InteractionResult) {
+  post.detail ??= {}
+  if (kind === 'like') { post.detail.liked = result.active; post.likeCount = result.count }
+  else { post.detail.favorited = result.active; post.detail.favoriteCount = result.count }
+}
+export async function refreshPostInteraction(post: Post) {
+  const viewer = identity(), revision = interactionRevision.value
+  const state = await GET<PostResponse>('/app/post/' + encodeURIComponent(post.id))
+  if (viewer !== identity() || revision !== interactionRevision.value) return
+  Object.assign(post.detail ??= {}, { liked: !!state.liked, favorited: !!state.favorited, following: !!state.following, followedBy: !!state.followedBy, favoriteCount: state.favoriteCount })
+  post.likeCount = state.likeCount; post.commentCount = state.commentCount;post.detail.shareCount=state.shareCount
+  post.author.nickname = state.authorNickname
+  post.author.avatarFrame = state.authorAvatarFrame
+  syncCurrentAuthor(post)
+  if (post.author.id) setRelationship(post.author.id, !!state.following, !!state.followedBy)
+}
+export async function performPostInteraction(post: Post, kind: 'like' | 'favorite'): Promise<InteractionResult | null> {
+  const key = post.id + ':' + kind
+  if (interactionBusy.has(key) || !ensureInteractionLogin()) return null
+  const viewer = identity()
+  const flight = Symbol(key); flights.set(key, flight)
+  interactionBusy.add(key)
+  try {
+    const result = await (kind === 'like' ? toggleLike : toggleFavorite)(post.id)
+    if (identity() !== viewer) return null
+    applyPostInteraction(post, kind, result)
+    if (kind === 'favorite') membershipRevision.favorites++
+    else membershipRevision.likes++
+    interactionRevision.value++
+    return result
+  } catch {
+    // A timeout may follow a committed write. Reconcile, never replay a toggle.
+    if (identity() === viewer) { try { await refreshPostInteraction(post); interactionRevision.value++ } catch { /* Request layer reports the failure. */ } }
+    return null
+  } finally { if (flights.get(key) === flight) { flights.delete(key); interactionBusy.delete(key) } }
+}
+export async function performFollow(userId: string): Promise<InteractionResult | null> {
+  const key = 'follow:' + userId
+  if (!userId || userId === identity() || interactionBusy.has(key) || !ensureInteractionLogin()) return null
+  const viewer = identity()
+  const flight = Symbol(key); flights.set(key, flight)
+  interactionBusy.add(key)
+  try {
+    const result = await toggleFollow(userId)
+    if (identity() !== viewer) return null
+    setRelationship(userId, result.active, !!result.followedBy)
+    membershipRevision.following++
+    interactionRevision.value++
+    return result
+  } catch {
+    if (identity() === viewer) {
+      try {
+        const result = await GET<InteractionResult>('/app/interaction/followState', { userId })
+        if (identity() === viewer) { setRelationship(userId, result.active, !!result.followedBy); membershipRevision.following++; interactionRevision.value++ }
+      } catch { /* Keep the last known relationship. */ }
+    }
+    return null
+  } finally { if (flights.get(key) === flight) { flights.delete(key); interactionBusy.delete(key) } }
+}
+export const fetchStatistics = () => GET<UserStatistics>('/app/user/statistics')
+export async function fetchRelationships(kind: 'followers' | 'following', pageNum: number, pageSize = 20) {
+  const viewer = identity(), revision = interactionRevision.value
+  const page = await GET<Page<UserRelationship>>('/app/user/' + kind, { pageNum, pageSize })
+  if (identity() === viewer && revision === interactionRevision.value)
+    for (const user of page.records) setRelationship(user.userId, user.following, user.followedBy)
+  return page
+}

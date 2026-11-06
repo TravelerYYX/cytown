@@ -1,0 +1,330 @@
+<template>
+  <view class="settings-page" :style="{ paddingTop: statusBarHeight + 'px' }" :class="[uxNative?'ux1':'',uxNative?'ux2':'']">
+    <view class="settings-header" :class="[uxNative?'ux1':'',uxNative?'ux3':'']">
+      <ActionButton class="icon-button" aria-label="返回" @tap="goBack" :class="[uxNative?'ux4':'',uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'']"><AppIcon name="back" :size="40" /></ActionButton>
+      <text class="settings-title" :class="[uxNative?'ux8':'',uxNative?'ux9':'',uxNative?'ux10':'']">设置</text>
+      <view class="header-space"  :class="[uxNative?'ux1':'',uxNative?'ux11':'']"/>
+    </view>
+
+    <scroll-view class="settings-scroll" direction="vertical" :show-scrollbar="false" :class="[uxNative?'ux12':'',uxNative?'ux13':'']">
+      <view class="settings-card" :class="[uxNative?'ux1':'',uxNative?'ux14':'']">
+        <ActionButton :aria-label="&quot;通行证账号与安全&quot;" class="settings-row" hover-class="row-hover" @tap="goAccountSecurity" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux15':'',uxNative?'ux16':'']">
+          <text class="row-title" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux18':'']">通行证账号与安全</text><RowArrow />
+        </ActionButton>
+      </view>
+
+      <view v-if="noticePushEnabled" class="settings-card" :class="[uxNative?'ux1':'',uxNative?'ux14':'']">
+        <ActionButton :aria-label="&quot;系统推送及提醒设置&quot;" class="settings-row" hover-class="row-hover" @tap="openPushSettings" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux15':'',uxNative?'ux16':'']">
+          <text class="row-title" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux18':'']">系统推送及提醒设置</text><RowArrow />
+        </ActionButton>
+      </view>
+
+      <view class="settings-card" :class="[uxNative?'ux1':'',uxNative?'ux14':'']">
+        <ActionButton :aria-label="&quot;护眼模式&quot; + ' ' + String(eyeCareEnabled ? '开启' : '关闭')" class="settings-row" hover-class="row-hover" @tap="openSheet('eye-care')" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux15':'']">
+          <text class="row-title" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux18':'']">护眼模式</text>
+          <view class="row-end" :class="[uxNative?'ux1':'',uxNative?'ux19':'']"><text class="row-value" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux20':'']" :style="uxLayout(uxNodePrefix+'-g1000',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'">{{ eyeCareEnabled ? '开启' : '关闭' }}</text><RowArrow  :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1001'"/></view>
+        </ActionButton>
+        <ActionButton :aria-label="&quot;首页帖子布局&quot; + ' ' + String(feedLayoutLabel)" class="settings-row" hover-class="row-hover" @tap="openSheet('feed-layout')" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux15':'']">
+          <text class="row-title" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux18':'']">首页帖子布局</text>
+          <view class="row-end" :class="[uxNative?'ux1':'',uxNative?'ux19':'']"><text class="row-value" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux20':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1002'">{{ feedLayoutLabel }}</text><RowArrow  :style="uxLayout(uxNodePrefix+'-g1003',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1003'"/></view>
+        </ActionButton>
+        <ActionButton :aria-label="&quot;列表视频自动播放&quot; + ' ' + String(videoAutoplayLabel)" class="settings-row" hover-class="row-hover" @tap="openSheet('video')" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux15':'']">
+          <text class="row-title" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux18':'']">列表视频自动播放</text>
+          <view class="row-end" :class="[uxNative?'ux1':'',uxNative?'ux19':'']"><text class="row-value" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux20':'']" :style="uxLayout(uxNodePrefix+'-g1004',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1004'">{{ videoAutoplayLabel }}</text><RowArrow  :style="uxLayout(uxNodePrefix+'-g1005',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1005'"/></view>
+        </ActionButton>
+        <ActionButton :aria-label="&quot;动图自动播放&quot; + ' ' + String(gifAutoplayLabel)" class="settings-row" hover-class="row-hover" @tap="openSheet('gif')" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux15':'',uxNative?'ux16':'']">
+          <text class="row-title" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux18':'']">动图自动播放</text>
+          <view class="row-end" :class="[uxNative?'ux1':'',uxNative?'ux19':'']"><text class="row-value" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux20':'']" :style="uxLayout(uxNodePrefix+'-g1006',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1006'">{{ gifAutoplayLabel }}</text><RowArrow  :style="uxLayout(uxNodePrefix+'-g1007',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1007'"/></view>
+        </ActionButton>
+      </view>
+
+      <view class="settings-card" :class="[uxNative?'ux1':'',uxNative?'ux14':'']">
+        <ActionButton :aria-label="&quot;关于次元町&quot;" class="settings-row" hover-class="row-hover" @tap="openAbout" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux15':'']">
+          <text class="row-title" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux18':'']">关于次元町</text><RowArrow />
+        </ActionButton>
+        <ActionButton :aria-label="&quot;清除缓存&quot; + ' ' + String(cacheSize)" class="settings-row" hover-class="row-hover" @tap="openDialog('cache')" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux15':'']">
+          <text class="row-title" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux18':'']">清除缓存</text>
+          <view class="row-end" :class="[uxNative?'ux1':'',uxNative?'ux19':'']"><text class="row-value" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux20':'']" :style="uxLayout(uxNodePrefix+'-g1008',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1008'">{{ cacheSize }}</text><RowArrow  :style="uxLayout(uxNodePrefix+'-g1009',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1009'"/></view>
+        </ActionButton>
+        <ActionButton aria-label="清除私聊媒体缓存" class="settings-row" hover-class="row-hover" @tap="openDialog('chat-cache')" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux15':'']"><text class="row-title" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux18':'']">清除私聊媒体缓存</text><RowArrow /></ActionButton>
+        <ActionButton :aria-label="&quot;建议与反馈&quot;" class="settings-row" hover-class="row-hover" @tap="openPlaceholder('建议与反馈')" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux15':'']">
+          <text class="row-title" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux18':'']">建议与反馈</text><RowArrow />
+        </ActionButton>
+        <ActionButton :aria-label="&quot;检查更新&quot;" class="settings-row" hover-class="row-hover" :disabled="updateChecking" @tap="checkUpdate" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux15':'',uxNative?'ux16':'']">
+          <view class="title-with-dot" :class="[uxNative?'ux1':'',uxNative?'ux21':'']"><text class="row-title" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux18':'']" :style="uxLayout(uxNodePrefix+'-g1010',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1010'">{{ updateChecking ? '正在检查…' : '检查更新' }}</text><view v-if="hasUpdate" class="update-dot"  :class="[uxNative?'ux1':'',uxNative?'ux22':'']" :style="uxLayout(uxNodePrefix+'-g1011',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1011'"/></view><RowArrow />
+        </ActionButton>
+      </view>
+
+      <view class="settings-card" :class="[uxNative?'ux1':'',uxNative?'ux14':'']">
+        <ActionButton :aria-label="String(legal)" v-for="(legal, __uxIndex0) in legalRows" :key="legal" class="settings-row" hover-class="row-hover" @tap="openLegal(legal)" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux15':'',uxNative?'ux16':'']">
+          <text class="row-title" :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux9':'',uxNative?'ux18':'']">{{ legal }}</text><RowArrow />
+        </ActionButton>
+      </view>
+
+      <view class="settings-card account-actions" :class="[uxNative?'ux1':'',uxNative?'ux14':'',uxNative?'ux23':'']">
+        <ActionButton :aria-label="&quot;切换账号&quot;" class="settings-row centered-row" hover-class="row-hover" @tap="goSwitchAccount" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux15':'',uxNative?'ux24':'']"><text :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux25':'',uxNative?'ux9':'']">切换账号</text></ActionButton>
+        <ActionButton :aria-label="&quot;退出登录&quot;" class="settings-row centered-row" hover-class="row-hover" @tap="openDialog('logout')" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux15':'',uxNative?'ux24':'',uxNative?'ux16':'']"><text :class="[uxNative?'ux8':'',uxNative?'ux17':'',uxNative?'ux25':'',uxNative?'ux9':'']">退出登录</text></ActionButton>
+      </view>
+      <view class="footer-space"  :class="[uxNative?'ux1':'',uxNative?'ux26':'']" :style="uxLayout(uxNodePrefix+'-n0',[{on:uxNative,declarations:{&quot;height&quot;:&quot;calc(max(42rpx, env(safe-area-inset-bottom, 0px)) + 18rpx)&quot;}}],{})" :id="uxNodePrefix+'-n0'"/>
+    </scroll-view>
+
+    <SettingsBottomSheet
+      :visible="sheetVisible"
+      :title="sheetTitle"
+      :options="sheetOptions"
+      :model-value="sheetValue"
+      @select="selectSheetOption"
+      @close="closeSheet"
+      @closed="sheetKind = null"
+    />
+    <SettingsConfirmDialog
+      :visible="dialogVisible"
+      :title="dialogTitle"
+      :message="dialogMessage"
+      :confirm-text="dialogConfirmText"
+      @cancel="closeDialog(false)"
+      @confirm="closeDialog(true)"
+      @closed="finishDialog"
+    />
+    <EyeCareOverlay />
+  </view>
+</template>
+
+<script setup lang="uts">
+import { enableNoticePush, noticePushCid } from '@/utils/notice-state'
+function openPushSettings():void {
+  if (!noticePushEnabled.value) return
+  uni.showActionSheet({itemList:['开启或管理通知权限','复制测试设备推送标识'],success:result=>{if(result.tapIndex===0)void enableNoticePush().catch(()=>{});else if(noticePushCid.value)uni.setClipboardData({data:noticePushCid.value});else uni.showToast({title:'推送服务尚未连接，请先开启系统推送',icon:'none'})}})
+}
+
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, ref } from 'vue'
+import { GET } from '@/utils/request'
+import { hasAppUpdate,checkAppUpdate,updateChecking } from '@/utils/app-update'
+
+import AppIcon from '@/components/AppIcon.uvue'
+import EyeCareOverlay from '@/components/EyeCareOverlay.uvue'
+import SettingsBottomSheet from '@/components/SettingsBottomSheet.uvue'
+import SettingsConfirmDialog from '@/components/SettingsConfirmDialog.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { clearAppCache, clearLogin, getStorageCacheSize, isLoggedIn } from '@/utils/auth'
+import { logoutSession } from '@/utils/auth-api'
+import { fetchHomeConfig } from '@/utils/home-config-api'
+import { fetchLegalLinks, openLegalLink, type LegalLinks } from '@/utils/legal-links'
+import {
+  feedLayout,
+  setFeedLayout,
+  isFeedLayout,
+  eyeCareEnabled,
+  gifAutoplayMode,
+  setEyeCare,
+  setGifAutoplay,
+  setVideoAutoplay,
+  videoAutoplayMode,
+  type GifAutoplayMode,
+  type VideoAutoplayMode
+} from '@/utils/app-settings'
+
+type SheetKind = 'eye-care' | 'video' | 'gif' | 'feed-layout'
+import { imageCacheSize, clearImageCache } from '@/utils/media-cache'
+
+import { clearChatMedia } from '@/utils/chat-cache'
+type DialogKind = 'cache' | 'chat-cache' | 'logout'
+type Option = { label: string; value: string }
+
+import RowArrow from '@/components/RowArrow.uvue'
+
+const { statusBarHeight } = useWindowInsets()
+const cacheSize = ref('0.00M')
+const noticePushEnabled = ref(false)
+const hasUpdate = hasAppUpdate
+const sheetKind = ref<SheetKind | null>(null)
+const sheetVisible = ref(false)
+const dialogKind = ref<DialogKind | null>(null)
+const dialogVisible = ref(false)
+const confirmedDialog = ref<DialogKind | null>(null)
+const legalRows = ['用户协议', '隐私政策', '个人信息收集清单', '第三方共享个人信息清单']
+const legalLinks = ref<LegalLinks | null>(null)
+let legalLinksPending: Promise<LegalLinks> | null = null
+let openingLegal = false
+
+function loadLegalLinks(): Promise<LegalLinks> {
+  return legalLinksPending ||= fetchLegalLinks().then(value => {
+    legalLinks.value = value
+    return value
+  }).finally(() => { legalLinksPending = null })
+}
+
+async function openLegal(title: string): Promise<void> {
+  if (title === '第三方共享个人信息清单') { openPlaceholder(title); return }
+  if (openingLegal) return
+  openingLegal = true
+  try {
+    const value = legalLinks.value || await loadLegalLinks()
+    const link = title === '用户协议' ? value.userAgreement : title === '隐私政策' ? value.privacyPolicy : value.personalInfoCollection
+    openLegalLink(link, title)
+  } catch {
+    uni.showToast({ title: '链接加载失败，请点击重试', icon: 'none' })
+  } finally { openingLegal = false }
+}
+
+const videoLabels: Record<VideoAutoplayMode, string> = { 'all-networks': '移动网络和Wi-Fi', 'wifi-only': '仅Wi-Fi', off: '关闭' }
+const gifLabels: Record<GifAutoplayMode, string> = { smart: '智能模式', always: '始终播放', off: '关闭' }
+const videoAutoplayLabel = computed(() => videoLabels[videoAutoplayMode.value])
+const gifAutoplayLabel = computed(() => gifLabels[gifAutoplayMode.value])
+const feedLayoutLabel = computed(() => feedLayout.value === 'waterfall' ? '双列瀑布布局' : '单列布局')
+const sheetTitle = computed(() => sheetKind.value === 'feed-layout' ? '首页帖子布局' : sheetKind.value === 'eye-care' ? '护眼模式' : sheetKind.value === 'video' ? '列表视频自动播放' : '动图自动播放')
+const sheetValue = computed(() => sheetKind.value === 'feed-layout' ? feedLayout.value : sheetKind.value === 'eye-care' ? (eyeCareEnabled.value ? 'on' : 'off') : sheetKind.value === 'video' ? videoAutoplayMode.value : gifAutoplayMode.value)
+const sheetOptions = computed<Option[]>(() => {
+  if (sheetKind.value === 'feed-layout') return [{ label: '单列布局', value: 'single' }, { label: '双列瀑布布局', value: 'waterfall' }]
+  if (sheetKind.value === 'eye-care') return [{ label: '开启', value: 'on' }, { label: '关闭', value: 'off' }]
+  if (sheetKind.value === 'video') return [
+    { label: '移动网络和Wi-Fi', value: 'all-networks' },
+    { label: '仅Wi-Fi', value: 'wifi-only' },
+    { label: '关闭', value: 'off' }
+  ]
+  return [{ label: '智能模式', value: 'smart' }, { label: '始终播放', value: 'always' }, { label: '关闭', value: 'off' }]
+})
+
+const dialogTitle = computed(() => dialogKind.value === 'chat-cache' ? '清除私聊媒体缓存' : dialogKind.value === 'cache' ? '清除缓存' : '温馨提示')
+const dialogMessage = computed(() => dialogKind.value === 'chat-cache' ? '仅清除私聊图片、表情和视频缓存，聊天记录保留。再次查看时需要重新下载。' : dialogKind.value === 'cache' ? '确定要清除缓存数据吗？' : '您确定要退出登录吗？')
+const dialogConfirmText = computed(() => dialogKind.value === 'cache' || dialogKind.value === 'chat-cache' ? '清除' : '确认')
+
+const refreshCacheSize = async () => { const imageBytes=await imageCacheSize(); cacheSize.value=((imageBytes/1024**2)+parseFloat(getStorageCacheSize())).toFixed(2)+'M' }
+onShow(refreshCacheSize)
+onShow(() => {
+  noticePushEnabled.value = false
+  void GET<{ enabled: boolean }>('/app/notice/push-config', undefined, true)
+    .then(config => { noticePushEnabled.value = config.enabled === true })
+    .catch(() => {})
+})
+onShow(() => { void fetchHomeConfig().catch(() => {}) })
+onShow(() => { legalLinks.value = null; void loadLegalLinks().catch(() => {}) })
+
+function openSheet(kind: SheetKind) { sheetKind.value = kind; sheetVisible.value = true }
+function closeSheet() { sheetVisible.value = false }
+function selectSheetOption(value: string) {
+  if (sheetKind.value === 'feed-layout' && isFeedLayout(value)) setFeedLayout(value)
+  else if (sheetKind.value === 'eye-care') setEyeCare(value === 'on')
+  else if (sheetKind.value === 'video') setVideoAutoplay(value as VideoAutoplayMode)
+  else if (sheetKind.value === 'gif') setGifAutoplay(value as GifAutoplayMode)
+  closeSheet()
+}
+
+function openDialog(kind: DialogKind) { dialogKind.value = kind; confirmedDialog.value = null; dialogVisible.value = true }
+function closeDialog(confirmed: boolean) {
+  if (confirmed) confirmedDialog.value = dialogKind.value
+  dialogVisible.value = false
+}
+async function finishDialog() {
+  const action = confirmedDialog.value
+  dialogKind.value = null
+  confirmedDialog.value = null
+  if (action === 'chat-cache') { await clearChatMedia(); uni.showToast({title:'私聊媒体缓存已清除',icon:'none'}); return }
+  if (action === 'cache') {
+    await clearImageCache()
+    clearAppCache()
+    await refreshCacheSize()
+    uni.showToast({ title: '缓存已清除', icon: 'none' })
+    return
+  }
+  if (action === 'logout') {
+    try { await logoutSession() } catch { /* 网络失败也继续本地退出。 */ }
+    clearLogin()
+    uni.showToast({ title: '已退出登录', icon: 'none' })
+    setTimeout(() => uni.reLaunch({ url: '/pages/index/index' }), 500)
+  }
+}
+
+onBackPress(() => {
+  if (dialogVisible.value) { closeDialog(false); return true }
+  if (sheetVisible.value) { closeSheet(); return true }
+  return false
+})
+
+const goBack = () => { getCurrentPages().length > 1 ? uni.navigateBack() : uni.reLaunch({ url: '/pages/index/index' }) }
+const openAbout = () => uni.navigateTo({ url: '/pages/settings/about' })
+const openPlaceholder = (title: string) => uni.navigateTo({ url: '/pages/placeholder/index?kind=feature&title=' + encodeURIComponent(title) })
+const goAccountSecurity = () => {
+  if (!isLoggedIn()) { uni.navigateTo({ url: '/pages/login/index' }); return }
+  uni.navigateTo({ url: '/pages/settings/account-security/index' })
+}
+const goSwitchAccount = () => {
+  if (!isLoggedIn()) { uni.navigateTo({ url: '/pages/login/index' }); return }
+  uni.navigateTo({ url: '/pages/switch-account/index' })
+}
+const checkUpdate = () => { if(!updateChecking.value)void checkAppUpdate(true) }
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.settings-page { position: fixed; inset: 0; display: flex; flex-direction: column; background: #f6f7f8; }
+.settings-page button { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; font-size: inherit; line-height: normal; overflow: visible; text-align: left; }
+.settings-page button::after { border: 0; }
+.settings-header { display: flex; align-items: center; height: 108rpx; flex-shrink: 0; padding: 0 28rpx; background: #f6f7f8; flex-direction: row; }
+.settings-header .icon-button { display: flex; align-items: center; justify-content: center; width: 64rpx; height: 64rpx; flex-direction: row; }
+.settings-title { flex: 1; min-width: 0; text-align: center; color: #303436; font-size: 27rpx; font-weight: 400; }
+.header-space { width: 64rpx; }
+.settings-scroll { flex: 1; height: 0; min-height: 0; }
+.settings-card { margin: 28rpx 32rpx 0; overflow: hidden; border-radius: 30rpx; background: #fff; }
+.settings-page .settings-row { width: 100%; min-height: 102rpx; padding: 0 30rpx; display: flex; align-items: center; justify-content: space-between; border-bottom: 1rpx solid #f0f1f2; flex-direction: row; }
+.settings-page .settings-row:last-child { border-bottom: 0; }
+.row-hover { background: #f7f8f9 !important; }
+.row-title { color: #303436; font-size: 25rpx; }
+.row-end { display: flex; align-items: center; flex-shrink: 0; gap: 9rpx; margin-left: 20rpx; flex-direction: row; }
+.row-value { color: #a2a7aa; font-size: 21rpx; }
+:deep(.row-arrow) { width: 30rpx; height: 30rpx; display: flex; align-items: center; justify-content: center; flex-shrink: 0; flex-direction: row; }
+.title-with-dot { display: flex; align-items: center; gap: 12rpx; flex-direction: row; }
+.update-dot { width: 12rpx; height: 12rpx; flex-shrink: 0; border-radius: 50%; background: #f6557b; }
+.account-actions { margin-top: 28rpx; }
+.settings-page .centered-row { justify-content: center; color: #303436; font-size: 25rpx; text-align: center; }
+.footer-space { height: calc(max(42rpx, env(safe-area-inset-bottom, 0px)) + 18rpx); }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux8{color:var(--text-main);font-size:26rpx;}
+.ux17{line-height:normal;text-align:left;}
+.ux25{color:#303436;font-size:25rpx;text-align:center;}
+.ux1{}
+.ux12{}
+.ux9{}
+.ux4{}
+.ux5{display:flex;flex-direction:row;align-items:center;justify-content:center;width:64rpx;height:64rpx;flex-shrink:0;}
+.ux2{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;background-color:#f6f7f8;}
+.ux3{display:flex;flex-direction:row;align-items:center;height:108rpx;flex-shrink:0;padding:0 28rpx;background-color:#f6f7f8;}
+.ux10{flex:1;min-width:0;text-align:center;color:#303436;font-size:27rpx;font-weight:400;}
+.ux11{width:64rpx;}
+.ux13{flex:1;height:0;min-height:0;}
+.ux14{margin:28rpx 32rpx 0;overflow:hidden;border-radius:30rpx;background-color:#fff;}
+.ux18{color:#303436;font-size:25rpx;}
+.ux19{display:flex;flex-direction:row;align-items:center;flex-shrink:0;margin-left:20rpx;}
+.ux20{color:#a2a7aa;font-size:21rpx;}
+.ux21{display:flex;flex-direction:row;align-items:center;}
+.ux22{width:12rpx;height:12rpx;flex-shrink:0;border-radius:50%;background-color:#f6557b;}
+.ux23{margin-top:28rpx;}
+.ux26{}
+.ux6{margin:0;padding:0;border:0px;border-radius:0;background-color:transparent;line-height:normal;overflow:visible;text-align:left;}
+.ux7{display:flex;flex-direction:row;align-items:center;justify-content:center;width:64rpx;height:64rpx;}
+.ux15{width:100%;min-height:102rpx;padding:0 30rpx;display:flex;flex-direction:row;align-items:center;justify-content:space-between;border-bottom:1rpx solid #f0f1f2;}
+.ux24{justify-content:center;color:#303436;font-size:25rpx;text-align:center;}
+.ux16{border-bottom:0;}
+/* #endif */
+</style>

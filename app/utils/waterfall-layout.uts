@@ -1,0 +1,15 @@
+import type { MediaSkeletonSpec, Post } from '@/types/home'
+import { mediaAspectRatio } from './media-layout'
+
+export function waterfallCoverRatio(media?: MediaSkeletonSpec, fallback = 1) {
+  return mediaAspectRatio(media, fallback)
+}
+
+// Use the same rpx geometry on both platforms, before asynchronous image loading.
+export function waterfallPostHeight(post: Post) {
+  const media = post.media[0]
+  const text = post.title.trim() || (!media ? post.content?.trim() : '') || ''
+  const units = Array.from(text).reduce((sum, char) => sum + (char.charCodeAt(0) <= 255 ? .5 : 1), 0)
+  const lines = text ? Math.min(2, Math.ceil(units / ((351 - 36) / 21))) : 0
+  return (media ? 351 / waterfallCoverRatio(media) : 0) + lines * 30 + 34 + 10 + 34 + 20
+}

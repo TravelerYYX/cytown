@@ -1,0 +1,32 @@
+import { ref, watch } from 'vue'
+import { authRevision, getUserInfo, getSessionGeneration, isLoggedIn } from './auth'
+import { GET, POST } from './request'
+interface UserLocation { province: string | null; locatedAt: number | null }
+export const ownIpProvince = ref('未知')
+let owner = '', flight: Promise<void> | null = null, checkedAt = 0
+export async function refreshOwnLocation(): Promise<void> {
+  if (!isLoggedIn()) return
+  const id = getUserInfo()?.userId || '', session = getSessionGeneration()
+  if (id !== owner) { owner = id; ownIpProvince.value = '未知'; checkedAt = 0; flight = null }
+  if (flight) return flight
+  if (Date.now() - checkedAt < 60_000) return
+  const current = (async () => {
+    try {
+      const saved = await GET<UserLocation>('/app/user/location', undefined, true)
+      if (session !== getSessionGeneration() || id !== owner) return
+      ownIpProvince.value = saved.province || '未知'
+      if (saved.locatedAt && Date.now() - saved.locatedAt < 86_400_000) { checkedAt = Date.now(); return }
+      const updated = await POST<UserLocation>('/app/user/location/refresh', undefined, true)
+      if (session !== getSessionGeneration() || id !== owner) return
+      ownIpProvince.value = updated.province || '未知'; checkedAt = Date.now()
+    } catch { /* Keep the last known province if the locator is unavailable. */ }
+  })()
+  flight = current
+  try { await current } finally { if (flight === current) flight = null }
+}
+watch(authRevision, () => {
+  const id = isLoggedIn() ? getUserInfo()?.userId || '' : ''
+  if (id === owner) return
+  owner = id; ownIpProvince.value = '未知'; checkedAt = 0; flight = null
+  if (id) void refreshOwnLocation()
+})

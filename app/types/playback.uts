@@ -1,0 +1,8 @@
+export interface PlaybackOptions {
+  source: string; poster: string; qualities: { height: number; url: string }[]
+  quality: string | number; rate: number; command: { id: number; type: string; value?: number }
+  active: boolean; suspendId: number; autoplay: boolean
+  muted?: boolean; loop?: boolean; objectFit?: 'contain' | 'cover'
+  fullscreen?: boolean
+}
+export interface PlaybackEvent { blocked?: boolean; time?: number; duration?: number; playing?: boolean; waiting?: boolean; level?: number; error?: string; ended?: boolean; suspended?: number; buffered?: number; fullscreen?: boolean }

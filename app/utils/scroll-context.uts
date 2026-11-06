@@ -1,0 +1,18 @@
+import type { InjectionKey } from 'vue'
+import type { AnchorProvider } from './scroll-anchors'
+export interface ScrollSnapshot { top: number; height: number; viewportTop: number }
+export interface PaneScrollContext {
+  snapshot: () => ScrollSnapshot
+  subscribe: (listener: () => void) => () => void
+  moveBy: (delta: number) => void
+  invalidate: () => void
+  registerAnchor: (provider: AnchorProvider) => () => void
+  preserveLayout: (update: () => void) => void
+}
+export const paneScrollKey: InjectionKey<PaneScrollContext> = Symbol('ct-native-pane')
+export const postLayoutKey: InjectionKey<() => void> = Symbol('ct-post-layout')
+export function firstAfter(offsets: number[], value: number): number {
+  let low = 0, high = Math.max(0, offsets.length - 2)
+  while (low < high) { const mid = (low + high) >> 1; if (offsets[mid + 1]! <= value) low = mid + 1; else high = mid }
+  return low
+}

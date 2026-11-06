@@ -1,0 +1,162 @@
+<script setup lang="uts">
+	import { flushMediaCacheMetadata, syncMediaCacheConfig } from '@/utils/media-cache'
+	import { refreshNativePreferences } from '@/utils/native-styles'
+	import { refreshOwnLocation } from '@/utils/user-location'
+	onShow(() => { void refreshOwnLocation() })
+	import { isLoggedIn } from '@/utils/auth'
+	import { fetchMe } from '@/utils/auth-api'
+	import { launchNotices, showNotices, hideNotices } from '@/utils/notice-state'
+	import { launchChat, showChat, hideChat } from '@/utils/chat-state'
+	import { launchSocial, showSocial, hideSocial } from '@/utils/social-inbox'
+	onLaunch(launchSocial)
+	onShow(showSocial)
+	onHide(hideSocial)
+	onLaunch(launchChat)
+	onShow(showChat)
+	onHide(hideChat)
+	onLaunch(launchNotices)
+	onShow(showNotices)
+	onHide(hideNotices)
+
+	import { launchAppUpdate, showAppUpdate, hideAppUpdate } from '@/utils/app-update'
+
+	onLaunch(() => { void syncMediaCacheConfig() })
+	onLaunch(launchAppUpdate)
+	onShow(showAppUpdate)
+	onHide(hideAppUpdate)
+	onShow(refreshNativePreferences)
+	// A remembered session counts on the first authenticated request of each Shanghai day.
+	onShow(() => { if (isLoggedIn()) void fetchMe().catch(() => { }) })
+
+	onHide(() => { void flushMediaCacheMetadata().catch(() => { }) })
+</script>
+
+<style>
+	/* #ifndef APP */
+
+
+	page {
+
+		--brand: #00c3ff;
+
+		--text-main: #242729;
+
+		--text-sub: #94999c;
+
+		--surface: #fff;
+
+		--page-background: #f7f7f7;
+
+		--skeleton: #e6e6e6;
+
+		--line: #f3f3f3;
+
+		--danger: #ff587d;
+
+		background: var(--surface);
+
+		color: var(--text-main);
+
+		font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+
+		font-size: 26rpx;
+
+	}
+
+	view,
+	scroll-view,
+	text,
+	input,
+	textarea,
+	button {
+		box-sizing: border-box;
+	}
+
+	.app-shell button,
+	.destination-page button,
+	.post-detail button,
+	.publish-page button,
+	.topic-page button {
+		margin: 0;
+		padding: 0;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		line-height: normal;
+		font-size: inherit;
+		color: inherit;
+		overflow: visible;
+	}
+
+	.social-page button::after,
+	.app-shell button::after,
+	.destination-page button::after,
+	.post-detail button::after,
+	.publish-page button::after,
+	.topic-page button::after {
+		border: 0;
+	}
+
+	.tap {
+		opacity: .65;
+	}
+
+	.icon-button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 64rpx;
+		height: 64rpx;
+		flex-shrink: 0;
+	}
+
+	.screen {
+		position: absolute;
+		inset: 0;
+		background: var(--surface);
+		overflow: hidden;
+	}
+
+	.screen-scroll {
+		width: 100%;
+		height: 100%;
+	}
+
+	.row {
+		display: flex;
+		align-items: center;
+	}
+
+	.load-tip {
+		text-align: center;
+		color: var(--text-sub);
+		font-size: 22rpx;
+		padding: 30rpx 0 40rpx;
+	}
+
+	::-webkit-scrollbar {
+		display: none;
+		width: 0;
+		height: 0;
+	}
+
+
+	/* #endif */
+</style>
+
+<style>
+	/* #ifdef APP */
+	page {
+		--brand: #00c3ff;
+		--text-main: #242729;
+		--text-sub: #94999c;
+		--surface: #ffffff;
+		--page-background: #f7f7f7;
+		--skeleton: #e6e6e6;
+		--line: #f3f3f3;
+		--danger: #ff587d;
+		background-color: #ffffff;
+	}
+
+	/* #endif */
+</style>

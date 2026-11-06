@@ -1,0 +1,70 @@
+// #ifdef WEB
+import jsQR from 'jsqr'
+
+/** Browser-only camera. Keep media streams and DOM objects outside reactive state. */
+export function createBrowserQrReader(hostId: string, found: (value: string) => void, failed: (message: string) => void) {
+  let stream: MediaStream | null = null
+  let video: HTMLVideoElement | null = null
+  let timer = 0
+  let generation = 0
+  const canvas = document.createElement('canvas')
+  const context = canvas.getContext('2d', { willReadFrequently: true })!
+  function stop() {
+    generation++
+    window.clearTimeout(timer)
+    stream?.getTracks().forEach(track => track.stop())
+    stream = null
+    if (video) { video.srcObject = null; video.remove(); video = null }
+  }
+  function decode(source: HTMLVideoElement | HTMLImageElement, width: number, height: number): string {
+    const scale = Math.min(1, 1280 / Math.max(width, height))
+    canvas.width = Math.max(1, Math.round(width * scale))
+    canvas.height = Math.max(1, Math.round(height * scale))
+    context.drawImage(source, 0, 0, canvas.width, canvas.height)
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height)
+    return jsQR(pixels.data, pixels.width, pixels.height, { inversionAttempts: 'attemptBoth' })?.data ?? ''
+  }
+  async function start() {
+    stop()
+    const revision = generation
+    if (!navigator.mediaDevices?.getUserMedia) { failed('当前浏览器无法使用相机，请使用 HTTPS 或从相册选择图片'); return }
+    try {
+      const camera = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 1920 } } })
+      if (revision !== generation) { camera.getTracks().forEach(track => track.stop()); return }
+      stream = camera
+      const host = document.getElementById(hostId)
+      if (!host) { stop(); return }
+      const preview = document.createElement('video')
+      video = preview
+      preview.autoplay = true; preview.muted = true; preview.playsInline = true
+      preview.setAttribute('playsinline', 'true')
+      preview.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;'
+      host.appendChild(preview)
+      preview.srcObject = camera
+      await preview.play()
+      function frame() {
+        if (revision !== generation || !video) return
+        try {
+          if (video.readyState >= 2 && video.videoWidth > 0) {
+            const result = decode(video, video.videoWidth, video.videoHeight)
+            if (result) { stop(); found(result); return }
+          }
+        } catch { /* A frame may be unavailable while the camera is warming up. */ }
+        timer = window.setTimeout(frame, 180)
+      }
+      frame()
+    } catch (error) {
+      if (revision !== generation) return
+      stop()
+      failed(error instanceof DOMException && error.name === 'NotAllowedError' ? '请允许使用相机，或从相册选择二维码' : '相机暂时无法使用，请重试或从相册选择图片')
+    }
+  }
+  async function image(path: string): Promise<string> {
+    const photo = new Image()
+    photo.src = path
+    await photo.decode()
+    return decode(photo, photo.naturalWidth, photo.naturalHeight)
+  }
+  return { start, stop, image }
+}
+// #endif

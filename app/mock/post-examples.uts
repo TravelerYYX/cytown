@@ -1,0 +1,48 @@
+import type { Post } from '@/types/home'
+
+// Display-only fixtures cover the reference layouts. No content resources are loaded.
+export const postExamples: Post[] = [
+  {
+    id: 'example-mixed', author: { id: 'demo-cos', nickname: '羲漓', level: 16 },
+    title: '等待亲亲ing',
+    media: [{ type: 'image', layout: 'square', aspectRatio: 1 }, { type: 'image', layout: 'portrait', aspectRatio: 2 / 3 }],
+    commentCount: 95, likeCount: 2083
+  },
+  {
+    id: 'example-wide-group', author: { id: 'demo-fanart', nickname: '红玉OvO', level: 13 },
+    title: '【观测枢】那只飞过一切的火蝶', content: '修到半夜的产物',
+    media: [{ type: 'image', layout: 'wide', aspectRatio: 16 / 9 }, { type: 'image', layout: 'wide', aspectRatio: 16 / 9 }],
+    commentCount: 18, likeCount: 874
+  },
+  {
+    id: 'example-landscape', author: { id: 'demo-weapon', nickname: '迎阳光逃亡', level: 4 },
+    title: '菲林斯1命，补2命好还是专武好？',
+    content: '我武器一直用的贯虹，常规队伍正常情况一屁股是25w+37w，偶尔会卡第三段大招，就目前来说补二命和专武哪个优先级高一点？感谢大佬指点。',
+    date: '08-27', media: [{ type: 'image', layout: 'wide', aspectRatio: 4 / 3 }, { type: 'image', layout: 'portrait', aspectRatio: 2 / 3 }],
+    commentCount: 33, likeCount: 278,
+    detail: { bio: '音乐不再响起，我们的故事在此终止', favoriteCount: 5, shareCount: 2 }
+  },
+  {
+    id: 'example-portrait', author: { id: 'demo-cos', nickname: '羲漓', level: 16 },
+    title: '芙宁娜深海来信', date: '09-04',
+    media: [{ type: 'image', layout: 'portrait', aspectRatio: 2 / 3 }],
+    tags: ['米游姬低成本COS', '令人心动的COS', 'COS仿妆大作战', 'COS原来这样拍', '芙宁娜'],
+    commentCount: 39, likeCount: 1291,
+    detail: { bio: 'Coser、生活领域作者、百日创作者', favoriteCount: 149, shareCount: 29, collection: '芙宁娜深海来信(777篇)', permission: '允许规范转载' }
+  },
+  {
+    id: 'example-video-wide', author: { id: 'demo-video', nickname: '拉菲骗了茅台', level: 11 },
+    title: '怕黑吗', date: '09-03',
+    media: [{ type: 'video', layout: 'wide', aspectRatio: 2.2, duration: '00:25' }],
+    tags: ['游戏心得', '每日一水', '原神观测枢', '哥伦比娅', '菲林斯', '无神怜爱的梦国'],
+    commentCount: 161, likeCount: 2151,
+    detail: { bio: '伊斯塔露～', favoriteCount: 60, shareCount: 25, permission: '允许规范转载' }
+  },
+  {
+    id: 'example-video-portrait', author: { id: 'demo-video', nickname: '拉菲骗了茅台', level: 11 },
+    title: '竖向视频展示', date: '09-03',
+    media: [{ type: 'video', layout: 'portrait', aspectRatio: 9 / 16, duration: '00:25' }],
+    tags: ['游戏心得', '原神观测枢'], commentCount: 161, likeCount: 2151,
+    detail: { bio: '伊斯塔露～', favoriteCount: 60, shareCount: 25, permission: '允许规范转载' }
+  }
+]

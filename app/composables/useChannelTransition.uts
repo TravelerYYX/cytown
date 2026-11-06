@@ -1,0 +1,35 @@
+import { nextTick, onBeforeUnmount, watch } from 'vue'
+import { uxMedia } from '@/utils/native-styles'
+/** Preserve the existing 220 ms slide/fade without unsupported CSS keyframes. */
+export function useChannelTransition(id: () => string, visible: () => boolean, extraIds?: () => string[]) {
+  // #ifdef APP
+  let animations: UniAnimation[] = []
+  let revision = 0
+  function stop() { revision++; animations.forEach(animation => animation.cancel()); animations = [] }
+  watch(visible, value => { if (!value) stop() })
+  onBeforeUnmount(stop)
+  // #endif
+  async function play(direction: string): Promise<void> {
+    // #ifdef APP
+    stop()
+    if (!visible() || uxMedia('(prefers-reduced-motion: reduce)')) return
+    const token = revision
+    await nextTick()
+    if (token !== revision || !visible()) return
+    const distance = uni.rpx2px(direction === 'from-right' ? 28 : -28)
+    for (const elementId of [id(), ...(extraIds?.() ?? [])]) {
+      const animation = uni.getElementById(elementId)?.animate([
+        { opacity: .35, transform: 'translateX(' + distance + 'px)' },
+        { opacity: 1, transform: 'translateX(0px)' }
+      ], { duration: 220, easing: 'ease-out' })
+      if (animation) {
+        animations.push(animation)
+        // The final frame matches the base styles. Release completed animations
+        // instead of canceling retained effects on recycled list cells later.
+        animation.onfinish = () => { animations = animations.filter(item => item !== animation) }
+      }
+    }
+    // #endif
+  }
+  return { play }
+}

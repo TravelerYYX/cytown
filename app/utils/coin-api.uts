@@ -1,0 +1,29 @@
+import { GET, POST } from './request'
+
+export interface CoinState {
+  balance: number
+  punched: boolean
+  streakDays: number
+  points: number
+  coins: number
+}
+
+export interface CoinLedgerRow {
+  id: string
+  title: string
+  category: string
+  amount: number
+  time: string
+}
+
+export interface CoinLedgerPage {
+  records: CoinLedgerRow[]
+  nextCursor: string
+}
+
+export const fetchCoinState = () => GET<CoinState>('/app/coin/me', undefined, true)
+export const claimCoinPunch = () => POST<CoinState>('/app/coin/punch', undefined, true)
+export function fetchCoinLedger(direction: string, cursor: string): Promise<CoinLedgerPage> {
+  const url = '/app/coin/ledger?direction=' + direction
+  return GET<CoinLedgerPage>(cursor.length > 0 ? url + '&cursor=' + cursor : url, undefined, true)
+}

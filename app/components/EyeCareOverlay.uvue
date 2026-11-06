@@ -1,0 +1,45 @@
+<template>
+  <!-- 使用普通视图，避免 App 原生 cover-view 拦截触摸，导致 pointer-events 无法穿透。 -->
+  <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(a11yPrefix+'-0',{&quot;aria-hidden&quot;:&quot;true&quot;})" v-if="eyeCareEnabled" class="eye-care-overlay"   :class="[uxNative?'ux0':'',uxNative?'ux1':'']"/>
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :aria-hidden="&quot;true&quot;" v-if="eyeCareEnabled" class="eye-care-overlay"   :class="[uxNative?'ux0':'',uxNative?'ux1':'']"/>
+<!-- #endif -->
+</template>
+
+<script setup lang="uts">
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { eyeCareEnabled } from '@/utils/app-settings'
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.eye-care-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: rgba(255, 205, 112, .105);
+  mix-blend-mode: multiply;
+}
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+
+.ux0{}
+.ux1{position:fixed;top:0;right:0;bottom:0;left:0;z-index:9999;pointer-events:none;background-color:rgba(255, 205, 112, .105);}
+/* #endif */
+</style>

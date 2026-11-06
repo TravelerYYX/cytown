@@ -1,0 +1,128 @@
+<template>
+  <view v-if="rendered" class="sheet-layer" :class="[{open:entered},uxNative?'ux1':'',uxNative?'ux8':'']">
+    <view class="sheet-backdrop" @tap="requestClose"  :class="[uxNative?'ux1':'',uxNative?'ux9':'',uxNative&amp;&amp;!!entered?'ux17':'']"/>
+    <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(uxNodePrefix+'-n0',{&quot;role&quot;:&quot;dialog&quot;,&quot;aria-modal&quot;:&quot;true&quot;})" class="settings-sheet"   @tap.stop :class="[uxNative?'ux1':'',uxNative?'ux10':'',uxNative&amp;&amp;!!entered?'ux18':'']" :style="uxLayout(uxNodePrefix+'-n0',[{on:uxNative,declarations:{&quot;padding&quot;:&quot;18rpx 32rpx calc(max(28rpx, env(safe-area-inset-bottom, 0px)) + 12rpx)&quot;}}],{})" :id="uxNodePrefix+'-n0'">
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :role="&quot;dialog&quot;" :aria-modal="&quot;true&quot;" class="settings-sheet"   @tap.stop :class="[uxNative?'ux1':'',uxNative?'ux10':'',uxNative&amp;&amp;!!entered?'ux18':'']" :style="uxLayout(uxNodePrefix+'-n0',[{on:uxNative,declarations:{&quot;padding&quot;:&quot;18rpx 32rpx calc(max(28rpx, env(safe-area-inset-bottom, 0px)) + 12rpx)&quot;}}],{})" :id="uxNodePrefix+'-n0'">
+<!-- #endif -->
+      <view class="sheet-handle"  :class="[uxNative?'ux1':'',uxNative?'ux11':'']"/>
+      <text class="sheet-heading" :class="[uxNative?'ux19':'',uxNative?'ux23':'',uxNative?'ux12':'']">{{ title }}</text>
+      <view class="sheet-options" :class="[uxNative?'ux1':'',uxNative?'ux13':'']">
+        <ActionButton :aria-label="option.label" v-for="(option, __uxIndex0) in options" :key="option.value" class="sheet-option" hover-class="sheet-option-hover" @tap="select(option.value)" :class="[uxNative?'ct-native-button':'',uxNative?'ux24':'',uxNative?'ux14':'',uxNative?'ux16':'']">
+          <text :class="[uxNative?'ux19':'',uxNative?'ux30':'',uxNative?'ux23':'']">{{ option.label }}</text>
+          <AppIcon v-if="option.value === modelValue" name="check" tone="cyan" :size="42" />
+        </ActionButton>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import ActionButton from '@/components/ActionButton.uvue'
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { nextTick, onUnmounted, ref, watch } from 'vue'
+import AppIcon from '@/components/AppIcon.uvue'
+
+type SheetOption = { label: string; value: string }
+const props = defineProps<{ visible: boolean; title: string; options: SheetOption[]; modelValue: string }>()
+const emit = defineEmits<{ close: []; closed: []; select: [value: string] }>()
+const rendered = ref(false)
+const entered = ref(false)
+let closeTimer: ReturnType<typeof setTimeout> | undefined
+let enterTimer: ReturnType<typeof setTimeout> | undefined
+
+watch(() => props.visible, async visible => {
+  if (closeTimer) clearTimeout(closeTimer)
+  if (enterTimer) clearTimeout(enterTimer)
+  if (visible) {
+    rendered.value = true
+    entered.value = false
+    await nextTick()
+    enterTimer = setTimeout(() => { entered.value = true }, 20)
+    return
+  }
+  if (!rendered.value) return
+  entered.value = false
+  closeTimer = setTimeout(() => {
+    rendered.value = false
+    emit('closed')
+  }, 230)
+}, { immediate: true })
+
+const requestClose = () => emit('close')
+const select = (value: string) => emit('select', value)
+onUnmounted(() => { if (closeTimer) clearTimeout(closeTimer); if (enterTimer) clearTimeout(enterTimer) })
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.sheet-layer { position: fixed; inset: 0; z-index: 700; }
+.sheet-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, .56); opacity: 0; transition: opacity 220ms ease; }
+.settings-sheet { position: absolute; left: 0; right: 0; bottom: 0; min-height: 560rpx; padding: 18rpx 32rpx calc(max(28rpx, env(safe-area-inset-bottom, 0px)) + 12rpx); border-radius: 52rpx 52rpx 0 0; background: #f6f7f8; transform: translateY(102%); transition: transform 280ms cubic-bezier(.22, .8, .28, 1); }
+.sheet-layer.open .sheet-backdrop { opacity: 1; }
+.sheet-layer.open .settings-sheet { transform: translateY(0); }
+.sheet-handle { width: 66rpx; height: 9rpx; margin: 0 auto 72rpx; border-radius: 8rpx; background: #e3e7eb; }
+.sheet-heading { display: block; padding: 0 22rpx 118rpx; color: #565b5f; font-size: 29rpx; }
+.sheet-options { overflow: hidden; border-radius: 30rpx; background: #fff; }
+.sheet-option { width: 100%; min-height: 106rpx; margin: 0; padding: 0 38rpx; display: flex; align-items: center; justify-content: space-between; border: 0; border-bottom: 1rpx solid #f0f1f2; border-radius: 0; background: #fff; color: #303436; font-size: 29rpx; line-height: normal; text-align: left; flex-direction: row; }
+.sheet-option::after { border: 0; }
+.sheet-option:last-child { border-bottom: 0; }
+.sheet-option-hover { background: #f7f8f9; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux19{color:var(--text-main);font-size:26rpx;}
+
+
+
+.ux30{color:#303436;font-size:29rpx;line-height:normal;text-align:left;}
+
+
+
+
+
+.ux1{}
+.ux23{}
+.ux24{}
+
+
+
+
+
+
+.ux8{position:fixed;top:0;right:0;bottom:0;left:0;z-index:700;}
+.ux9{position:absolute;top:0;right:0;bottom:0;left:0;background-color:rgba(0, 0, 0, .56);opacity:0;transition:opacity 220ms ease;}
+.ux10{position:absolute;left:0;right:0;bottom:0;min-height:560rpx;border-radius:52rpx 52rpx 0 0;background-color:#f6f7f8;transform:translateY(102%);transition:transform 280ms cubic-bezier(.22, .8, .28, 1);}
+.ux11{width:66rpx;height:9rpx;margin:0 auto 72rpx;border-radius:8rpx;background-color:#e3e7eb;}
+.ux12{display:flex;flex-direction:column;padding:0 22rpx 118rpx;color:#565b5f;font-size:29rpx;}
+.ux13{overflow:hidden;border-radius:30rpx;background-color:#fff;}
+.ux14{width:100%;min-height:106rpx;margin:0;padding:0 38rpx;display:flex;flex-direction:row;align-items:center;justify-content:space-between;border:0px;border-bottom:1rpx solid #f0f1f2;border-radius:0;background-color:#fff;color:#303436;font-size:29rpx;line-height:normal;text-align:left;}
+
+
+
+
+
+
+.ux16{border-bottom:0;}
+.ux17{opacity:1;}
+.ux18{transform:translateY(0);}
+/* #endif */
+</style>

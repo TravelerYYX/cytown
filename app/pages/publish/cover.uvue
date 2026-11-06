@@ -1,0 +1,116 @@
+<template>
+  <view class="page" :class="[uxNative?'ux0':'',uxNative?'ux1':'']">
+    <view class="status" :style="{ height: statusBarHeight + 'px' }"  :class="[uxNative?'ux0':'']"/>
+    <view class="header" :class="[uxNative?'ux0':'',uxNative?'ux2':'']"><ActionButton :aria-label="&quot;取消&quot;" @tap="back" :class="[uxNative?'ux3':'',uxNative?'ux4':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux8':'']">取消</text></ActionButton><text :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux8':'',uxNative?'ux9':'']">设置封面</text><ActionButton :aria-label="&quot;保存&quot;" class="save" @tap="save" :class="[uxNative?'ux3':'',uxNative?'ux4':'',uxNative?'ux10':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux11':'',uxNative?'ux8':'']">保存</text></ActionButton></view>
+    <scroll-view class="body" direction="vertical" :class="[uxNative?'ux12':'',uxNative?'ux13':'']">
+      <view class="stage" :style="stageStyle" :class="[uxNative?'ux0':'',uxNative?'ux14':'']">
+        <video v-if="videoSource" id="coverVideo" class="source" :src="videoSource" :initial-time="time / 1000" :controls="false" object-fit="contain"  :class="[uxNative?'ux15':'']"/>
+        <image v-else-if="context.coverUrl" class="source" :src="uiAsset(resourceUrl(context.coverUrl))" mode="aspectFit"  :class="[uxNative?'ux15':'']"/>
+        <view class="crop-frame" :class="[uxNative?'ux0':'',uxNative?'ux16':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux17':'',uxNative?'ux8':'']">{{ sourceAspect < 1 ? '竖屏' : sourceAspect > 1 ? '横屏' : '方形' }}封面区域</text></view>
+      </view>
+      <text class="label" :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux8':'',uxNative?'ux18':'']">选择时间 {{ (time / 1000).toFixed(1) }}s</text>
+      <slider :value="time" min="0" :max="Math.max(1, (context.durationMs || 1) - 50)" step="100" activeColor="#10b9ef" @changing="seek" @change="seek" />
+      <text class="hint" :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux8':'',uxNative?'ux19':'']">拖动时间轴选择封面，保留视频原始比例和完整画面。</text>
+      <image v-if="preview" class="preview" :style="stageStyle" :src="uiAsset(resourceUrl(preview))" mode="aspectFit"  :class="[uxNative?'ux20':'']"/>
+    </scroll-view>
+    <EyeCareOverlay />
+  </view>
+</template>
+
+<script setup lang="uts">
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, ref } from 'vue'
+
+import { mediaUrl as resourceUrl } from '@/utils/media-cache'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { updateVideoCover } from '@/utils/publish-api'
+import type { Asset } from '@/types/publish'
+
+const { statusBarHeight } = useWindowInsets()
+const context = ref<Partial<Asset>>({ durationMs: 1, width: 16, height: 9 })
+const time = ref(0)
+const preview = ref('')
+let video: ReturnType<typeof uni.createVideoContext> | undefined
+const videoSource = computed(() => context.value.localPath || resourceUrl(context.value.originalUrl))
+const sourceAspect = computed(() => (context.value.width || 16) / (context.value.height || 9))
+const stageStyle = computed(() => {
+  const width = Math.min(694, 820 * sourceAspect.value)
+  return { width: width + 'rpx', height: width / sourceAspect.value + 'rpx' }
+})
+function seek(event: { detail: { value: number } }) {
+  time.value = event.detail.value
+  video?.seek(time.value / 1000)
+}
+const back = () => uni.navigateBack()
+async function save() {
+  try {
+    const asset = await updateVideoCover(Number(context.value.id), { timeMs: time.value, x: 0, y: 0, width: 1, height: 1 })
+    preview.value = asset.coverUrl
+    uni.setStorageSync('publish-cover-result', asset)
+    setTimeout(back, 350)
+  } catch {}
+}
+onLoad(() => {
+  context.value = uni.getStorageSync('publish-cover-context') || { durationMs: 1, width: 16, height: 9 }
+  time.value = context.value.coverTimeMs || Math.min(1500, (context.value.durationMs || 1) / 2)
+  preview.value = context.value.coverUrl || ''
+  setTimeout(() => { video = uni.createVideoContext('coverVideo') }, 50)
+})
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.page { position: fixed; inset: 0; display: flex; flex-direction: column; background: #fff; color: #25282a; }
+.header { height: 94rpx; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 32rpx; border-bottom: 1rpx solid #eee; flex-direction: row; }
+.header > text { font-size: 28rpx; font-weight: 600; }
+.header button { width: 90rpx; color: #777; text-align: left; }
+.header .save { text-align: right; color: #10b9ef; }
+.body { height: 0; min-height: 0; flex: 1; padding: 28rpx; box-sizing: border-box; }
+.stage { position: relative; margin: auto; overflow: hidden; border-radius: 16rpx; background: #111; }
+.source { position: absolute; inset: 0; width: 100%; height: 100%; }
+.crop-frame { position: absolute; inset: 0; box-sizing: border-box; border: 4rpx solid #10b9ef; color: #fff; display: flex; align-items: center; justify-content: center; text-shadow: 0 1px 3px #000; pointer-events: none; flex-direction: row; }
+.label { display: block; margin-top: 34rpx; font-size: 22rpx; }
+.hint { display: block; margin: 30rpx 0; color: #999; font-size: 20rpx; line-height: 1.6; }
+.preview { display: block; margin: 20rpx auto 0; border-radius: 16rpx; background: #111; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux5{color:var(--text-main);font-size:26rpx;}
+.ux6{color:#25282a;}
+.ux7{color:#777;text-align:left;}
+.ux11{text-align:right;color:#10b9ef;}
+.ux17{color:#fff;text-shadow:0 1px 3px #000;}
+.ux0{}
+.ux12{}
+.ux8{}
+.ux3{}
+.ux1{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;background-color:#fff;color:#25282a;}
+.ux2{height:94rpx;flex-shrink:0;display:flex;flex-direction:row;align-items:center;justify-content:space-between;padding:0 32rpx;border-bottom:1rpx solid #eee;}
+.ux13{height:0;min-height:0;flex:1;padding:28rpx;}
+.ux14{position:relative;margin:auto;overflow:hidden;border-radius:16rpx;background-color:#111;}
+.ux15{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;}
+.ux16{position:absolute;top:0;right:0;bottom:0;left:0;border:4rpx solid #10b9ef;color:#fff;display:flex;flex-direction:row;align-items:center;justify-content:center;text-shadow:0 1px 3px #000;pointer-events:none;}
+.ux18{display:flex;flex-direction:column;margin-top:34rpx;font-size:22rpx;}
+.ux19{display:flex;flex-direction:column;margin:30rpx 0;color:#999;font-size:20rpx;line-height:32rpx;}
+.ux20{display:flex;flex-direction:column;margin:20rpx auto 0;border-radius:16rpx;background-color:#111;}
+.ux9{font-size:28rpx;font-weight:600;}
+.ux4{width:90rpx;color:#777;text-align:left;}
+.ux10{text-align:right;color:#10b9ef;}
+/* #endif */
+</style>

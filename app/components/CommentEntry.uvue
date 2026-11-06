@@ -1,0 +1,210 @@
+<template>
+  <view class="comment-entry" :class="[{nested,deleted:comment.deleted},uxNative?'ux0':'',uxNative?'ux7':'']" @longpress.stop="openDelete">
+    <SkeletonBlock v-if="comment.deleted" :width="nested ? 54 : 76" :height="nested ? 54 : 76" circle label="已删除评论头像"  :style="uxLayout(uxNodePrefix+'-g1000',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'"/>
+    <UserAvatar navigable v-else :src="comment.authorAvatar" :user-id="comment.authorId || undefined" :frame-id="comment.authorAvatarFrame" :frame-expires-at="comment.authorAvatarFrameExpiresAt ?? undefined" :size="nested ? 40 : 56" />
+    <view class="comment-body" :class="[uxNative?'ux0':'',uxNative?'ux9':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+(comment.deleted?1:0)+1)}}],{})" :id="uxNodePrefix+'-g1002'">
+      <view v-if="comment.deleted" class="deleted-name" :class="[uxNative?'ux0':'',uxNative?'ux21':'']"><SkeletonBlock :width="126" :height="22" :radius="11" label="已删除评论昵称" /></view>
+      <view v-else class="comment-identity-name" :style="{ height: (nested ? 54 : 76) + 'rpx' }"><UserName :user-id="comment.authorId || undefined" :nickname="comment.authorNickname" :level="comment.authorLevel" :size="nested ? 20 : 28" /></view>
+      <text v-if="comment.deleted" class="deleted-copy" :class="[uxNative?'ux28':'',uxNative?'ux40':'',uxNative?'ux22':'']">评论已删除</text>
+      <template v-else>
+        <text v-if="comment.replyToNickname && !comment.content" class="comment-reply-target" :class="[uxNative?'ux28':'',uxNative?'ux40':'',uxNative?'ux12':'']">回复 {{ comment.replyToNickname }}：</text>
+        <image v-if="comment.contentType === 'sticker' && comment.stickerUrl" class="comment-sticker" :src="uiAsset(assetUrl(comment.stickerUrl))" mode="aspectFit"  :class="[uxNative?'ux14':'']"/>
+        <text v-else-if="comment.content" class="comment-text" :class="[uxNative?'ux28':'',uxNative?'ux40':'',uxNative?'ux13':'']">{{(comment.replyToNickname?'回复 '+comment.replyToNickname+'：':'')+comment.content}}</text>
+        <view v-if="comment.media?.length" class="comment-media" :class="['count-'+Math.min(comment.media.length,3),uxNative?'ux0':'',uxNative?'ux15':'',uxNative&amp;&amp;uxClass('count-'+Math.min(comment.media.length,3),&quot;count-1&quot;)?'ux24':'',uxNative&amp;&amp;uxClass('count-'+Math.min(comment.media.length,3),&quot;count-2&quot;)?'ux25':'',uxNative&amp;&amp;uxClass('count-'+Math.min(comment.media.length,3),&quot;count-3&quot;)?'ux26':'']" :style="uxLayout(uxNodePrefix+'-n0',[{on:uxNative,declarations:{&quot;width&quot;:&quot;min(100%, 490rpx)&quot;}}],{})" :id="uxNodePrefix+'-n0'">
+          <ActionButton v-for="(item,index) in comment.media" :key="item.id" class="media-button" :aria-label="'查看评论图片' + (Number(index) + 1)" @tap.stop="preview(Number(index))" :class="[uxNative?'ct-native-button':'',uxNative?'ux41':'',uxNative?'ux16':'',uxNative&amp;&amp;uxClass('count-'+Math.min(comment.media.length,3),&quot;count-1&quot;)?'ux27':'']" :style="uxLayout(uxNodePrefix+'-g1005'+'-'+[Number(index)].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:uxNative&amp;&amp;uxClass('count-'+Math.min(comment.media.length,3),&quot;count-2&quot;),declarations:{&quot;__columns&quot;:&quot;3&quot;,&quot;__wrap&quot;:&quot;wrap&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;uxClass('count-'+Math.min(comment.media.length,3),&quot;count-3&quot;),declarations:{&quot;__columns&quot;:&quot;3&quot;,&quot;__wrap&quot;:&quot;wrap&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+Number(index))}}],{})" :id="uxNodePrefix+'-g1005'+'-'+[Number(index)].join('-')">
+            <CachedImage :src="assetUrl(item.url)" variant="preview" mode="aspectFill"  :style="uxLayout(uxNodePrefix+'-g1006'+'-'+[Number(index)].join('-'),[{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1006'+'-'+[Number(index)].join('-')"/>
+          </ActionButton>
+        </view>
+        <view class="comment-meta" :class="[uxNative?'ux0':'',uxNative?'ux17':'']">
+          <text :class="[uxNative?'ux28':'',uxNative?'ux48':'',uxNative?'ux40':'']">{{displayTime+(comment.region?' · '+comment.region:'')}}</text>
+          <ActionButton :aria-label="&quot;回复&quot;" class="reply-label" @tap.stop="$emit('reply', comment)" :class="[uxNative?'ct-native-button':'',uxNative?'ux41':'',uxNative?'ux18':'']"><text :class="[uxNative?'ux28':'',uxNative?'ux48':'',uxNative?'ux49':'',uxNative?'ux40':'']">回复</text></ActionButton>
+          <view class="comment-votes" :class="[uxNative?'ux0':'',uxNative?'ux19':'']">
+            <CommentLikeButton :comment="comment" :active="active" :disabled="busy" :size="32" />
+          </view>
+        </view>
+        <text v-if="comment.pinned" class="pinned-comment" :class="[uxNative?'ux28':'',uxNative?'ux40':'',uxNative?'ux20':'']">置顶评论</text>
+      </template>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { postPreviewMode } from '@/utils/post-preview'
+import UserAvatar from '@/components/UserAvatar.uvue'
+import UserName from '@/components/UserName.uvue'
+
+import LevelBadge from '@/components/LevelBadge.uvue'
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import CachedImage from './CachedImage.uvue'
+import { computed, ref, watch } from 'vue'
+import CommentLikeButton from './CommentLikeButton.uvue'
+import SkeletonBlock from './SkeletonBlock.uvue'
+import { API_BASE_URL } from '@/config/env'
+import { DEFAULT_AVATAR, avatarSrc, isLoggedIn } from '@/utils/auth'
+import { deleteComment } from '@/utils/post-api'
+import type { CommentDeleteResult, CommentResponse } from '@/types/post-api'
+
+const props = withDefaults(defineProps<{ comment: CommentResponse; postId: string; nested?: boolean; active?: boolean }>(), { active: true })
+const emit = defineEmits<{
+  (e: 'reply', comment: CommentResponse): void
+  (e: 'deleted', comment: CommentResponse, result: CommentDeleteResult): void
+}>()
+const busy = ref(false)
+const avatar = ref(avatarSrc(props.comment.authorAvatar))
+watch(() => props.comment.authorAvatar, value => { avatar.value = avatarSrc(value) })
+const assetUrl = (path: string) => /^https?:\/\//i.test(path) ? path : API_BASE_URL + path
+const displayTime = computed(() => {
+  const raw = props.comment.createTime || ''
+  const parsed = new Date(raw.replace(' ', 'T'))
+  if (Number.isNaN(parsed.getTime())) return raw
+  const elapsed = Date.now() - parsed.getTime()
+  if (elapsed >= 0 && elapsed < 60 * 60 * 1000) return Math.max(1, Math.floor(elapsed / 60000)) + '分钟前'
+  if (elapsed >= 0 && elapsed < 24 * 60 * 60 * 1000) return Math.floor(elapsed / 3600000) + '小时前'
+  return raw.slice(5, 10)
+})
+
+function preview(index: number) {
+  const urls = props.comment.media.map(item => assetUrl(item.url))
+  uni.previewImage({ current: urls[index], urls })
+}
+function openDelete() {
+  if(postPreviewMode.value)return
+  if (!props.comment.canDelete || props.comment.deleted || busy.value) return
+  uni.showActionSheet({ itemList: ['删除评论'], success: action => {
+    if (action.tapIndex !== 0) return
+    uni.showModal({ title: '删除评论', content: props.comment.parentId ? '确定删除这条回复吗？' : '确定删除这条评论吗？', confirmText: '删除', confirmColor: '#e34d59', success: async modal => {
+      if (!modal.confirm) return
+      busy.value = true
+      try { emit('deleted', props.comment, await deleteComment(props.postId, props.comment.id)) }
+      finally { busy.value = false }
+    } })
+  } })
+}
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.comment-entry { display: flex; gap: 16rpx; min-width: 0; flex-direction: row; }
+.comment-avatar { width: 76rpx; height: 76rpx; flex-shrink: 0; border-radius: 50%; background: #e6e6e6; }
+.comment-avatar.small { width: 50rpx; height: 50rpx; }
+.comment-body { flex: 1; min-width: 0; }
+.comment-name { display: flex; align-items: center; gap: 12rpx; min-height: 34rpx; color: #a6aaac; font-size: 22rpx; overflow-wrap: anywhere; flex-direction: row; }
+.comment-level { flex-shrink: 0; min-width: 27rpx; height: 27rpx; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; border: 2rpx solid #b9bdbf; border-radius: 50%; padding: 0 4rpx; font-size: 17rpx; flex-direction: row; }
+.comment-reply-target { display: block; margin-top: 12rpx; color: #666c6f; font-size: 24rpx; line-height: 1.55; overflow-wrap: anywhere; }
+.comment-text { display: block; margin: 12rpx 0 18rpx; white-space: pre-wrap; overflow-wrap: anywhere; color: #363a3c; font-size: 25rpx; line-height: 1.75; }
+.comment-sticker { display: block; width: 112rpx; height: 112rpx; margin: 12rpx 0 18rpx; }
+.comment-media { display: grid; gap: 8rpx; width: min(100%, 490rpx); margin: 12rpx 0 18rpx; }
+.comment-media.count-1 { grid-template-columns: minmax(0, 360rpx); }
+.comment-media.count-2, .comment-media.count-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.media-button { width: 100%; height: 154rpx; padding: 0; margin: 0; overflow: hidden; border-radius: 10rpx; background: #f1f2f3; line-height: 1; }
+.count-1 .media-button { height: 260rpx; }
+.media-button::after { border: 0; }
+.media-button :deep(uni-image),.media-button :deep(image) { display: block; width: 100%; height: 100%; }
+.comment-meta { display: flex; align-items: center; min-height: 38rpx; color: #b9bdbf; font-size: 18rpx; flex-direction: row; }
+.reply-label { padding: 0; margin: 0 0 0 18rpx; border: 0; background: transparent; color: #64696b; font-size: 18rpx; line-height: 38rpx; }
+.reply-label::after, .comment-votes button::after { border: 0; }
+.comment-votes { display: flex; align-items: center; gap: 28rpx; margin-left: auto; flex-direction: row; }
+.comment-votes button { min-width: 54rpx; height: 40rpx; display: flex; align-items: center; justify-content: flex-start; gap: 7rpx; padding: 0; margin: 0; background: transparent; color: #94999b; font-size: 18rpx; line-height: 1; flex-direction: row; }
+.comment-votes button.active { color: #00bce9; }
+.pinned-comment { display: inline-block; margin-top: 16rpx; border: 1rpx solid #efbd7a; border-radius: 6rpx; padding: 2rpx 9rpx; color: #e3a558; font-size: 18rpx; }
+.deleted-name { min-height: 34rpx; display: flex; align-items: center; flex-direction: row; }
+.deleted-copy { display: block; margin: 14rpx 0 4rpx; color: #b4b8ba; font-size: 24rpx; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux28{color:var(--text-main);font-size:26rpx;}
+
+
+
+
+
+
+
+
+
+
+.ux39{color:#a6aaac;font-size:22rpx;}
+.ux48{color:#b9bdbf;font-size:18rpx;}
+.ux49{color:#64696b;font-size:18rpx;line-height:38rpx;}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ux72{color:#94999b;font-size:18rpx;line-height:18rpx;}
+.ux73{color:#00bce9;}
+.ux0{}
+.ux40{}
+.ux41{}
+
+
+
+
+
+
+.ux7{display:flex;flex-direction:row;min-width:0;}
+.ux8{width:76rpx;height:76rpx;flex-shrink:0;border-radius:50%;background-color:#e6e6e6;}
+.ux9{flex:1;min-width:0;}
+.ux10{display:flex;flex-direction:row;align-items:center;min-height:34rpx;color:#a6aaac;font-size:22rpx;}
+.ux11{flex-shrink:0;min-width:27rpx;height:27rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;border:2rpx solid #b9bdbf;border-radius:50%;padding:0 4rpx;font-size:17rpx;}
+.ux12{display:flex;flex-direction:column;margin-top:12rpx;color:#666c6f;font-size:24rpx;line-height:37.2rpx;}
+.ux13{display:flex;flex-direction:column;margin:12rpx 0 18rpx;white-space:pre-wrap;color:#363a3c;font-size:25rpx;line-height:43.75rpx;}
+.ux14{display:flex;flex-direction:column;width:112rpx;height:112rpx;margin:12rpx 0 18rpx;}
+.ux15{display:flex;flex-direction:column;margin:12rpx 0 18rpx;}
+.ux16{width:100%;height:154rpx;padding:0;margin:0;overflow:hidden;border-radius:10rpx;background-color:#f1f2f3;line-height:26rpx;}
+.ux17{display:flex;flex-direction:row;align-items:center;min-height:38rpx;color:#b9bdbf;font-size:18rpx;}
+.ux18{padding:0;margin:0 0 0 18rpx;border:0px;background-color:transparent;color:#64696b;font-size:18rpx;line-height:38rpx;}
+.ux19{display:flex;flex-direction:row;align-items:center;margin-left:auto;}
+.ux20{display:flex;flex-direction:column;margin-top:16rpx;border:1rpx solid #efbd7a;border-radius:6rpx;padding:2rpx 9rpx;color:#e3a558;font-size:18rpx;}
+.ux21{min-height:34rpx;display:flex;flex-direction:row;align-items:center;}
+.ux22{display:flex;flex-direction:column;margin:14rpx 0 4rpx;color:#b4b8ba;font-size:24rpx;}
+
+
+
+
+
+.ux47{min-width:54rpx;height:40rpx;display:flex;flex-direction:row;align-items:center;justify-content:flex-start;padding:0;margin:0;background-color:transparent;color:#94999b;font-size:18rpx;line-height:18rpx;}
+.ux23{width:50rpx;height:50rpx;}
+.ux24{flex-direction:row;flex-wrap:wrap;}
+.ux25{flex-direction:row;flex-wrap:wrap;}
+.ux26{flex-direction:row;flex-wrap:wrap;}
+.ux27{height:260rpx;}
+.ux56{color:#00bce9;}
+/* #endif */
+</style>
+
+<style scoped>
+.comment-identity-name { display: flex; flex-direction: row; align-items: center; min-width: 0; }
+</style>

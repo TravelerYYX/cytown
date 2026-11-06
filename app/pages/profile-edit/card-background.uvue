@@ -1,0 +1,135 @@
+<template>
+  <view class="bg-page" :style="{ paddingTop: statusBarHeight + 'px' }" :class="[uxNative?'ux1':'',uxNative?'ux2':'']">
+    <view class="bg-nav" :class="[uxNative?'ux1':'',uxNative?'ux3':'']">
+      <ActionButton class="back-button" aria-label="返回" @tap="back" :class="[uxNative?'ux4':'',uxNative?'ux5':'']"><AppIcon name="back" :size="42" /></ActionButton>
+      <text :class="[uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux8':'',uxNative?'ux9':'']">卡片背景</text>
+    </view>
+
+    <scroll-view direction="vertical" class="bg-scroll" :class="[uxNative?'ux10':'',uxNative?'ux11':'']">
+      <view class="bg-content" :class="[uxNative?'ux1':'',uxNative?'ux12':'']" :style="uxLayout(uxNodePrefix+'-n0',[{on:uxNative,declarations:{&quot;padding&quot;:&quot;24rpx 32rpx max(40rpx, env(safe-area-inset-bottom))&quot;}}],{})" :id="uxNodePrefix+'-n0'">
+        <text class="bg-tip" :class="[uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux9':'',uxNative?'ux13':'']" :style="uxLayout(uxNodePrefix+'-g1000',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;24rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'">选择一张图片作为「我的」页面角色卡片的背景</text>
+        <ActionButton :aria-label="'卡片背景 ' + String(__uxIndex0 + 1) + (current===name?' 当前使用':'')"
+          v-for="(name, __uxIndex0) in backgrounds"
+          :key="name"
+          class="bg-item"
+          :class="[{active:current===name},uxNative?'ux4':'',uxNative?'ux20':'',uxNative&amp;&amp;!!(current===name)?'ux24':'']"
+          :disabled="saving"
+          hover-class="bg-item-hover"
+          @tap="select(name)"
+         :style="uxLayout(uxNodePrefix+'-g1001'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;24rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0+1+__uxIndex0)}}],{})" :id="uxNodePrefix+'-g1001'+'-'+[__uxIndex0].join('-')">
+          <image class="bg-image" :src="uiAsset(directory + name)" mode="aspectFill"  :class="[uxNative?'ux22':'']"/>
+          <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(a11yPrefix+'-0',{&quot;aria-label&quot;:&quot;当前使用&quot;})" v-if="current === name" class="bg-check"   :class="[uxNative?'ux1':'',uxNative?'ux23':'']"/>
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :aria-label="&quot;当前使用&quot;" v-if="current === name" class="bg-check"   :class="[uxNative?'ux1':'',uxNative?'ux23':'']"/>
+<!-- #endif -->
+        </ActionButton>
+      </view>
+    </scroll-view>
+    <EyeCareOverlay />
+  </view>
+</template>
+
+<script setup lang="uts">
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { ref } from 'vue'
+
+import AppIcon from '@/components/AppIcon.uvue'
+import EyeCareOverlay from '@/components/EyeCareOverlay.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { getUserInfo, isLoggedIn, saveUserInfo } from '@/utils/auth'
+import { updateCardBackground } from '@/utils/auth-api'
+import { CARD_BACKGROUNDS, CARD_BACKGROUND_DIRECTORY, DEFAULT_CARD_BACKGROUND } from '@/config/assets'
+
+const { statusBarHeight } = useWindowInsets()
+const backgrounds = CARD_BACKGROUNDS
+const directory = CARD_BACKGROUND_DIRECTORY
+const current = ref<string>(DEFAULT_CARD_BACKGROUND)
+const saving = ref(false)
+let disposed = false
+
+function back() { getCurrentPages().length > 1 ? uni.navigateBack() : uni.reLaunch({ url: '/pages/index/index' }) }
+async function select(name: string) {
+  if (saving.value || current.value === name) return
+  saving.value = true
+  try {
+    const updated = await updateCardBackground(name)
+    if (disposed) return
+    saveUserInfo(updated)
+    current.value = updated.cardBackground || name
+    uni.showToast({ title: '已保存', icon: 'success' })
+  } catch { /* 请求层统一提示。 */ } finally { saving.value = false }
+}
+onShow(() => {
+  if (!isLoggedIn()) { uni.reLaunch({ url: '/pages/login/index' }); return }
+  current.value = getUserInfo()?.cardBackground || DEFAULT_CARD_BACKGROUND
+})
+onUnload(() => { disposed = true })
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.bg-page { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; background: #f7f7f7; color: #222628; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.bg-nav { position: relative; display: flex; align-items: center; justify-content: center; height: 116rpx; flex-shrink: 0; background: #f7f7f7; color: #1f2325; font-size: 31rpx; font-weight: 600; flex-direction: row; }
+.back-button { position: absolute; left: 27rpx; top: 50%; display: flex; align-items: center; justify-content: center; width: 58rpx; height: 68rpx; margin: 0; padding: 0; transform: translateY(-50%); border: 0; border-radius: 0; background: transparent; flex-direction: row; }
+.back-button::after,.bg-item::after { border: 0; }
+.bg-scroll { height: 0; flex: 1; }
+.bg-content { display: flex; flex-direction: column; gap: 24rpx; padding: 24rpx 32rpx max(40rpx, env(safe-area-inset-bottom)); }
+.bg-tip { font-size: 23rpx; color: #858d91; }
+.bg-item { position: relative; width: 100%; height: 232rpx; margin: 0; padding: 0; border: 4rpx solid transparent; border-radius: 24rpx; overflow: hidden; background: #ececec; line-height: normal; }
+.bg-item.active { border-color: #00afd9; }
+.bg-item-hover { opacity: 0.85; }
+.bg-image { display: block; width: 100%; height: 100%; }
+.bg-check { position: absolute; right: 20rpx; bottom: 20rpx; width: 40rpx; height: 40rpx; border-radius: 50%; background: #00afd9; }
+.bg-check::after { content: ''; position: absolute; left: 12rpx; top: 10rpx; width: 12rpx; height: 20rpx; border-right: 4rpx solid #fff; border-bottom: 4rpx solid #fff; transform: rotate(45deg); }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux6{color:var(--text-main);font-size:26rpx;}
+.ux7{color:#222628;}
+.ux8{color:#1f2325;font-size:31rpx;font-weight:600;}
+.ux1{}
+.ux10{}
+.ux9{}
+.ux4{}
+
+
+
+
+
+
+.ux2{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;overflow:hidden;background-color:#f7f7f7;color:#222628;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);}
+.ux3{position:relative;display:flex;flex-direction:row;align-items:center;justify-content:center;height:116rpx;flex-shrink:0;background-color:#f7f7f7;color:#1f2325;font-size:31rpx;font-weight:600;}
+.ux5{position:absolute;left:27rpx;top:50%;display:flex;flex-direction:row;align-items:center;justify-content:center;width:58rpx;height:68rpx;margin:0;padding:0;transform:translateY(-50%);border:0px;border-radius:0;background-color:transparent;}
+.ux11{height:0;flex:1;}
+.ux12{display:flex;flex-direction:column;}
+.ux13{font-size:23rpx;color:#858d91;}
+.ux20{position:relative;width:100%;height:232rpx;margin:0;padding:0;border:4rpx solid transparent;border-radius:24rpx;overflow:hidden;background-color:#ececec;line-height:normal;}
+
+.ux22{display:flex;flex-direction:column;width:100%;height:100%;}
+.ux23{position:absolute;right:20rpx;bottom:20rpx;width:40rpx;height:40rpx;border-radius:50%;background-color:#00afd9;}
+.ux24{border-color:#00afd9;}
+/* #endif */
+</style>

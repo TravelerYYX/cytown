@@ -1,0 +1,6 @@
+import type { MessageCategory, NoticeDetail, NoticeListItem } from '@/types/home'
+import type { Page } from '@/types/post-api'
+import { GET } from './request'
+export const fetchNoticeCategories = () => GET<MessageCategory[]>('/app/notice/categories')
+export const fetchNoticeList = (categoryId:number,pageNum=1,pageSize=20) => GET<Page<NoticeListItem> & {readPublicationIds:number[]}>('/app/notice/list',{categoryId,pageNum,pageSize})
+export const fetchNoticeDetail = (id:number) => GET<NoticeDetail>(`/app/notice/${id}`)

@@ -1,0 +1,119 @@
+<template>
+  <view class="topic-mask">
+    <view class="topic-backdrop" :style="{opacity: entered ? 1 : 0}" @tap="close" />
+    <view class="topic-sheet" :style="{height: sheetHeight + 'px', paddingBottom: bottomPadding + 'px', transform: entered ? 'translateY(0%)' : 'translateY(100%)'}" @tap.stop>
+      <view class="topic-handle" />
+      <view class="topic-header">
+        <ActionButton aria-label="取消" class="topic-action" @tap="close"><text class="topic-cancel">取消</text></ActionButton>
+        <text class="topic-title">选择话题（{{ selected.length }}/5）</text>
+        <ActionButton aria-label="确认" class="topic-action" @tap="confirm"><text class="topic-confirm">确认</text></ActionButton>
+      </view>
+      <text class="topic-intro">选择相关内容分类，最多参与5个话题</text>
+      <view class="topic-search">
+        <AppIcon name="search" tone="muted" :size="34" />
+        <input v-model="keyword" class="topic-input" placeholder="搜索或创建话题" @confirm="load" />
+        <ActionButton aria-label="创建" class="topic-create" :disabled="creating" @tap="create"><text class="topic-confirm">创建</text></ActionButton>
+      </view>
+      <view class="recommended-title"><AppIcon name="topic" tone="muted" :size="35" /><text class="recommended-text">{{ keyword ? '搜索结果' : '推荐话题' }}</text></view>
+      <scroll-view class="topic-list" direction="vertical" :show-scrollbar="false" :bounces="false">
+        <ActionButton v-for="topic in topics" :key="topic.id" :aria-label="topic.name + (topic.hot ? ' 热' : '') + ' ' + (topic.description || '暂无介绍')" :aria-pressed="has(topic.id)" class="topic-row" :class="{'topic-selected': has(topic.id)}" @tap="toggle(topic)">
+          <SkeletonBlock v-if="!topic.coverUrl" :width="92" :height="92" :radius="14" label="话题头像" />
+          <image v-else class="topic-cover" :src="uiAsset(resourceUrl(topic.coverUrl))" mode="aspectFill" />
+          <view class="topic-copy">
+            <view class="topic-name-line"><text class="topic-name">{{ topic.name }}</text><text v-if="topic.hot" class="topic-hot">热</text><AppIcon v-if="has(topic.id)" class="topic-check" name="check" tone="cyan" :size="30" /></view>
+            <text class="topic-description">{{ topic.description || '暂无介绍' }}</text>
+          </view>
+        </ActionButton>
+        <view v-if="loadError" class="topic-message"><text class="topic-message-text">{{ loadError }}</text><ActionButton aria-label="重新加载话题" @tap="load"><text class="topic-confirm">点击重试</text></ActionButton></view>
+        <text v-else-if="loading" class="topic-message-text topic-message">加载中…</text>
+        <EmptyState v-else-if="!topics.length" />
+      </scroll-view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import ActionButton from '@/components/ActionButton.uvue'
+import AppIcon from '@/components/AppIcon.uvue'
+import EmptyState from '@/components/EmptyState.uvue'
+import SkeletonBlock from '@/components/SkeletonBlock.uvue'
+import { observeWindowResize } from '@/utils/window-events'
+import { uiAsset } from '@/utils/ui-assets'
+import { mediaUrl as resourceUrl } from '@/utils/media-cache'
+import { createCustomTopic, fetchTopics } from '@/utils/publish-api'
+import type { Topic } from '@/types/publish'
+
+const props = defineProps<{entered: boolean; selection: Topic[]}>()
+const emit = defineEmits<{close: []; confirm: [topics: Topic[]]}>()
+// Work on a copy so cancel/backdrop/system back never changes the editor.
+const selected = ref<Topic[]>(props.selection.slice(0, 5))
+const topics = ref<Topic[]>([]), keyword = ref(''), loading = ref(false), loadError = ref(''), creating = ref(false)
+const viewport = ref(uni.getWindowInfo())
+const unobserve = observeWindowResize(() => { viewport.value = uni.getWindowInfo() })
+const sheetHeight = computed(() => Math.max(0, viewport.value.windowHeight - Math.max(viewport.value.statusBarHeight, 24 * viewport.value.windowWidth / 750)))
+const bottomPadding = computed(() => Math.max(20 * viewport.value.windowWidth / 750, viewport.value.safeAreaInsets?.bottom ?? 0))
+let disposed = false, loadRevision = 0
+onBeforeUnmount(() => { disposed = true; loadRevision++; unobserve() })
+const has = (id: number) => selected.value.some(item => item.id === id)
+function close() { uni.hideKeyboard(); emit('close') }
+function confirm() { if (!props.entered) return; emit('confirm', selected.value.slice()); close() }
+function toggle(topic: Topic) {
+  if (!props.entered) return
+  const index = selected.value.findIndex(item => item.id === topic.id)
+  if (index >= 0) selected.value.splice(index, 1)
+  else if (selected.value.length < 5) selected.value.push(topic)
+  else uni.showToast({title: '最多选择5个话题', icon: 'none'})
+}
+async function load() {
+  const token = ++loadRevision
+  loading.value = true; loadError.value = ''
+  try { const result = await fetchTopics(keyword.value.trim()); if (!disposed && token === loadRevision) topics.value = result }
+  catch { if (!disposed && token === loadRevision) loadError.value = '话题加载失败，请重试' }
+  finally { if (!disposed && token === loadRevision) loading.value = false }
+}
+async function create() {
+  if (!props.entered || creating.value) return
+  const name = keyword.value.trim()
+  if (!name) { uni.showToast({title: '请输入话题名称', icon: 'none'}); return }
+  creating.value = true
+  try {
+    const topic = await createCustomTopic(name)
+    if (disposed || !props.entered) return
+    if (!topics.value.some(item => item.id === topic.id)) topics.value.unshift(topic)
+    if (!has(topic.id) && selected.value.length < 5) selected.value.push(topic)
+    uni.showToast({title: topic.status === 0 ? '话题已提交审核' : '已选择话题', icon: 'none'})
+  } catch {} finally { if (!disposed) creating.value = false }
+}
+onMounted(() => { void load() })
+</script>
+
+<style scoped>
+.topic-mask{position:fixed;top:0;right:0;bottom:0;left:0;z-index:20;display:flex;flex-direction:column;justify-content:flex-end;}
+.topic-backdrop{position:absolute;top:0;right:0;bottom:0;left:0;background-color:rgba(0,0,0,.45);transition-property:opacity;transition-duration:320ms;transition-timing-function:cubic-bezier(.16,1,.3,1);}
+.topic-sheet{position:relative;display:flex;flex-direction:column;width:100%;box-sizing:border-box;border-radius:42rpx 42rpx 0 0;background-color:#fff;overflow:hidden;transition-property:transform;transition-duration:320ms;transition-timing-function:cubic-bezier(.16,1,.3,1);}
+.topic-handle{align-self:center;width:72rpx;height:8rpx;flex-shrink:0;margin-top:18rpx;border-radius:8rpx;background-color:#dcdcdc;}
+.topic-header{height:100rpx;flex-shrink:0;display:flex;flex-direction:row;align-items:center;justify-content:space-between;padding:0 34rpx;border-bottom:2rpx solid #f1f1f1;}
+.topic-action{min-width:84rpx;padding:0;background-color:transparent;}
+.topic-cancel{color:#929799;font-size:24rpx;}
+.topic-confirm{color:#10b9ef;font-size:24rpx;}
+.topic-title{color:#25282a;font-size:27rpx;font-weight:600;}
+.topic-intro{flex-shrink:0;padding:26rpx 34rpx 18rpx;color:#9da2a5;font-size:21rpx;}
+.topic-search{height:68rpx;flex-shrink:0;margin:0 34rpx;display:flex;flex-direction:row;align-items:center;padding:0 18rpx;border-radius:36rpx;background-color:#f4f5f6;}
+.topic-input{min-width:0;flex:1;margin-left:12rpx;color:#25282a;font-size:26rpx;}
+.topic-create{padding:0;margin-left:12rpx;background-color:transparent;}
+.recommended-title{height:94rpx;flex-shrink:0;display:flex;flex-direction:row;align-items:flex-end;padding:0 34rpx 20rpx;}
+.recommended-text{margin-left:12rpx;color:#25282a;font-size:25rpx;font-weight:600;}
+.topic-list{height:0;min-height:0;flex:1;}
+.topic-row{width:100%;min-height:136rpx;display:flex;flex-direction:row;align-items:center;padding:16rpx 34rpx;border-radius:0;background-color:transparent;}
+.topic-selected{background-color:#f2fbff;}
+.topic-cover{width:92rpx;height:92rpx;flex-shrink:0;border-radius:14rpx;}
+.topic-copy{min-width:0;flex:1;margin-left:22rpx;}
+.topic-name-line{display:flex;flex-direction:row;align-items:center;}
+.topic-name{flex-shrink:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#25282a;font-size:25rpx;font-weight:600;}
+.topic-hot{margin-left:10rpx;padding:2rpx 7rpx;border-radius:6rpx;background-color:#ff831c;color:#fff;font-size:18rpx;}
+.topic-check{margin-left:auto;}
+.topic-description{margin-top:14rpx;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#aeb3b5;font-size:20rpx;}
+.topic-message{padding:60rpx 30rpx;align-items:center;}
+.topic-message-text{text-align:center;color:#aaa;font-size:22rpx;}
+</style>

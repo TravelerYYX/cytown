@@ -1,0 +1,12 @@
+import { GET, POST } from './request'
+import type { UserStatistics } from '@/types/auth'
+import type { Page, PostResponse } from '@/types/post-api'
+import type { ChatConversation } from '@/types/chat'
+export interface UserProfile {
+  userId: string; publicUid: string; nickname: string; avatar: string; avatarFrame?: string; avatarFrameExpiresAt?: number | null
+  gender: number; signature: string; cardBackground: string; level: number; title: string; coinBalance: number | null
+  ipProvince: string | null; statistics: UserStatistics; following: boolean; followedBy: boolean; blockedByMe: boolean
+}
+export const fetchUserProfile = (id: string) => GET<UserProfile>('/app/user/' + encodeURIComponent(id) + '/profile')
+export const fetchUserPosts = (id: string, pageNum: number) => GET<Page<PostResponse>>('/app/user/' + encodeURIComponent(id) + '/posts', { pageNum, pageSize: 10 })
+export const openProfileChat = (peerId: string) => POST<ChatConversation>('/app/chat/conversations', { peerId })

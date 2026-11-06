@@ -1,0 +1,204 @@
+<template>
+  <view class="security-page" :style="{ paddingTop: statusBarHeight + 'px' }" :class="[uxNative?'ux0':'',uxNative?'ux1':'']">
+    <view class="edit-nav" :class="[uxNative?'ux0':'',uxNative?'ux2':'']">
+      <ActionButton class="back-button" aria-label="返回" @tap="back" :class="[uxNative?'ux3':'',uxNative?'ux4':'']"><AppIcon name="back" :size="42" /></ActionButton>
+      <text class="nav-title" :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux8':'']">通行证账号与安全</text>
+    </view>
+
+    <scroll-view direction="vertical" class="security-scroll" :class="[uxNative?'ux9':'',uxNative?'ux10':'']">
+      <view class="security-content" :class="[uxNative?'ux0':'',uxNative?'ux11':'']" :style="uxLayout(uxNodePrefix+'-n0',[{on:uxNative,declarations:{&quot;padding&quot;:&quot;24rpx 30rpx max(40rpx, env(safe-area-inset-bottom))&quot;}}],{})" :id="uxNodePrefix+'-n0'">
+        <view class="status-card" :class="[uxNative?'ux0':'',uxNative?'ux12':'']">
+          <view class="status-row" :class="[uxNative?'ux0':'',uxNative?'ux13':'']"><text class="status-label" :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux14':'']">登录账号</text><text class="status-value set" :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux15':'',uxNative?'ux16':'']">{{ loginAccount || '—' }}</text></view>
+          <view class="status-row" :class="[uxNative?'ux0':'',uxNative?'ux13':'']">
+            <text class="status-label" :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux14':'']">登录密码</text>
+            <text class="status-value" :class="[{set:hasPassword},uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux15':'',uxNative&amp;&amp;!!hasPassword?'ux16':'']">{{ hasPassword ? '已设置' : '未设置' }}</text>
+          </view>
+          <text class="status-hint" :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux23':'']">{{ isOfficial ? '官方账号密码由管理后台统一设置和修改' : hasPassword ? '请使用上面的登录账号和密码登录，QQ验证码登录仍可用' : '设置密码后可使用上面的登录账号和密码登录，QQ验证码登录仍可用' }}</text>
+        </view>
+
+        <view v-if="!isOfficial" class="form-card" :class="[uxNative?'ux0':'',uxNative?'ux24':'']">
+          <view v-if="hasPassword" class="field" :class="[uxNative?'ux0':'',uxNative?'ux25':'']">
+            <text :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux28':'']">旧密码</text>
+            <input v-model="oldPassword" :password="true" maxlength="20" placeholder="请输入旧密码" :disabled="submitting"  :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux29':'',uxNative?'ux30':'']"/>
+          </view>
+          <view class="field" :class="[uxNative?'ux0':'',uxNative?'ux25':'']">
+            <text :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux28':'']">{{ hasPassword ? '新密码' : '设置密码' }}</text>
+            <input v-model="newPassword" :password="true" maxlength="20" placeholder="8-20位" :disabled="submitting"  :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux29':'',uxNative?'ux30':'']"/>
+          </view>
+          <view class="field" :class="[uxNative?'ux0':'',uxNative?'ux25':'']">
+            <text :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux28':'']">确认新密码</text>
+            <input v-model="confirmPassword" :password="true" maxlength="20" placeholder="再次输入新密码" :disabled="submitting"  :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux29':'',uxNative?'ux30':'']"/>
+          </view>
+          <ActionButton :aria-label="String(submitLabel)" class="submit-button" :disabled="!valid || submitting" :loading="submitting" @tap="submit" :class="[uxNative?'ux3':'',uxNative?'ux26':'',uxNative&amp;&amp;!!(!valid||submitting)?'ux31':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux32':'',uxNative&amp;&amp;!!(!valid||submitting)?'ux33':'',uxNative?'ux7':'']">{{ submitLabel }}</text></ActionButton>
+        </view>
+
+        <text v-if="!isOfficial" class="security-tip" :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux27':'']">保存成功后需要使用新密码重新登录</text>
+      </view>
+    </scroll-view>
+    <EyeCareOverlay />
+  </view>
+</template>
+
+<script setup lang="uts">
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, ref } from 'vue'
+
+import AppIcon from '@/components/AppIcon.uvue'
+import EyeCareOverlay from '@/components/EyeCareOverlay.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { clearLogin, getUserInfo, isLoggedIn, saveUserInfo } from '@/utils/auth'
+import { fetchMe, setPassword, updatePassword } from '@/utils/auth-api'
+
+const { statusBarHeight } = useWindowInsets()
+const hasPassword = ref(false)
+const loginAccount = ref('')
+const isOfficial = ref(false)
+const oldPassword = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+const submitting = ref(false)
+let disposed = false
+
+const submitLabel = computed(() => (hasPassword.value ? '修改密码' : '设置密码'))
+const valid = computed(() => {
+  if (hasPassword.value && !oldPassword.value) return false
+  return !!newPassword.value && !!confirmPassword.value
+})
+
+/** 与后端 Passwords.validate 规则一致：8-20位、不含空格（允许纯数字） */
+function validatePassword(password: string): string {
+  if (password.length < 8 || password.length > 20) return '密码需为8-20位';
+  if (/\s/.test(password)) return '密码不能包含空格';
+  return '';
+}
+
+/** 设置/修改密码后 token 版本递增，所有旧登录失效，主动回到登录页 */
+function backToLogin(message: string) {
+  clearLogin()
+  uni.showToast({ title: message, icon: 'none' })
+  setTimeout(() => { if (!disposed) uni.reLaunch({ url: '/pages/login/index' }) }, 800)
+}
+
+async function submit() {
+  if (submitting.value || isOfficial.value) return
+  const invalid = validatePassword(newPassword.value)
+  if (invalid) { uni.showToast({ title: invalid, icon: 'none' }); return }
+  if (newPassword.value !== confirmPassword.value) { uni.showToast({ title: '两次输入的密码不一致', icon: 'none' }); return }
+  submitting.value = true
+  try {
+    if (hasPassword.value) {
+      if (!oldPassword.value) { uni.showToast({ title: '请输入旧密码', icon: 'none' }); return }
+      await updatePassword(oldPassword.value, newPassword.value)
+      if (disposed) return
+      backToLogin('密码已修改，请重新登录')
+    } else {
+      await setPassword(newPassword.value)
+      if (disposed) return
+      backToLogin('密码已设置，请重新登录')
+    }
+  } catch { /* 请求层统一提示。 */ } finally { submitting.value = false }
+}
+
+function back() { getCurrentPages().length > 1 ? uni.navigateBack() : uni.reLaunch({ url: '/pages/index/index' }) }
+
+onShow(async () => {
+  if (!isLoggedIn()) { uni.reLaunch({ url: '/pages/login/index' }); return }
+  const cached = getUserInfo()
+  hasPassword.value = !!cached?.hasPassword
+  loginAccount.value = cached?.account || cached?.qqNumber || ''
+  isOfficial.value = !!cached?.isOfficial
+  oldPassword.value = ''
+  newPassword.value = ''
+  confirmPassword.value = ''
+  // 拉取最新资料：以服务端 hasPassword 为准（本地缓存可能滞后）
+  try {
+    const me = await fetchMe()
+    if (disposed) return
+    saveUserInfo(me)
+    hasPassword.value = !!me.hasPassword
+    loginAccount.value = me.account || me.qqNumber || ''
+    isOfficial.value = !!me.isOfficial
+  } catch { /* 拉取失败时沿用本地缓存判断。 */ }
+})
+onUnload(() => { disposed = true })
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.security-page { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; background: #fff; color: #202426; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.edit-nav { position: relative; display: flex; align-items: center; justify-content: center; height: 118rpx; flex-shrink: 0; flex-direction: row; }
+.nav-title { color: #202426; font-size: 31rpx; font-weight: 600; }
+.back-button { position: absolute; left: 28rpx; top: 50%; display: flex; align-items: center; justify-content: center; width: 58rpx; height: 68rpx; margin: 0; padding: 0; transform: translateY(-50%); border: 0; border-radius: 0; background: transparent; flex-direction: row; }
+.back-button::after { border: 0; }
+.security-scroll { height: 0; flex: 1; }
+.security-content { padding: 24rpx 30rpx max(40rpx, env(safe-area-inset-bottom)); }
+.status-card { padding: 30rpx 32rpx; border-radius: 25rpx; background: #f4f6f7; margin-bottom: 28rpx; }
+.status-row { display: flex; align-items: center; justify-content: space-between; flex-direction: row; }
+.status-label { font-size: 28rpx; font-weight: 600; }
+.status-value { font-size: 26rpx; color: #92999e; }
+.status-value.set { color: #00a9d9; }
+.status-hint { display: block; margin-top: 14rpx; font-size: 23rpx; line-height: 1.5; color: #92999e; }
+.form-card { padding: 8rpx 32rpx 36rpx; border-radius: 25rpx; background: #fff; box-shadow: 0 4rpx 24rpx rgba(32, 36, 38, .05); }
+.field { margin: 30rpx 0; }
+.field > text { display: block; font-size: 25rpx; margin-bottom: 16rpx; }
+.field input { height: 94rpx; padding: 0 24rpx; background: #f4f6f7; border-radius: 18rpx; font-size: 29rpx; min-width: 0; }
+.submit-button { margin-top: 24rpx; height: 96rpx; line-height: 96rpx; border-radius: 24rpx; background: #00c3ff; color: #fff; font-size: 30rpx; font-weight: 600; }
+.submit-button[disabled] { background: #cfedf5; color: #fff; }
+.security-tip { display: block; text-align: center; margin-top: 32rpx; font-size: 22rpx; color: #a0a7ac; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux5{color:var(--text-main);font-size:26rpx;}
+.ux6{color:#202426;}
+.ux32{line-height:96rpx;color:#fff;font-size:30rpx;font-weight:600;}
+.ux33{color:#fff;}
+.ux0{}
+.ux9{}
+.ux7{}
+.ux29{}
+.ux3{}
+
+
+
+
+
+
+.ux1{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;overflow:hidden;background-color:#fff;color:#202426;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);}
+.ux2{position:relative;display:flex;flex-direction:row;align-items:center;justify-content:center;height:118rpx;flex-shrink:0;}
+.ux8{color:#202426;font-size:31rpx;font-weight:600;}
+.ux4{position:absolute;left:28rpx;top:50%;display:flex;flex-direction:row;align-items:center;justify-content:center;width:58rpx;height:68rpx;margin:0;padding:0;transform:translateY(-50%);border:0px;border-radius:0;background-color:transparent;}
+.ux10{height:0;flex:1;}
+.ux11{}
+.ux12{padding:30rpx 32rpx;border-radius:25rpx;background-color:#f4f6f7;margin-bottom:28rpx;}
+.ux13{display:flex;flex-direction:row;align-items:center;justify-content:space-between;}
+.ux14{font-size:28rpx;font-weight:600;}
+.ux15{font-size:26rpx;color:#92999e;}
+.ux23{display:flex;flex-direction:column;margin-top:14rpx;font-size:23rpx;line-height:34.5rpx;color:#92999e;}
+.ux24{padding:8rpx 32rpx 36rpx;border-radius:25rpx;background-color:#fff;box-shadow:0 4rpx 24rpx rgba(32, 36, 38, .05);}
+.ux25{margin:30rpx 0;}
+.ux26{margin-top:24rpx;height:96rpx;line-height:96rpx;border-radius:24rpx;background-color:#00c3ff;color:#fff;font-size:30rpx;font-weight:600;}
+.ux27{display:flex;flex-direction:column;text-align:center;margin-top:32rpx;font-size:22rpx;color:#a0a7ac;}
+.ux28{display:flex;flex-direction:column;font-size:25rpx;margin-bottom:16rpx;}
+.ux30{height:94rpx;padding:0 24rpx;background-color:#f4f6f7;border-radius:18rpx;font-size:29rpx;min-width:0;}
+.ux16{color:#00a9d9;}
+.ux31{background-color:#cfedf5;color:#fff;}
+/* #endif */
+</style>

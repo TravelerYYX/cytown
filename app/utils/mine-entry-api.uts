@@ -1,0 +1,36 @@
+import { API_BASE_URL } from '@/config/env'
+import type { MineEntry } from '@/types/home'
+
+export const DEFAULT_MEMBERSHIP_TARGET = '/pages/membership/index'
+
+let membershipPending: Promise<string> | undefined
+export function fetchMembershipTarget(): Promise<string> {
+  return membershipPending ||= new Promise<string>((resolve, reject) => {
+    uni.request({
+      url: API_BASE_URL + '/app/mine/membership-target', timeout: 5000,
+      success(response) {
+        const result = response.data as { code?: string; data?: { target?: string } }
+        const target = result?.data?.target
+        if (response.statusCode === 200 && result?.code === '0000' && target) resolve(target)
+        else reject(new Error('会员入口配置加载失败'))
+      },
+      fail: reject
+    })
+  }).finally(() => { membershipPending = undefined })
+}
+
+let pending: Promise<MineEntry[]> | undefined
+// Public, optional decoration: a failed request must not interrupt profile/posts or force a login.
+export function fetchMineEntries(): Promise<MineEntry[]> {
+  return pending ||= new Promise<MineEntry[]>((resolve, reject) => {
+    uni.request({
+      url: API_BASE_URL + '/app/mine/entries', timeout: 10000,
+      success(response) {
+        const result = response.data as { code?: string; data?: MineEntry[] }
+        if (response.statusCode === 200 && result?.code === '0000' && Array.isArray(result.data)) resolve(result.data)
+        else reject(new Error('入口加载失败'))
+      },
+      fail: reject
+    })
+  }).finally(() => { pending = undefined })
+}

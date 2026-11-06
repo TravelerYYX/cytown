@@ -1,0 +1,30 @@
+const { chromium } = require('playwright-core')
+const { fixtures } = require('./verify-waterfall.cjs')
+const path = require('node:path'), fs = require('node:fs')
+const output = path.resolve(__dirname, '../artifacts/performance/backgrounds')
+;(async () => {
+  fs.mkdirSync(output, { recursive: true })
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.UI_BROWSER_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe' })
+  try {
+    for (const width of [320, 390, 430]) {
+      const page = await browser.newPage({ viewport: { width, height: 844 } })
+      await fixtures(page); await page.goto(process.env.UI_TEST_URL || 'http://127.0.0.1:15273')
+      await page.waitForSelector('.home-view .post-card')
+      await page.waitForTimeout(250)
+      await page.screenshot({ path: path.join(output, `${width}-home-after.png`) })
+      await page.locator('.banner-image').evaluateAll(nodes => { for (const n of nodes) { n.style.filter = 'blur(' + (innerWidth * 28 / 750) + 'px)'; const img = n.querySelector('img'); if (img) img.src = '/static/images/home-banner.jpg'; const bg = n.querySelector('div'); if (bg) bg.style.backgroundImage = 'url(/static/images/home-banner.jpg)' } })
+      await page.waitForTimeout(250)
+      await page.screenshot({ path: path.join(output, `${width}-home-before.png`) })
+      await page.evaluate(() => { uni.setStorageSync('app_token', 'background-fixture'); uni.setStorageSync('app_user_info', { userId: '10', nickname: '背景验收', tags: [] }) })
+      await page.reload(); await page.locator('.tab-item').nth(4).click()
+      await page.locator('.mine-view .profile-header').waitFor()
+      await page.waitForTimeout(300)
+      await page.screenshot({ path: path.join(output, `${width}-profile-after.png`) })
+      await page.addStyleTag({ content: `.profile-background{background-image:url('/static/images/assets/my_background.jpg')!important;filter:brightness(1.35) saturate(1.1)!important}.profile-blur{background-image:url('/static/images/assets/my_background.jpg')!important;filter:brightness(1.35) saturate(1.1) blur(14px)!important}` })
+      await page.waitForTimeout(250)
+      await page.screenshot({ path: path.join(output, `${width}-profile-before.png`) })
+      await page.close()
+    }
+    console.log('Background comparison screenshots captured at 320/390/430px.')
+  } finally { await browser.close() }
+})().catch(error => { console.error(error); process.exitCode = 1 })

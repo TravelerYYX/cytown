@@ -1,0 +1,15 @@
+import { onBeforeUnmount, watch } from 'vue'
+import { retainPost, releasePost } from '@/utils/interactions'
+import type { Post } from '@/types/home'
+
+/** Data owners retain canonical posts, independently of virtual card mounts. */
+export function usePostOwnership(source: () => readonly Post[]) {
+  let owned = new Set<Post>()
+  watch(() => source().slice(), posts => {
+    const next = new Set(posts)
+    for (const post of next) if (!owned.has(post)) retainPost(post)
+    for (const post of owned) if (!next.has(post)) releasePost(post)
+    owned = next
+  }, { immediate: true, flush: 'sync' })
+  onBeforeUnmount(() => { for (const post of owned) releasePost(post); owned.clear() })
+}

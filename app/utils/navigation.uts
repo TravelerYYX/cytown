@@ -1,0 +1,87 @@
+import { postPreviewMode } from './post-preview'
+import { openExternalBrowser } from './platform'
+import { ref } from 'vue'
+import { getUserInfo, isLoggedIn } from './auth'
+import type { MainTabKey, NavigationIntent } from '@/types/home'
+
+// Main sections share one page and use CustomTabBar rather than uni.switchTab.
+export const entryChannelRequest=ref<string|null>(null)
+export const entryTabRequest = ref<MainTabKey | null>(null)
+export const entryMinePublishRequest = ref(0)
+export function openConfiguredEntry(targetType: string | undefined, target: string, title: string, openMode: 'inapp' | 'browser', showTopbar = true): void {
+  if (targetType !== 'app') { openWebLink(target, title, openMode, showTopbar); return }
+  if (!/^\/pages\/[A-Za-z0-9/-]+(?:\?[^#\s]*)?$/.test(target)) {
+    uni.showToast({ title: '入口页面地址无效', icon: 'none' }); return
+  }
+  const path = target.split('?')[0]
+  if (path === '/pages/index/index') {
+    const match = /[?&]tab=(home|follow|message|mine)(?:&|$)/.exec(target)
+    const tab = (match ? match[1] : 'home') as MainTabKey
+    const pages = getCurrentPages()
+    if (pages.length && pages[pages.length - 1].route === 'pages/index/index') {
+      entryTabRequest.value = tab
+      return
+    }
+    uni.reLaunch({ url: target, fail: () => { uni.showToast({ title: '页面打开失败，请重试', icon: 'none' }) } })
+    return
+  }
+  if (opening) return
+  opening = true
+  uni.navigateTo({ url: target, fail: () => { uni.showToast({ title: '页面打开失败，请重试', icon: 'none' }) }, complete: () => { opening = false } })
+}
+
+export function openSearchPage(hint = ''): void {
+  const query = hint ? '?hint=' + encodeURIComponent(hint) : ''
+  openConfiguredEntry('app', '/pages/search/index' + query, '搜索', 'inapp')
+}
+
+export function openScanner(): void {
+  openConfiguredEntry('app', '/pages/scan/index', '扫码', 'inapp')
+}
+
+export function openWebLink(linkUrl: string, title: string, openMode: 'inapp' | 'browser', showTopbar = true): void {
+  if (openMode === 'browser') {
+    openExternalBrowser(linkUrl)
+    return
+  }
+  uni.navigateTo({ url: '/pages/webview/index?url=' + encodeURIComponent(linkUrl) + '&title=' + encodeURIComponent(title) + '&topbar=' + (showTopbar ? 1 : 0) })
+}
+let opening = false
+/** All business avatars use string IDs and share one navigation lock. */
+export function openUserProfile(userId?: string): void {
+  if(postPreviewMode.value)return
+  if (!userId || !/^[1-9]\d*$/.test(userId) || opening) return
+  const pages = getCurrentPages()
+  const current = pages[pages.length - 1]
+  if (isLoggedIn() && userId === getUserInfo()?.userId) {
+    entryTabRequest.value = 'mine'
+    if (current?.route === 'pages/index/index') return
+    const index = pages.findIndex(page => page.route === 'pages/index/index')
+    opening = true
+    const done = () => { opening = false }
+    if (index >= 0) uni.navigateBack({ delta: pages.length - 1 - index, complete: done })
+    else uni.reLaunch({ url: '/pages/index/index?tab=mine', complete: done })
+    return
+  }
+  if (current?.route === 'pages/user-profile/index' && String(current.options?.userId || '') === userId) return
+  opening = true
+  uni.navigateTo({ url: '/pages/user-profile/index?userId=' + encodeURIComponent(userId), complete: () => { opening = false } })
+}
+export function openDestination(intent: NavigationIntent): void {
+  if (opening) return
+  let url: string | null = null
+  if (intent.kind === 'publish') {
+    url = '/pages/publish/index'
+  } else if (intent.kind === 'settings') {
+    url = '/pages/settings/index'
+  } else if (intent.kind === 'post' && intent.postId) {
+    url = '/pages/post/index?id=' + encodeURIComponent(intent.postId) + (intent.anchor ? '&anchor=' + intent.anchor : '')
+    if (intent.view === 'media') url += '&view=media&mediaIndex=' + (intent.mediaIndex ?? 0)
+  }
+  if (!url) return
+  opening = true
+  uni.navigateTo({
+    url,
+    complete: () => { opening = false }
+  })
+}

@@ -1,0 +1,8 @@
+// uni-app x delivers window changes through page onResize, rather than the
+// legacy uni.onWindowResize API. One event fan-out serves cached components.
+const listeners = new Set<() => void>()
+export function notifyWindowResize(): void { listeners.forEach(listener => listener()) }
+export function observeWindowResize(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => { listeners.delete(listener) }
+}

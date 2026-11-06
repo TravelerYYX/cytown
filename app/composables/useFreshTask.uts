@@ -1,0 +1,31 @@
+import { onBeforeUnmount, watch } from 'vue'
+
+/** A visible pane owns one idle refresh, with TTL and a single in-flight task. */
+export function useFreshTask(visible: () => boolean, action: () => Promise<unknown>, ttl = 60_000) {
+  let updated = 0, disposed = false, moving = false, revision = 0, running: Promise<void> | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const run = (force = false): Promise<void> => {
+    if (disposed || !visible()) return Promise.resolve()
+    if (running) return running
+    if (!force && Date.now() - updated < ttl) return Promise.resolve()
+    const token = revision
+    running = Promise.resolve().then(action).then(() => { if (token === revision) updated = Date.now() }).catch(() => {
+      // The owning pane retains its successful snapshot; explicit retries stay available.
+    }).finally(() => { running = undefined; schedule() })
+    return running
+  }
+  function schedule(delay = Math.max(0, ttl - (Date.now() - updated))) {
+    clearTimeout(timer)
+    if (!disposed && !moving && visible()) timer = setTimeout(() => { void run() }, Math.max(300, delay))
+  }
+  watch(visible, value => { clearTimeout(timer); if (value) schedule(0); else moving = false }, { immediate: true, flush: 'post' })
+  onBeforeUnmount(() => { disposed = true; clearTimeout(timer) })
+  return {
+    run,
+    touch: () => { updated = Date.now(); schedule() },
+    invalidate: () => { revision++; updated = 0; schedule(0) },
+    // Scroll activity postpones background validation until after the gesture settles.
+    idle: () => { moving = false; schedule(300) },
+    busy: () => { moving = true; clearTimeout(timer) }
+  }
+}

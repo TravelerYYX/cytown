@@ -1,0 +1,31 @@
+<template>
+ <view class="social-entries">
+  <ActionButton v-for="entry in entries" :key="entry.kind" :id="'social-entry-'+entry.kind" class="social-entry" :aria-label="entry.label" @tap="openSocial(entry.kind)">
+   <view class="social-entry-icon"><image class="social-entry-image" :src="uiAsset('/static/icons/social/'+entry.icon+'.svg')" mode="aspectFit"/><view v-if="entry.count>0" class="social-entry-dot"/></view>
+   <text class="social-entry-label">{{entry.label}}</text>
+  </ActionButton>
+ </view>
+</template>
+<script setup lang="uts">
+import { computed } from 'vue'
+import ActionButton from './ActionButton.uvue'
+import { uiAsset } from '@/utils/ui-assets'
+import { socialSummary, openSocial } from '@/utils/social-inbox'
+import type { SocialKind } from '@/types/social'
+const entries=computed<{kind:SocialKind;label:string;icon:string;count:number}[]>(()=>[
+ {kind:'reply',label:'评论和@',icon:'comments',count:socialSummary.value.reply+socialSummary.value.repost+socialSummary.value.mention},
+ {kind:'follow',label:'新增关注',icon:'followers',count:socialSummary.value.follow},
+ {kind:'like',label:'收到的赞',icon:'likes',count:socialSummary.value.like}
+])
+</script>
+<style scoped>
+.social-entries{height:132rpx;width:100%;display:flex;flex-direction:row;align-items:center;justify-content:space-between;padding:20rpx 34rpx 30rpx;background-color:#fff;border-bottom-width:16rpx;border-bottom-style:solid;border-bottom-color:#f6f7f9;flex-shrink:0;}
+.social-entry{display:flex;flex-direction:row;align-items:center;justify-content:center;margin:0;padding:0;background-color:transparent;border-width:0;overflow:visible;}
+.social-entry-icon{position:relative;width:44rpx;height:44rpx;flex-shrink:0;overflow:visible;}
+.social-entry-image{width:44rpx;height:44rpx;}
+.social-entry-dot{position:absolute;right:-3rpx;top:-4rpx;width:12rpx;height:12rpx;border-radius:50%;background-color:#ff505e;}
+.social-entry-label{margin-left:10rpx;font-size:24rpx;line-height:36rpx;color:#293244;}
+/* #ifndef APP */
+.social-entry::after{border:0;}
+/* #endif */
+</style>

@@ -1,0 +1,23 @@
+import { ref } from 'vue'
+import { GET, POST } from './request'
+import { API_BASE_URL } from '@/config/env'
+import type { LevelConfig, LevelProgress, LevelHistory } from '@/types/level'
+import type { Page } from '@/types/post-api'
+
+export const levelConfig = ref<LevelConfig | null>(null)
+let pending: Promise<LevelConfig> | null = null
+let loadedAt = 0
+export async function fetchLevelConfig(force = false): Promise<LevelConfig> {
+  if (!force && levelConfig.value != null && Date.now() - loadedAt < 60000) return levelConfig.value
+  if (pending != null) return pending
+  pending = GET<LevelConfig>('/app/level/config').then(value => { levelConfig.value = value; loadedAt = Date.now(); return value })
+  try { return await pending } finally { pending = null }
+}
+export const fetchLevelProgress = () => GET<LevelProgress>('/app/level/me')
+export const signInLevel = () => POST<{ gained: number; progress: LevelProgress }>('/app/level/sign-in')
+export const fetchLevelHistory = (pageNum = 1) => GET<Page<LevelHistory>>('/app/level/history', { pageNum, pageSize: 20 })
+export function levelBadgeUrl(level: number): string {
+  const url = levelConfig.value?.levels.find(item => item.level === level)?.badgeUrl
+  if (url != null && url.length > 0) return /^https?:\/\//i.test(url) ? url : API_BASE_URL + url
+  return '/static/images/levels/level-' + Math.max(1, Math.min(60, level)) + '.png'
+}

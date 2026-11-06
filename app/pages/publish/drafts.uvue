@@ -1,0 +1,63 @@
+<template>
+  <view class="page" :class="[uxNative?'ux1':'',uxNative?'ux2':'']"><view class="status" :style="{height:statusBarHeight+'px'}" :class="[uxNative?'ux1':'']"/><view class="header" :class="[uxNative?'ux1':'',uxNative?'ux3':'']"><ActionButton :aria-label="&quot;返回&quot;" @tap="back" :class="[uxNative?'ux4':'',uxNative?'ux5':'']"><AppIcon name="back" :size="42"/></ActionButton><text :class="[uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux8':'',uxNative?'ux9':'']">草稿箱</text><view :class="[uxNative?'ux1':'',uxNative?'ux10':'']"/></view>
+    <scroll-view class="list" direction="vertical" :class="[uxNative?'ux11':'',uxNative?'ux12':'']" :style="uxLayout(uxNodePrefix+'-n0',[{on:uxNative,declarations:{&quot;height&quot;:&quot;calc(100% - 92rpx)&quot;}}],{})" :id="uxNodePrefix+'-n0'"><ActionButton :aria-label="(item.title || '无标题草稿') + ' ' + (item.summary || modeName(item.mode)) + ' ' + item.updateTime" v-for="(item, __uxIndex0) in drafts" :key="item.id" class="draft" @tap="open(item)" :class="[uxNative?'ux4':'',uxNative?'ux13':'']" :style="uxLayout(uxNodePrefix+'-n1'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;width&quot;:&quot;calc(100% - 40rpx)&quot;}}],{})" :id="uxNodePrefix+'-n1'+'-'+[__uxIndex0].join('-')"><image v-if="item.coverUrl" :src="uiAsset(resourceUrl(item.coverUrl))" mode="aspectFill" :class="[uxNative?'ux14':'']" :style="uxLayout(uxNodePrefix+'-g1000'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;20rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;40rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'+'-'+[__uxIndex0].join('-')"/><view v-else class="cover" :class="[uxNative?'ux1':'',uxNative?'ux15':'']" :style="uxLayout(uxNodePrefix+'-g1001'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;20rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;40rpx&quot;}},{on:true,declarations:{__index:String(0+(item.coverUrl?1:0))}}],{})" :id="uxNodePrefix+'-g1001'+'-'+[__uxIndex0].join('-')"><AppIcon name="draft" tone="muted" :size="42"/></view><view class="copy" :class="[uxNative?'ux1':'',uxNative?'ux16':'']" :style="uxLayout(uxNodePrefix+'-g1002'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;20rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;40rpx&quot;}},{on:true,declarations:{__index:String(0+(item.coverUrl?1:0)+1)}}],{})" :id="uxNodePrefix+'-g1002'+'-'+[__uxIndex0].join('-')"><text class="title" :class="[uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux17':'',uxNative?'ux8':'',uxNative?'ux18':'']" :style="uxLayout(uxNodePrefix+'-g1003'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1003'+'-'+[__uxIndex0].join('-')">{{ item.title || '无标题草稿' }}</text><text class="summary" :class="[uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux17':'',uxNative?'ux8':'',uxNative?'ux19':'']" :style="uxLayout(uxNodePrefix+'-g1004'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1004'+'-'+[__uxIndex0].join('-')">{{ item.summary || modeName(item.mode) }}</text><text class="time" :class="[uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux17':'',uxNative?'ux8':'',uxNative?'ux20':'']" :style="uxLayout(uxNodePrefix+'-g1005'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1005'+'-'+[__uxIndex0].join('-')">{{ item.updateTime }}</text></view><ActionButton :aria-label="&quot;删除&quot;" class="delete" @tap.stop="remove(item)" :class="[uxNative?'ux4':'',uxNative?'ux21':'']" :style="uxLayout(uxNodePrefix+'-g1006'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;20rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;40rpx&quot;}},{on:true,declarations:{__index:String(0+(item.coverUrl?1:0)+1+1)}}],{})" :id="uxNodePrefix+'-g1006'+'-'+[__uxIndex0].join('-')"><text :class="[uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux17':'',uxNative?'ux22':'',uxNative?'ux8':'']">删除</text></ActionButton></ActionButton><view v-if="loadError"><text>{{loadError}}</text><ActionButton aria-label="重新加载草稿" @tap="load"><text>点击重试</text></ActionButton></view><EmptyState v-if="!loading && !loadError && !drafts.length" /></scroll-view>
+    <EyeCareOverlay />
+  </view>
+</template>
+<script setup lang="uts">
+import EmptyState from '@/components/EmptyState.uvue'
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { mediaUrl as resourceUrl } from '@/utils/media-cache'
+
+import { ref } from 'vue';import AppIcon from '@/components/AppIcon.uvue';import { useWindowInsets } from '@/composables/useWindowInsets';import { API_BASE_URL } from '@/config/env';import { deleteDraft,fetchDrafts } from '@/utils/publish-api';import type { DraftView } from '@/types/publish';import type { PublishMode } from '@/types/home'
+const {statusBarHeight}=useWindowInsets(),base=API_BASE_URL,drafts=ref<DraftView[]>([]),loading=ref(false),loadError=ref('');const back=()=>uni.navigateBack();const modeName=(mode:PublishMode)=>({image:'图文',video:'视频',post:'帖子'}[mode]);async function load(){loading.value=true;loadError.value='';try{drafts.value=await fetchDrafts()}catch{loadError.value='草稿加载失败，请重试'}finally{loading.value=false}}function open(item:DraftView){uni.setStorageSync('publish-open-draft',item.id);uni.navigateBack()}function remove(item:DraftView){uni.showModal({title:'删除草稿',content:'删除后无法恢复，确定继续？',success:async r=>{if(r.confirm){await deleteDraft(item.id);await load()}}})}onShow(()=>void load())
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+.page{position:fixed;inset:0;background:#f6f7f8;color:#25282a}.header{height:92rpx;display:flex;align-items:center;justify-content:space-between;padding:0 28rpx;background:#fff;border-bottom:1rpx solid #eee;flex-direction:row}.header>text{font-size:29rpx;font-weight:600}.header button,.header>view{width:60rpx}.list{height:calc(100% - 92rpx)}.draft{width:calc(100% - 40rpx);margin:20rpx;display:flex;align-items:center;gap:20rpx;padding:20rpx;border-radius:18rpx;background:#fff;text-align:left;flex-direction:row}.draft image,.cover{width:126rpx;height:96rpx;border-radius:12rpx;background:#eef0f2;display:flex;align-items:center;justify-content:center;flex-direction:row}.copy{min-width:0;flex:1;display:flex;flex-direction:column;gap:8rpx}.title{font-size:25rpx;font-weight:600}.summary{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#777;font-size:21rpx}.time{color:#aaa;font-size:18rpx}.delete{color:#eb4d4d;font-size:21rpx}.empty{padding-top:220rpx;text-align:center;color:#aaa}
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux6{color:var(--text-main);font-size:26rpx;}
+.ux7{color:#25282a;}
+.ux17{text-align:left;}
+.ux22{color:#eb4d4d;font-size:21rpx;}
+.ux24{text-align:center;color:#aaa;}
+.ux1{}
+.ux11{}
+.ux8{}
+.ux4{}
+.ux2{position:fixed;top:0;right:0;bottom:0;left:0;background-color:#f6f7f8;color:#25282a;}
+.ux3{height:92rpx;display:flex;flex-direction:row;align-items:center;justify-content:space-between;padding:0 28rpx;background-color:#fff;border-bottom:1rpx solid #eee;}
+.ux12{}
+.ux13{margin:20rpx;display:flex;flex-direction:row;align-items:center;padding:20rpx;border-radius:18rpx;background-color:#fff;text-align:left;}
+.ux15{width:126rpx;height:96rpx;border-radius:12rpx;background-color:#eef0f2;display:flex;flex-direction:row;align-items:center;justify-content:center;}
+.ux16{min-width:0;flex:1;display:flex;flex-direction:column;}
+.ux18{font-size:25rpx;font-weight:600;}
+.ux19{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#777;font-size:21rpx;}
+.ux20{color:#aaa;font-size:18rpx;}
+.ux21{color:#eb4d4d;font-size:21rpx;}
+.ux23{padding-top:220rpx;text-align:center;color:#aaa;}
+.ux9{font-size:29rpx;font-weight:600;}
+.ux5{width:60rpx;}
+.ux10{width:60rpx;}
+.ux14{width:126rpx;height:96rpx;border-radius:12rpx;background-color:#eef0f2;display:flex;flex-direction:row;align-items:center;justify-content:center;}
+/* #endif */
+</style>

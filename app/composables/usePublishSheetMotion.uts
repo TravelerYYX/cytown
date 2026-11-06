@@ -1,0 +1,30 @@
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+
+// Keep the sheet mounted until its 320 ms exit transition has finished.
+export function usePublishSheetMotion(visible: () => boolean) {
+  const rendered = ref(false)
+  const entered = ref(false)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let revision = 0
+
+  watch(visible, async open => {
+    const token = ++revision
+    clearTimeout(timer)
+    if (open) {
+      if (!rendered.value) {
+        entered.value = false
+        rendered.value = true
+        await nextTick()
+        if (token !== revision) return
+        // Allow the initial offscreen position to reach the renderer first.
+        timer = setTimeout(() => { entered.value = true }, 32)
+      } else entered.value = true
+      return
+    }
+    entered.value = false
+    if (rendered.value) timer = setTimeout(() => { rendered.value = false }, 320)
+  }, { immediate: true })
+
+  onBeforeUnmount(() => { revision++; clearTimeout(timer) })
+  return { rendered, entered }
+}

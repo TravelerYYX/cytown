@@ -1,0 +1,95 @@
+<template>
+  <view class="detail-author" :class="[{header},uxNative?'ux0':'',uxNative?'ux7':'',uxNative&amp;&amp;!!header?'ux15':'']">
+    <ActionButton v-if="header" class="icon-button back" aria-label="返回" @tap="$emit('back')" :class="[uxNative?'ct-native-button':'',uxNative?'ux16':'',uxNative?'ux2':'',uxNative?'ux13':'']" :style="uxLayout(uxNodePrefix+'-g1000',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:uxNative&amp;&amp;!!header,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__padding&quot;:&quot;44rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'"><AppIcon name="back" :size="42" /></ActionButton>
+    <UserAvatar navigable :src="post.author.avatar" :user-id="post.author.id" :frame-id="post.author.avatarFrame" :frame-expires-at="post.author.avatarFrameExpiresAt ?? undefined" :style="{ marginLeft: uxNative &amp;&amp; header ? '16rpx' : '0rpx' }" />
+    <view class="detail-author-copy" :class="[uxNative?'ux0':'',uxNative?'ux9':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:uxNative&amp;&amp;!!header,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__padding&quot;:&quot;44rpx&quot;}},{on:true,declarations:{__index:String(0+(header?1:0)+1)}}],{})" :id="uxNodePrefix+'-g1002'">
+      <UserName :user-id="post.author.id" :nickname="post.author.nickname" :level="post.author.level" />
+      <text class="detail-author-bio" :class="[uxNative?'ux22':'',uxNative?'ux28':'',uxNative?'ux12':'']">{{ post.detail?.bio || post.author.time || '记录热爱，分享日常' }}</text>
+    </view>
+    <FollowButton :user-id="post.author.id" :following="post.detail?.following" :followed-by="post.detail?.followedBy" @follow="emit('follow', $event.active)"  :style="uxLayout(uxNodePrefix+'-g1005',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:uxNative&amp;&amp;!!header,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__padding&quot;:&quot;44rpx&quot;}},{on:true,declarations:{__index:String(0+(header?1:0)+1+1)}}],{})" :id="uxNodePrefix+'-g1005'"/>
+    <ActionButton v-if="header" class="icon-button more" aria-label="更多操作" @tap="emit('more')" :class="[uxNative?'ct-native-button':'',uxNative?'ux16':'',uxNative?'ux2':'',uxNative?'ux14':'']" :style="uxLayout(uxNodePrefix+'-g1006',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:uxNative&amp;&amp;!!header,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__padding&quot;:&quot;44rpx&quot;}},{on:true,declarations:{__index:String(0+(header?1:0)+1+1+1)}}],{})" :id="uxNodePrefix+'-g1006'"><AppIcon name="more" :size="32" /></ActionButton>
+  </view>
+</template>
+<script setup lang="uts">
+import UserAvatar from '@/components/UserAvatar.uvue'
+import UserName from '@/components/UserName.uvue'
+
+import LevelBadge from '@/components/LevelBadge.uvue'
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import FollowButton from './FollowButton.uvue'
+import { ref, watch } from 'vue'
+import AppIcon from './AppIcon.uvue'
+import { DEFAULT_AVATAR, avatarSrc, getUserInfo, isLoggedIn } from '@/utils/auth'
+import type { Post } from '@/types/home'
+const props = defineProps<{ post: Post; header?: boolean }>()
+const emit=defineEmits<{ (e: 'back'): void;(e:'follow',active:boolean):void;(e:'more'):void }>()
+
+const avatar = ref(avatarSrc(props.post.author.avatar))
+watch(() => props.post.author.avatar, value => { avatar.value = avatarSrc(value) })
+const onAvatarError = () => { if (avatar.value !== DEFAULT_AVATAR) avatar.value = DEFAULT_AVATAR }
+</script>
+<style scoped>
+
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.detail-author { display: flex; align-items: center; gap: 16rpx; padding: 28rpx 34rpx; min-height: 118rpx; background: #fff; flex-direction: row; }
+.detail-author.header { padding: 10rpx 22rpx; min-height: 100rpx; gap: 16rpx; }
+.detail-author-avatar { display: block; width: 64rpx; height: 64rpx; flex-shrink: 0; border-radius: 50%; background: #e6e6e6; }
+.detail-author-copy { flex: 1; min-width: 0; }
+.detail-author-name { display: flex; align-items: center; gap: 9rpx; font-size: 25rpx; font-weight: 600; flex-direction: row; }
+.detail-author-name > text:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail-level { flex-shrink: 0; font-size: 18rpx; font-weight: 600; color: #e6af26; border: 2rpx solid #e6af26; border-radius: 50%; padding: 0 5rpx; }
+.detail-author-bio { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-top: 8rpx; font-size: 18rpx; color: #b8bcbe; }
+.detail-author .follow-outline { border: 2rpx solid #37b9df; border-radius: 14rpx; padding: 12rpx 22rpx; color: #37b9df; font-size: 24rpx; font-weight: 600; flex-shrink: 0; }
+.back { width: 42rpx; }
+.more { width: 30rpx; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux22{color:var(--text-main);font-size:26rpx;}
+
+
+
+
+.ux27{font-size:25rpx;font-weight:600;}
+.ux0{}
+.ux28{}
+.ux16{}
+
+.ux2{display:flex;flex-direction:row;align-items:center;justify-content:center;width:64rpx;height:64rpx;flex-shrink:0;}
+
+
+
+
+.ux7{display:flex;flex-direction:row;align-items:center;padding:28rpx 34rpx;min-height:118rpx;background-color:#fff;}
+.ux8{display:flex;flex-direction:column;width:64rpx;height:64rpx;flex-shrink:0;border-radius:50%;background-color:#e6e6e6;}
+.ux9{flex:1;min-width:0;}
+.ux10{display:flex;flex-direction:row;align-items:center;font-size:25rpx;font-weight:600;}
+.ux11{flex-shrink:0;font-size:18rpx;font-weight:600;color:#e6af26;border:2rpx solid #e6af26;border-radius:50%;padding:0 5rpx;}
+.ux12{display:flex;flex-direction:column;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;margin-top:8rpx;font-size:18rpx;color:#b8bcbe;}
+.ux13{width:42rpx;}
+.ux14{width:30rpx;}
+
+
+
+
+
+.ux15{padding:10rpx 22rpx;min-height:100rpx;}
+.ux29{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* #endif */
+</style>

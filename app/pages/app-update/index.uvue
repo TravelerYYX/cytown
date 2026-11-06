@@ -1,0 +1,82 @@
+<template>
+  <view class="update-overlay">
+    <view class="update-shade" @tap="ignoreBackdrop" />
+    <view v-if="updateRelease" class="update-card" :style="{maxHeight:cardHeight+'px'}">
+      <view class="update-art">
+        <view class="update-art-projection"><image class="update-art-image update-art-image-top" src="/static/images/update/xingxi-update-cutout.png" mode="aspectFit" /></view>
+        <view class="update-art-panel"><image class="update-art-image update-art-image-bottom" src="/static/images/update/xingxi-update-cutout.png" mode="aspectFit" /></view>
+      </view>
+      <view class="update-body">
+        <view class="update-heading"><text class="update-title">次元町版本更新</text><text class="update-version">v{{ release.versionName }}</text></view>
+        <text v-if="release.forceUpdate" class="update-required">此版本需要更新后继续使用</text>
+        <text class="update-size">本次更新大小：{{ updateSize(release.sizeBytes) }}</text>
+        <scroll-view class="update-notes" direction="vertical" :show-scrollbar="true"><text class="update-note-text">{{ release.notes }}</text></scroll-view>
+        <view v-if="hasTask" class="update-download">
+          <view class="update-track"><view class="update-fill" :style="{width:updateProgress+'%'}" /></view>
+          <view class="update-progress-copy"><text class="update-percent">{{ updatePercent }}%</text><text class="update-bytes">{{ updateSize(updateDownload.downloaded || 0) }} / {{ updateSize(release.sizeBytes) }}</text></view>
+          <text v-if="updateDownload.phase==='verifying'" class="update-hint">下载完成，正在校验安装包…</text>
+          <text v-if="updateDownload.message" class="update-error">{{ updateDownload.message }}</text>
+          <text v-if="updateDownload.notificationsEnabled===false" class="update-hint">下载通知未开启，可在系统设置中开启；返回这里可查看进度。</text>
+        </view>
+        <ActionButton class="update-primary" :disabled="updateIsDownloading || updateActionBusy" :aria-label="actionLabel" @tap="beginAppUpdate"><text class="update-primary-text">{{ actionLabel }}</text></ActionButton>
+        <text v-if="hasTask" class="update-background-tip">支持后台下载，完成后将打开系统安装程序</text>
+        <text v-if="release.forceUpdate && updateIsDownloading" class="update-hint update-centered">可将应用切至系统后台继续下载</text>
+        <ActionButton v-if="release.forceUpdate && !updateIsDownloading" class="update-later" :disabled="updateChecking" aria-label="重新检查更新" @tap="recheck"><text class="update-later-text">{{updateChecking?'正在检查…':'重新检查更新'}}</text></ActionButton>
+        <ActionButton v-if="!release.forceUpdate" class="update-later" :aria-label="hasTask?'后台下载':'下次再说'" @tap="closeUpdateDialog"><text class="update-later-text">{{ updateIsReady ? '稍后安装' : hasTask ? '后台下载' : '下次再说' }}</text></ActionButton>
+      </view>
+    </view>
+  </view>
+</template>
+<script setup lang="uts">
+import { computed } from 'vue'
+import ActionButton from '@/components/ActionButton.uvue'
+import { updateRelease,updateDownload,updateIsDownloading,updateIsReady,updateActionBusy,updateProgress,updatePercent,updateSize,beginAppUpdate,closeUpdateDialog,checkAppUpdate,updateChecking } from '@/utils/app-update'
+const release=computed(()=>updateRelease.value || {id:0,versionName:'',versionCode:0,notes:'',forceUpdate:false,packageUrl:'',packageName:'',sizeBytes:0,sha256:''})
+const hasTask=computed(()=>!!updateDownload.value.phase)
+const cardHeight=Math.max(240,uni.getWindowInfo().windowHeight-32)
+const actionLabel=computed(()=>updateDownload.value.phase==='verifying'?'正在校验…':updateIsDownloading.value?'正在下载 '+updatePercent.value+'%':updateIsReady.value?'安装更新':hasTask.value?'继续下载':'立即更新')
+function ignoreBackdrop():void{}
+function recheck():void{void checkAppUpdate(true)}
+onBackPress(()=>{if(updateRelease.value?.forceUpdate)return true;closeUpdateDialog();return true})
+</script>
+<style scoped>
+.update-overlay{flex:1;display:flex;align-items:center;justify-content:center;padding:16px 0;position:relative}
+.update-shade{position:absolute;left:0;top:0;right:0;bottom:0;background-color:rgba(0,0,0,0.6)}
+/* Keep the header's transparent silhouette visible above the blue sky panel. */
+.update-card{width:79.2%;max-width:390px;display:flex;flex-direction:column;overflow:visible}
+.update-art{width:100%;height:297rpx;max-height:195px;flex-shrink:0;position:relative}
+/* Round the blue panel below the silhouette without clipping the raised artwork. */
+.update-art-projection{position:absolute;left:0;right:0;top:0;height:36%;overflow:hidden}
+.update-art-panel{position:absolute;left:0;right:0;top:36%;bottom:0;border-top-left-radius:12px;border-top-right-radius:12px;overflow:hidden}
+.update-art-image{position:absolute;left:0;width:100%;height:297rpx;max-height:195px}
+.update-art-image-top{top:0}
+.update-art-image-bottom{bottom:0}
+.update-body{padding:0 7% 6px;background-color:#ffffff;border-bottom-left-radius:8px;border-bottom-right-radius:8px;display:flex;flex-direction:column;flex-shrink:1;min-height:0}
+.update-heading{display:flex;flex-direction:row;align-items:center;justify-content:center;flex-wrap:wrap;margin-bottom:12px;flex-shrink:0}
+.update-title{font-size:17px;line-height:24px;font-weight:600;color:#222222;margin-right:8px}
+.update-version{font-size:12px;line-height:24px;color:#444444}
+.update-required{font-size:12px;color:#e27556;text-align:center;margin-bottom:10px}
+.update-size{font-size:13px;line-height:20px;color:#555555;margin-bottom:12px;flex-shrink:0}
+.update-notes{height:46px;flex-shrink:1;margin-bottom:4px;min-height:0}
+.update-note-text{font-size:13px;color:#777777;line-height:23px;white-space:pre-wrap}
+.update-download{display:flex;flex-direction:column;margin-bottom:12px}
+.update-track{height:7px;background-color:#e7f5ff;border-radius:4px;overflow:hidden}
+.update-fill{height:7px;background-color:#18a8fa;border-radius:4px}
+.update-progress-copy{display:flex;flex-direction:row;justify-content:space-between;margin-top:7px;align-items:center}
+.update-percent{font-size:14px;font-weight:600;color:#179ce5}
+.update-bytes{font-size:11px;color:#8592a3}
+.update-primary{height:42px;border-radius:5px;background-color:#19a4f5;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.update-primary-text{font-size:14px;font-weight:400;color:#ffffff}
+.update-background-tip{font-size:11px;color:#8a99aa;text-align:center;line-height:17px;margin-top:10px}
+.update-hint{font-size:11px;color:#8592a3;line-height:17px;margin-top:5px}
+.update-centered{text-align:center}
+.update-error{font-size:12px;color:#df705c;line-height:18px;margin-top:6px}
+.update-later{height:40px;display:flex;align-items:center;justify-content:center;margin-top:8px;flex-shrink:0}
+.update-later-text{font-size:13px;color:#777777}
+/* #ifdef WEB */
+.update-card .update-primary{width:100%;margin:0;padding:0;border:0;background:#19a4f5}
+.update-card .update-primary[disabled]{background:#73ceff}
+.update-card .update-later{width:100%;margin:8px 0 0;padding:0;background:transparent;border:0}
+.update-card button::after{border:0}
+/* #endif */
+</style>

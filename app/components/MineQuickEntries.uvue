@@ -1,0 +1,43 @@
+<template>
+  <view v-if="entries.length" class="mine-quick-zone">
+    <scroll-view class="mine-quick-scroll" direction="horizontal" :show-scrollbar="false">
+      <view class="mine-quick-track" :style="{width: entries.length * 212.5 + 50 + 'rpx'}">
+        <ActionButton v-for="(entry, index) in entries" :key="entry.id" class="mine-quick-entry" :style="{marginRight: index === entries.length - 1 ? '0rpx' : '16.667rpx'}" :aria-label="entry.title" :press-motion="entry.id === -1" @tap="openEntry(entry)">
+          <view class="mine-quick-title">
+            <image class="mine-quick-icon" :src="uiAsset(entry.id === -1 ? entry.iconUrl : mediaUrl(entry.iconUrl))" mode="aspectFit" />
+            <text class="mine-quick-label">{{ entry.title }}</text>
+          </view>
+          <text class="mine-quick-sub">{{ entry.description }}</text>
+        </ActionButton>
+      </view>
+    </scroll-view>
+  </view>
+</template>
+<script setup lang="uts">
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+import { mediaUrl } from '@/utils/media-cache'
+import { openConfiguredEntry } from '@/utils/navigation'
+import type { MineEntry } from '@/types/home'
+defineProps<{ entries: MineEntry[]; guest?: boolean }>()
+const openEntry = (entry: MineEntry) => openConfiguredEntry(entry.targetType, entry.linkUrl, entry.title, entry.openMode, entry.showTopbar)
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+/* Reference: 1080 px screenshot mapped to the project's 750 rpx canvas. */
+.mine-quick-zone { height: 164rpx; padding-top: 41.667rpx; flex-shrink: 0; }
+.mine-quick-scroll { width: 100%; height: 91rpx; }
+.mine-quick-track { display: flex; flex-direction: row; padding: 0 33.333rpx; }
+.mine-quick-entry { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; flex-shrink: 0; width: 195.833rpx; height: 91rpx; margin: 0; margin-right: 16.667rpx; border-width: 0; border-radius: 16.667rpx; padding: 18.056rpx 22.222rpx; background-color: #f5f6f7; }
+.mine-quick-title { display: flex; flex-direction: row; align-items: center; height: 30.556rpx; flex-shrink: 0; }
+.mine-quick-icon { width: 30.556rpx; height: 30.556rpx; margin-right: 12.5rpx; flex-shrink: 0; }
+.mine-quick-label { font-size: 22.222rpx; line-height: 30.556rpx; font-weight: 500; color: #252525; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mine-quick-sub { display: flex; margin-top: 3.472rpx; width: 151.389rpx; font-size: 16.667rpx; line-height: 22.222rpx; color: #a2a6a8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* #ifndef APP */
+/* The global Web button reset is deliberately more specific than a class. */
+.app-shell .mine-quick-entry { margin: 0 16.667rpx 0 0; padding: 18.056rpx 22.222rpx; border-radius: 16.667rpx; background: #f5f6f7; text-align: left; }
+.mine-quick-label { min-width: 0; }
+/* #endif */
+</style>

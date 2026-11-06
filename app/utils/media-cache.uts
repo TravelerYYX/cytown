@@ -1,0 +1,240 @@
+// #ifdef WEB
+import { transact, webRows, webBudget, webDownload, webImageURL } from './media-cache-web'
+// #endif
+// #ifndef WEB
+import { fileSize, persistFile, deleteFile, downloadImageFile } from './file-storage'
+// #endif
+import { API_BASE_URL } from '@/config/env'
+import { imageDeadline, IMAGE_DOWNLOAD_TIMEOUT } from './image-loading'
+// #ifdef APP
+const INDEX = 'ct_image_file_cache_v2'
+// #endif
+// #ifndef APP
+const INDEX = 'ct_image_file_cache_v1'
+// #endif
+const DEFAULT_LIMIT = 3 * 1024 ** 3
+type Entry = { key: string; path?: string; blob?: Blob; size: number; used: number }
+let limit = DEFAULT_LIMIT, generation = 0
+let sequence: Promise<unknown> = Promise.resolve()
+export type ImageRequestOptions = { priority?: () => number; cancelled?: () => boolean }
+type DownloadJob = { key: string; source: string; revision: number; clients: ImageRequestOptions[]; resolve: (entry: Entry | undefined) => void; promise: Promise<Entry | undefined> }
+const pending = new Map<string, DownloadJob>()
+const queue: DownloadJob[] = []
+let downloads = 0
+let nativeEntries: Map<string, Entry> | undefined
+let nativeBytes = 0
+let persistTimer: ReturnType<typeof setTimeout> | undefined
+let nativePersistence: Promise<void> = Promise.resolve()
+const touches = new Map<string, number>()
+const validated = new Set<string>()
+function pump() {
+ while (downloads < 3 && queue.length) {
+  queue.sort((a, b) => Math.max(0, ...b.clients.filter(c => !c.cancelled?.()).map(c => c.priority?.() || 0)) - Math.max(0, ...a.clients.filter(c => !c.cancelled?.()).map(c => c.priority?.() || 0)))
+  const job = queue.shift()!
+  if (job.revision !== generation || job.clients.every(c => c.cancelled?.())) { if (pending.get(job.key) === job) pending.delete(job.key); job.resolve(undefined); continue }
+  downloads++
+  void imageDeadline(download(job.key, job.source, job.revision)).catch(() => undefined).then(job.resolve).finally(() => { downloads--; if (pending.get(job.key) === job) pending.delete(job.key); pump() })
+ }
+}
+function queuedDownload(key: string, source: string, revision: number, client: ImageRequestOptions) {
+ let job = pending.get(key)
+ if (!job) {
+  let resolve!: DownloadJob['resolve']
+  const promise = new Promise<Entry | undefined>(done => { resolve = done })
+  job = { key, source, revision, clients: [], resolve, promise }; pending.set(key, job); queue.push(job)
+ }
+ job.clients.push(client); pump(); return job.promise
+}
+function nativeIndex(): Map<string, Entry> {
+ if (!nativeEntries) {
+  let rows: Entry[] = []
+  // #ifdef APP
+  // v1 could contain another URL's bytes despite distinct saved paths. Those
+  // records cannot be repaired by checking filenames or file sizes.
+  try {
+   const legacy = uni.getStorageSync('ct_image_file_cache_v1')
+   if (Array.isArray(legacy)) {
+    for (const path of new Set(legacy.map((row: Entry) => row.path).filter((value: string | undefined) => !!value))) if (path) void deleteFile(path).catch(() => {})
+    uni.removeStorageSync('ct_image_file_cache_v1')
+   }
+  } catch {}
+  // #endif
+  try { const stored = uni.getStorageSync(INDEX); if (Array.isArray(stored)) rows = stored } catch {}
+  // Older saves could map unrelated images to the same local filename. Refetch
+  // every affected entry: its original contents can no longer be identified.
+  const pathCounts = new Map<string, number>()
+  for (const row of rows) if (row.path) pathCounts.set(row.path, (pathCounts.get(row.path) || 0) + 1)
+  const sharedPaths = new Set<string>()
+  for (const [path, count] of pathCounts) if (count > 1) sharedPaths.add(path)
+  nativeEntries = new Map(rows.filter(row => !row.path || !sharedPaths.has(row.path)).map(row => [row.key, row]))
+  nativeBytes = [...nativeEntries.values()].reduce((total, row) => total + row.size, 0)
+  if (sharedPaths.size) {
+   // #ifndef WEB
+   for (const path of sharedPaths) void deleteFile(path).catch(() => {})
+   // #endif
+   schedulePersistence()
+  }
+ }
+ return nativeEntries
+}
+function schedulePersistence() {
+ if (persistTimer) return
+ persistTimer = setTimeout(() => { persistTimer = undefined; void flushMediaCacheMetadata().catch(() => {}) }, 750)
+}
+/** Flush batched access metadata on app background and explicit cache operations. */
+export async function flushMediaCacheMetadata(): Promise<void> {
+ clearTimeout(persistTimer); persistTimer = undefined
+ if (isWeb()) {
+ // #ifdef WEB
+  const batch = new Map(touches); touches.clear(); const revision = generation
+  await serial(async () => {
+   if (revision !== generation) return
+   for (const [key, used] of batch) { const entry = await transact<Entry | undefined>('readonly', store => store.get(key)); if (entry) { entry.used = Math.max(entry.used, used); await write(entry) } }
+  })
+ 
+ // #endif
+} else if (nativeEntries) {
+  const snapshot = [...nativeEntries.values()].map(entry => ({ ...entry }))
+  nativePersistence = nativePersistence.catch(() => {}).then(() => new Promise<void>((resolve, reject) => {
+   uni.setStorage({ key: INDEX, data: snapshot, success: () => resolve(), fail: reject })
+  }))
+  await nativePersistence
+ }
+}
+export const mediaUrl = (url?: string) => !url ? '' : /^(https?:|blob:|data:|file:|_doc\/)/.test(url) ? url : API_BASE_URL + url
+const serial = <T>(action: () => Promise<T>): Promise<T> => { const next = sequence.then(action, action); sequence = next.catch(() => {}); return next }
+const isWeb = () => {
+ // #ifdef WEB
+ return true
+ // #endif
+ // #ifndef WEB
+ return false
+ // #endif
+}
+async function rows(): Promise<Entry[]> {
+ // #ifdef WEB
+ return webRows()
+ // #endif
+ // #ifndef WEB
+ return [...nativeIndex().values()]
+ // #endif
+}
+async function remove(entry: Entry) {
+ touches.delete(entry.key); validated.delete(entry.key)
+ // #ifdef WEB
+ await transact('readwrite', store => store.delete(entry.key))
+ // #endif
+ // #ifndef WEB
+ if (entry.path) await deleteFile(entry.path).catch(() => {})
+ const index = nativeIndex(); nativeBytes -= index.get(entry.key)?.size || 0; index.delete(entry.key); schedulePersistence()
+ // #endif
+}
+async function trim(extra = 0, force = false) {
+ if (!isWeb()) { nativeIndex(); if (!force && nativeBytes + extra <= limit) return }
+ const entries = (await rows()).sort((a,b) => (touches.get(a.key) || a.used) - (touches.get(b.key) || b.used)); let total = entries.reduce((sum, row) => sum+row.size, 0), budget=limit
+ // #ifdef WEB
+ if(!force)budget=await webBudget(limit,total)
+ // #endif
+ for (const entry of entries) { if (!force && total+extra <= budget) break; await remove(entry); total -= entry.size }
+}
+async function read(key: string): Promise<Entry | undefined> {
+ let value: Entry | undefined
+ // #ifdef WEB
+ value = await transact<Entry | undefined>('readonly', store => store.get(key))
+ // #endif
+ // #ifndef WEB
+ value = nativeIndex().get(key)
+ // #endif
+ if (!value) return undefined
+ // #ifndef WEB
+ if (value.path && !validated.has(key)) { const valid = await fileSize(value.path).then(() => true, () => false); if (!valid) { await remove(value); return undefined } validated.add(key) }
+ // #endif
+ value.used = Date.now(); touches.set(key, value.used); schedulePersistence(); return value
+}
+async function write(entry: Entry) {
+ // #ifdef WEB
+ await transact('readwrite', store => store.put(entry))
+ // #endif
+ // #ifndef WEB
+  const index = nativeIndex(); nativeBytes += entry.size - (index.get(entry.key)?.size || 0); index.set(entry.key, entry); validated.add(entry.key); schedulePersistence()
+ // #endif
+}
+async function download(key: string, url: string, revision: number): Promise<Entry | undefined> {
+ // #ifdef WEB
+  const entry = await webDownload(key,url,limit); if (!entry) return undefined
+  return serial(async () => { if (generation !== revision) return undefined; await trim(entry.size); try { await write(entry) } catch { await trim(0, true); try { await write(entry) } catch { return undefined } } return entry })
+ 
+ // #endif
+ // #ifdef APP
+ const image = await downloadImageFile(url)
+ if (generation !== revision || image.size > limit) { await deleteFile(image.path).catch(() => {}); return undefined }
+ return serial(async () => {
+  if (generation !== revision) { await deleteFile(image.path).catch(() => {}); return undefined }
+  const entry: Entry = { key, path: image.path, size: image.size, used: Date.now() }
+  try {
+   await trim(image.size)
+   if (generation !== revision) { await deleteFile(image.path).catch(() => {}); return undefined }
+   await write(entry)
+  }
+  catch (error) { await remove(entry); throw error }
+  return entry
+ })
+ // #endif
+ // #ifdef MP-WEIXIN
+ const downloaded = await new Promise<DownloadFileSuccess>((resolve,reject) => uni.downloadFile({ url, timeout: IMAGE_DOWNLOAD_TIMEOUT, success: resolve, fail: reject }))
+ if (downloaded.statusCode !== 200 || generation !== revision) return undefined
+ const size = await fileSize(downloaded.tempFilePath)
+ if (size > limit) return undefined
+ return serial(async () => { if (generation !== revision) return undefined; await trim(size); const path = await persistFile(downloaded.tempFilePath); const entry:Entry = {key,path,size,used:Date.now()}; if (generation !== revision) { await deleteFile(path).catch(() => {}); return undefined } try{await write(entry)}catch(error){await remove(entry);throw error} return entry })
+ // #endif
+}
+/** A file already validated in this process can be bound on the first native render. */
+export function cachedImageSource(url: string, version = 'legacy', variant = 'preview'): string {
+ const source = mediaUrl(url)
+ if (!source || /^(data:|blob:|file:|_doc\/)/.test(source)) return source
+ // #ifndef WEB
+ const key = JSON.stringify([source, version, variant])
+ const entry = nativeIndex().get(key)
+ if (entry?.path && validated.has(key)) {
+  entry.used = Date.now(); touches.set(key, entry.used); schedulePersistence()
+  return entry.path
+ }
+ // #endif
+ return ''
+}
+/** Each caller owns its Blob URL; unmounting an image releases it without deleting the disk entry. */
+export async function cachedImage(url: string, version = 'legacy', variant = 'preview', options: ImageRequestOptions = {}): Promise<{ url: string; release: () => void }> {
+ const source = mediaUrl(url); if (!source || /^(data:|blob:|file:|_doc\/)/.test(source)) return { url: source, release: () => {} }
+ const key = JSON.stringify([source, version, variant]); const revision = generation
+ let finished = false
+ const client: ImageRequestOptions = { priority: options.priority, cancelled: () => finished || options.cancelled?.() === true || revision !== generation }
+ try {
+  const entry = await imageDeadline((async () => {
+   const hit = await read(key)
+   if (client.cancelled?.()) return undefined
+   return hit || await queuedDownload(key, source, revision, client)
+  })())
+  if (options.cancelled?.() || revision !== generation) return { url: '', release: () => {} }
+  // #ifdef WEB
+  if (entry?.blob) return webImageURL(entry.blob)
+  // #endif
+  if (entry?.path) return {url:entry.path,release:()=>{}}
+ } catch { /* Rendering still works when cache storage is unavailable or slow. */ }
+ finally { finished = true }
+ if (options.cancelled?.() || revision !== generation) return { url: '', release: () => {} }
+ return {url:source,release:()=>{}}
+}
+export async function imageCacheSize(): Promise<number> { try { if (!isWeb()) { nativeIndex(); return nativeBytes } return (await rows()).reduce((sum,row)=>sum+row.size,0) } catch { return 0 } }
+export async function clearImageCache() {
+ generation++; pending.clear(); touches.clear(); validated.clear()
+ for (const job of queue.splice(0)) job.resolve(undefined)
+ clearTimeout(persistTimer); persistTimer = undefined
+ await serial(() => trim(0, true))
+ await flushMediaCacheMetadata()
+}
+export async function syncMediaCacheConfig() {
+ try { const result = await new Promise<MediaConfigResult>(resolve => uni.request({ url:API_BASE_URL+'/app/media/config',success:resolve,fail:()=>resolve({data:{},statusCode:0}) })); const data=result.data as MediaConfigEnvelope; if(data?.data?.cacheMaxBytes && data.data.cacheMaxBytes>=16*1024**2){limit=data.data.cacheMaxBytes;await serial(()=>trim())} } catch {}
+}
+type MediaConfig = { cacheMaxBytes?: number }
+type MediaConfigEnvelope = { data?: MediaConfig }
+type MediaConfigResult = { data: unknown; statusCode: number }

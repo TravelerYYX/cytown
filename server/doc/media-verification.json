@@ -1,0 +1,74 @@
+{
+  "javaTests": [
+    {
+      "name": "MediaIntegrationTests",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "ImageProcessServiceTests",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "PostIntegrationTests",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "CommentIntegrationTests",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "P2IntegrationTests",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "UserAccountManagementTests",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "JwtAudienceTests",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "AccountSessionTests",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "javaTotal": 51,
+  "uploadFailureTests": {"tests": 2, "failures": 0, "errors": 0},
+  "browser": {
+    "cache": "passed",
+    "adaptive": "passed",
+    "admin": "passed",
+    "ui": "passed"
+  },
+  "historyCleanup": "applied-and-backed-up",
+  "projectDatabaseMigration": "applied-2026-10-10",
+  "backend": "running",
+  "liveImageUpload": {"result": "passed", "status": "ready", "cover": "WebP", "preview": "transparent PNG", "originalBytesUnchanged": true, "temporaryDataRemoved": true},
+  "realCloudTests": "awaiting-environment",
+  "androidDeviceTests": "awaiting-environment"
+}

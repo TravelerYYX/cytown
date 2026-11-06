@@ -1,0 +1,20 @@
+/** All design dimensions use the existing 750rpx mobile coordinate system. */
+export const LAYOUT = {
+  homeHeader: 420,
+  compactHeader: 96,
+  homeCompactHeader: 108,
+  channelTabs: 90,
+  profileHeader: 744,
+  quickEntries: 164,
+  profileTabs: 76,
+  tabBar: 128
+} as const
+export const THEME = {
+  brand: '#00c3ff',
+  textMain: '#242729',
+  textSub: '#94999c',
+  skeleton: '#e6e6e6',
+  surface: '#ffffff',
+  background: '#f7f7f7',
+  danger: '#ff587d'
+} as const

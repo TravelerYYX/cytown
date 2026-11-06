@@ -1,0 +1,32 @@
+import { onBeforeUnmount, watch } from 'vue'
+import { HorizontalSwipe } from '@/utils/horizontal-swipe'
+
+export function useHorizontalSwipe(enabled: () => boolean, key: () => string, change: (direction: number) => void) {
+  const gesture = new HorizontalSwipe()
+  let origin = ''
+  function cancel(): void { gesture.cancel(); origin = '' }
+  function start(event: UniTouchEvent): void {
+    cancel()
+    if (!enabled() || event.touches.length !== 1) return
+    origin = key()
+    const point = event.touches[0]!
+    gesture.begin(point.clientX, point.clientY)
+  }
+  function move(event: UniTouchEvent): void {
+    if (!enabled() || origin !== key() || event.touches.length !== 1) { cancel(); return }
+    const point = event.touches[0]!
+    if (gesture.move(point.clientX, point.clientY)) event.preventDefault()
+  }
+  function end(event: UniTouchEvent): void {
+    if (!enabled() || origin !== key() || event.touches.length > 0) { cancel(); return }
+    const point = event.changedTouches[0]
+    if (point) gesture.move(point.clientX, point.clientY)
+    const direction = gesture.release()
+    origin = ''
+    if (direction !== 0) change(direction)
+  }
+  watch(enabled, active => { if (!active) cancel() })
+  watch(key, cancel)
+  onBeforeUnmount(cancel)
+  return { start, move, end, cancel }
+}

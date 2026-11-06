@@ -1,0 +1,33 @@
+<template>
+  <view class="mine-search-bar">
+    <view class="mine-search-field">
+      <AppIcon name="search" tone="muted" :size="36" />
+      <input class="mine-search-input" :value="modelValue" :focus="focused" :maxlength="100"
+        :placeholder="placeholder" placeholder-style="color:#a0a0a0" confirm-type="search"
+        :adjust-position="false" :cursor-spacing="16" aria-label="搜索我的作品、收藏或赞过"
+        @input="input" @confirm="emit('submit')" />
+      <ActionButton v-if="modelValue" class="mine-search-clear" aria-label="清除搜索关键词" @tap="emit('update:modelValue', '')">
+        <AppIcon name="close" tone="muted" :size="24" />
+      </ActionButton>
+    </view>
+    <ActionButton class="mine-search-cancel" aria-label="取消搜索" @tap="emit('cancel')"><text class="mine-search-cancel-label">取消</text></ActionButton>
+  </view>
+</template>
+<script setup lang="uts">
+import ActionButton from './ActionButton.uvue'
+import AppIcon from './AppIcon.uvue'
+withDefaults(defineProps<{ modelValue: string; focused?: boolean; placeholder?: string }>(), { focused: false, placeholder: '搜索我的作品/收藏/赞过' })
+const emit = defineEmits<{ 'update:modelValue': [value: string]; submit: []; cancel: [] }>()
+function input(event: UniInputEvent) { emit('update:modelValue', event.detail.value) }
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+.mine-search-bar { display: flex; flex-direction: row; align-items: center; height: 124rpx; flex-shrink: 0; padding: 24rpx 32rpx 24rpx 34rpx; background-color: #fff; border-bottom: 1rpx solid #f0f0f0; }
+.mine-search-field { display: flex; flex-direction: row; align-items: center; flex: 1; min-width: 0; height: 66rpx; padding: 0 18rpx; border-radius: 36rpx; background-color: #f5f5f5; }
+.mine-search-input { flex: 1; min-width: 0; height: 66rpx; margin-left: 14rpx; padding: 0; font-size: 27rpx; color: #333; background-color: transparent; }
+.mine-search-clear { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 44rpx; height: 56rpx; flex-shrink: 0; }
+.mine-search-cancel { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 78rpx; height: 66rpx; margin-left: 22rpx; flex-shrink: 0; }
+.mine-search-cancel-label { font-size: 30rpx; color: #919191; }
+</style>

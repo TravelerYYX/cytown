@@ -1,0 +1,29 @@
+// Only the inline refresh area moves. Header, channels and native list reuse stay
+// in place; horizontal gestures and pulls begun away from the top remain scrolls.
+export class InlinePullRefresh {
+  private startX = 0
+  private startY = 0
+  private tracking = false
+  private rejected = false
+  distance = 0
+  constructor(private threshold: number) {}
+  begin(x: number, y: number, atTop: boolean): void {
+    this.startX = x; this.startY = y
+    this.tracking = atTop; this.rejected = false; this.distance = 0
+  }
+  move(x: number, y: number): number {
+    if (!this.tracking || this.rejected) return 0
+    const dx = Math.abs(x - this.startX), dy = y - this.startY
+    if (this.distance === 0 && (dy < -6 || dx > 6 && dx > Math.abs(dy))) {
+      this.rejected = true; return 0
+    }
+    this.distance = Math.max(0, Math.min(this.threshold * 1.5, (dy - 6) * .5))
+    return this.distance
+  }
+  release(): boolean {
+    const refresh = this.tracking && !this.rejected && this.distance >= this.threshold
+    this.cancel()
+    return refresh
+  }
+  cancel(): void { this.tracking = false; this.rejected = false; this.distance = 0 }
+}

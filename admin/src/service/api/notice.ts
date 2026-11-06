@@ -1,0 +1,12 @@
+import { request } from '../request';
+export const fetchNoticeCategories=()=>request<Api.P3.Category[]>({url:'/notice/category/list'});
+export const createNoticeCategory=(data:Partial<Api.P3.Category>)=>request<Api.P3.Category>({url:'/notice/category/create',method:'post',data});
+export const updateNoticeCategory=(data:Partial<Api.P3.Category>)=>request<Api.P3.Category>({url:'/notice/category/update',method:'post',data});
+export const deleteNoticeCategory=(id:number)=>request<void>({url:'/notice/category/delete',method:'post',data:{id}});
+export const fetchNotices=(params:Api.P3.NoticeQuery)=>request<Api.P3.Page<Api.P3.Notice>>({url:'/notice/list',params});
+export const fetchNoticeDetail=(id:number)=>request<Api.P3.NoticeDetail>({url:`/notice/${id}`});
+export const createNotice=(data:Record<string,unknown>)=>request<number>({url:'/notice/create',method:'post',data});
+export const updateNotice=(data:Record<string,unknown>)=>request<number>({url:'/notice/update',method:'post',data});
+export const deleteNotice=(id:number)=>request<void>({url:'/notice/delete',method:'post',data:{id}});
+export const publishNotice=(id:number)=>request<void>({url:'/notice/publish',method:'post',data:{id}});
+export const unpublishNotice=(id:number)=>request<void>({url:'/notice/unpublish',method:'post',data:{id}});

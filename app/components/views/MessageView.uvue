@@ -1,0 +1,160 @@
+<template>
+  <view class="screen message-view" :class="[uxNative?'ux2':'',uxNative?'ux3':'']">
+    <swiper class="message-swiper" :current="topTab === 'chat' ? 0 : 1" :duration="300" easing-function="easeOutCubic" @change="onTopTabSwipe">
+      <swiper-item v-for="pane in messageTabs" :key="pane">
+        <view class="message-pane">
+          <view class="message-pane-spacer" :style="{ paddingTop: statusBarHeight + 'px' }">
+            <view class="message-pane-header-space" />
+          </view>
+          <SocialInboxEntries v-if="pane === 'notice'" />
+          <PaneScroll :style="{ height: '0px', flexGrow: 1 }" :active="paneVisible && topTab === pane" :scroll-top="pane === 'chat' ? chatScrollTop : noticeScrollTop" :show-scrollbar="false" @scroll="pane === 'chat' ? onChatScroll($event) : onNoticeScroll($event)" :class="[uxNative?'ux4':'']">
+            <view v-if="pane==='chat'" class="chat-separator"  :class="[uxNative?'ux2':'',uxNative?'ux15':'']"/>
+            <view v-if="loading&&pane==='notice'" class="load-tip" :class="[uxNative?'ux2':'',uxNative?'ux16':'']"><text :class="[uxNative?'ux11':'',uxNative?'ux17':'',uxNative?'ux14':'']">通知加载中…</text></view>
+            <EmptyState v-if="!conversationsByTab[pane].length && (pane === 'chat' || (!loading && !noticeSyncError))" />
+            <view class="conversation-list" :class="[uxNative?'ux2':'']">
+              <ActionButton :aria-label="conversation.name + ' ' + (conversation.isTop?'置顶 ':'') + conversation.time + ' ' + conversation.lastMsg + (conversation.unread?' '+String(conversation.unread):'')" v-for="(conversation, __uxIndex1) in conversationsByTab[pane]" :key="conversation.id" class="conversation" @tap="openConversation(conversation)" :class="[uxNative?'ct-native-button':'',uxNative?'ux8':'',uxNative?'ux18':'']">
+                <view class="conversation-avatar" @tap.stop="openConversationProfile(conversation)" :class="[uxNative?'ux2':'',uxNative?'ux19':'']"><image v-if="conversation.iconUrl" class="avatar-image" :src="conversationIcon(conversation.iconUrl)" mode="aspectFit"  :class="[uxNative?'ux20':'']"/><view v-else class="bell-avatar" :class="[uxNative?'ux2':'',uxNative?'ux21':'',uxNative?'ux22':'']"><AppIcon name="bell" :size="46" /></view></view>
+                <view class="conversation-body" :class="[uxNative?'ux2':'',uxNative?'ux23':'']"><view class="conversation-top" :class="[uxNative?'ux2':'',uxNative?'ux24':'']"><text class="conversation-name" :class="[uxNative?'ux11':'',uxNative?'ux25':'',uxNative?'ux14':'',uxNative?'ux26':'']" :style="uxLayout(uxNodePrefix+'-'+pane+'-g1004'+'-'+[__uxIndex1].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-'+pane+'-g1004'+'-'+[__uxIndex1].join('-')">{{ conversation.name }}</text><text v-if="conversation.isTop" class="pinned" :class="[uxNative?'ux11':'',uxNative?'ux25':'',uxNative?'ux14':'',uxNative?'ux27':'']" :style="uxLayout(uxNodePrefix+'-'+pane+'-g1005'+'-'+[__uxIndex1].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-'+pane+'-g1005'+'-'+[__uxIndex1].join('-')">置顶</text><text class="conversation-time" :class="[uxNative?'ux11':'',uxNative?'ux25':'',uxNative?'ux14':'',uxNative?'ux28':'']" :style="uxLayout(uxNodePrefix+'-'+pane+'-g1006'+'-'+[__uxIndex1].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1+(conversation.isTop?1:0))}}],{})" :id="uxNodePrefix+'-'+pane+'-g1006'+'-'+[__uxIndex1].join('-')">{{ conversation.time }}</text></view><view class="conversation-bottom" :class="[uxNative?'ux2':'',uxNative?'ux29':'']"><text class="conversation-preview" :class="[uxNative?'ux11':'',uxNative?'ux25':'',uxNative?'ux14':'',uxNative?'ux30':'']" :style="uxLayout(uxNodePrefix+'-'+pane+'-g1007'+'-'+[__uxIndex1].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-'+pane+'-g1007'+'-'+[__uxIndex1].join('-')">{{ conversation.lastMsg }}</text><text v-if="conversation.unread" class="unread" :class="[uxNative?'ux11':'',uxNative?'ux25':'',uxNative?'ux14':'',uxNative?'ux31':'']" :style="uxLayout(uxNodePrefix+'-'+pane+'-g1008'+'-'+[__uxIndex1].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-'+pane+'-g1008'+'-'+[__uxIndex1].join('-')">{{ conversation.unread > 99 ? '99+' : conversation.unread }}</text></view></view>
+              </ActionButton>
+            </view><view v-if="pane==='chat'?chatError:noticeSyncError" class="load-tip"><text>{{pane==='chat'?chatError:noticeSyncError}}</text></view><view class="conversation-end"  :class="[uxNative?'ux2':'',uxNative?'ux32':'']"/>
+          </PaneScroll>
+        </view>
+      </swiper-item>
+    </swiper>
+    <view class="message-header" :style="{ paddingTop: statusBarHeight + 'px' }" :class="[uxNative?'ux2':'',uxNative?'ux33':'']"><view class="header-body" :class="[uxNative?'ux2':'',uxNative?'ux34':'']"><view class="message-tabs" :class="[uxNative?'ux2':'',uxNative?'ux35':'']"><ActionButton :aria-label="&quot;聊天&quot;" class="message-tab" :class="[uxNative?'ct-native-button':'',{active:topTab==='chat'},uxNative?'ux8':'',uxNative?'ux39':'',uxNative&amp;&amp;!!(topTab==='chat')?'ux41':'']" @tap="switchTopTab('chat')" :style="uxLayout(uxNodePrefix+'-g1009',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;72rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1009'"><text :class="[uxNative?'ux11':'',uxNative?'ux43':'',uxNative&amp;&amp;!!(topTab==='chat')?'ux51':'',uxNative?'ux14':'']">聊天</text><view class="underline"  :class="[uxNative?'ux2':'',uxNative?'ux40':'',uxNative&amp;&amp;!!(topTab==='chat')?'ux52':'']"/></ActionButton><ActionButton :aria-label="&quot;通知&quot;" class="message-tab" :class="[uxNative?'ct-native-button':'',{active:topTab==='notice'},uxNative?'ux8':'',uxNative?'ux39':'',uxNative&amp;&amp;!!(topTab==='notice')?'ux41':'']" @tap="switchTopTab('notice')" :style="uxLayout(uxNodePrefix+'-g1010',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;72rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1010'"><text :class="[uxNative?'ux11':'',uxNative?'ux43':'',uxNative&amp;&amp;!!(topTab==='notice')?'ux51':'',uxNative?'ux14':'']">通知</text><text v-if="notificationUnread>0" class="social-notice-count">{{notificationUnread>99?'99+':notificationUnread}}</text><view class="underline"  :class="[uxNative?'ux2':'',uxNative?'ux40':'',uxNative&amp;&amp;!!(topTab==='notice')?'ux52':'']"/></ActionButton></view><ActionButton class="icon-button" aria-label="消息设置" @tap="open('settings', '消息设置')" :class="[uxNative?'ct-native-button':'',uxNative?'ux8':'',uxNative?'ux37':'',uxNative?'ux53':'']"><AppIcon name="settings" :size="40" /></ActionButton></view></view>
+  </view>
+</template>
+<script setup lang="uts">
+import { openUserProfile } from '@/utils/navigation'
+import SocialInboxEntries from '@/components/SocialInboxEntries.uvue'
+import { refreshSocial,socialSummary } from '@/utils/social-inbox'
+import EmptyState from '@/components/EmptyState.uvue'
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import PaneScroll from '@/components/PaneScroll.uvue'
+import { usePaneScroll } from '@/composables/usePaneScroll'
+import { usePaneVisibility } from '@/composables/usePaneVisibility'
+import { useFreshTask } from '@/composables/useFreshTask'
+import { mediaUrl as resourceUrl } from '@/utils/media-cache'
+
+import { noticeSummary, noticeSyncError, refreshNotices } from '@/utils/notice-state'
+import {chatTime} from '@/utils/chat-local'
+import {DEFAULT_AVATAR} from '@/utils/auth'
+const conversationIcon=(url?:string)=>{const source=url||'';return uiAsset(source.startsWith('/static/')?source:resourceUrl(source))}
+import { chatConversations as liveChats,refreshChats,chatError } from '@/utils/chat-state'
+const chatConversationRows=computed(()=>liveChats.value.map(item=>({...item,iconUrl:item.iconUrl||DEFAULT_AVATAR,time:chatTime(item.lastTime)})))
+import { computed,onMounted,ref } from 'vue';import AppIcon from '@/components/AppIcon.uvue';import { openDestination } from '@/utils/navigation';import { fetchNoticeCategories,fetchNoticeList } from '@/utils/notice-api';import { API_BASE_URL } from '@/config/env';import type { Conversation,MessageCategory,NavigationKind,ViewProps } from '@/types/home.uts'
+const notificationUnread=computed(()=>noticeSummary.value.unreadCount+socialSummary.value.unreadCount)
+type NoticeConversation={id:string;categoryId:number;name:string;iconUrl:string;isTop:false;lastMsg:string;time:string;unread:number}
+const props=defineProps<ViewProps>();const paneVisible=usePaneVisibility(()=>props.active);const topTab=ref<'chat'|'notice'>('chat');const categories=computed(()=>noticeSummary.value.categories);const loading=ref(false)
+const noticeConversations=computed<NoticeConversation[]>(()=>noticeSummary.value.categories.map(category=>({id:'notice-'+category.id,categoryId:category.id,name:category.name,iconUrl:category.iconUrl,isTop:false,lastMsg:category.latestTitle||'暂无通知',time:category.latestTime?.slice(5,16)||'',unread:category.unreadCount})))
+type MessageTab = 'chat' | 'notice'
+const messageTabs: MessageTab[] = ['chat', 'notice']
+const { requestedTop: chatScrollTop, onScroll: onChatScroll, scrollToTop: resetChatScroll } = usePaneScroll(() => paneVisible.value && topTab.value === 'chat')
+const { requestedTop: noticeScrollTop, onScroll: onNoticeScroll, scrollToTop: resetNoticeScroll } = usePaneScroll(() => paneVisible.value && topTab.value === 'notice')
+const conversationsByTab = computed(() => ({
+  chat: chatConversationRows.value as Array<NoticeConversation | Conversation>,
+  notice: noticeConversations.value as Array<NoticeConversation | Conversation>
+}))
+function switchTopTab(tab: MessageTab) {
+  topTab.value = tab
+  if (tab === 'chat') void resetChatScroll()
+  else void resetNoticeScroll()
+}
+function onTopTabSwipe(event: { detail: { current: number } }) {
+  const tab: MessageTab = event.detail.current === 0 ? 'chat' : 'notice'
+  if (tab !== topTab.value) switchTopTab(tab)
+}
+const open=(kind:NavigationKind,title:string)=>openDestination({kind,title})
+function openConversationProfile(item:NoticeConversation|Conversation){const peer=liveChats.value.find(x=>x.id===item.id)?.peerId;if(peer)openUserProfile(peer);else openConversation(item)}
+function openCategory(category:MessageCategory){uni.navigateTo({url:'/pages/notice/list?categoryId='+category.id+'&name='+encodeURIComponent(category.name)})}
+function openConversation(item:NoticeConversation|Conversation){if('categoryId'in item)uni.navigateTo({url:'/pages/notice/list?categoryId='+item.categoryId+'&name='+encodeURIComponent(item.name)});else uni.navigateTo({url:'/pages/chat/index?id='+item.id})}
+async function load(){loading.value=true;try{await Promise.all([refreshNotices(),refreshChats(),refreshSocial()])}finally{loading.value=false}}
+const fresh=useFreshTask(()=>paneVisible.value,load)
+
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+.message-swiper { width: 100%; height: 100%; }
+.message-pane { display: flex; flex-direction: column; width: 100%; height: 100%; }
+.message-pane-spacer { flex-shrink: 0; }
+.message-pane-header-space { height: 108rpx; }
+
+/* #ifndef APP */
+
+.message-header{position:absolute;left:0;right:0;top:0;background:#fff}.header-body{position:relative;height:108rpx;display:flex;align-items:center;justify-content:center;flex-direction:row}.message-tabs{display:flex;gap:72rpx;height:100%;align-items:center;flex-direction:row}.message-tab{position:relative;color:#9b9fa1;font-size:34rpx;padding:16rpx 0}.message-tab.active{color:#202425;font-weight:600}.underline{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:38rpx;height:8rpx;border-radius:5rpx}.active .underline{background:var(--brand)}.header-body>.icon-button{position:absolute;right:24rpx}.categories{height:120rpx;border-bottom:16rpx solid #f6f7f8;white-space:nowrap}.categories-track{height:104rpx;padding:20rpx 34rpx 32rpx;display:inline-flex;gap:46rpx;flex-direction:row}.category{display:flex;align-items:center;gap:12rpx;font-size:24rpx;white-space:nowrap;flex-direction:row}.category-icon{width:38rpx;height:38rpx;border-radius:8rpx}.chat-separator{height:16rpx;background:#f6f7f8}.conversation{width:100%;display:flex;align-items:center;padding:22rpx 34rpx;height:134rpx;text-align:left;flex-direction:row}.conversation-avatar{position:relative;flex-shrink:0;width:88rpx;height:88rpx}.avatar-image,.bell-avatar{width:88rpx;height:88rpx;border-radius:50%;background:#f1f5f7}.bell-avatar{display:flex;align-items:center;justify-content:center;flex-direction:row}.conversation-body{flex:1;min-width:0;margin-left:32rpx}.conversation-top{display:flex;align-items:center;gap:12rpx;flex-direction:row}.conversation-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:28rpx;font-weight:600}.pinned{flex-shrink:0;font-size:18rpx;padding:4rpx 10rpx;background:#f7f7f7;border-radius:6rpx;color:#909597}.conversation-time{margin-left:auto;padding-left:10rpx;flex-shrink:0;color:#a9adb0;font-size:17rpx}.conversation-bottom{display:flex;align-items:center;margin-top:22rpx;gap:12rpx;min-height:32rpx;flex-direction:row}.conversation-preview{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#a9adaf;font-size:21rpx}.unread{flex-shrink:0;min-width:32rpx;line-height:32rpx;text-align:center;padding:0 7rpx;border-radius:50%;color:#fff;background:var(--brand);font-size:18rpx}.conversation-end{height:16rpx}
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux11{color:var(--text-main);font-size:26rpx;}
+.ux12{white-space:nowrap;}
+.ux13{font-size:24rpx;white-space:nowrap;}
+.ux17{text-align:center;color:var(--text-sub);font-size:22rpx;}
+.ux25{text-align:left;}
+
+.ux43{color:#9b9fa1;font-size:34rpx;}
+
+
+
+
+
+
+
+.ux51{color:#202425;font-weight:600;}
+.ux2{}
+.ux5{}
+.ux14{}
+.ux8{}
+
+.ux37{display:flex;flex-direction:row;align-items:center;justify-content:center;width:64rpx;height:64rpx;flex-shrink:0;}
+.ux3{position:absolute;top:0;right:0;bottom:0;left:0;background-color:var(--surface);overflow:hidden;}
+.ux4{width:100%;height:100%;}
+
+.ux16{text-align:center;color:var(--text-sub);font-size:22rpx;padding:30rpx 0 40rpx;}
+.ux33{position:absolute;left:0;right:0;top:0;background-color:#fff;}
+.ux34{position:relative;height:108rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;}
+.ux35{display:flex;flex-direction:row;height:100%;align-items:center;}
+.ux39{position:relative;color:#9b9fa1;font-size:34rpx;padding:16rpx 0;}
+.ux40{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:38rpx;height:8rpx;border-radius:5rpx;}
+.ux6{height:120rpx;border-bottom:16rpx solid #f6f7f8;white-space:nowrap;}
+.ux7{height:104rpx;padding:20rpx 34rpx 32rpx;display:flex;flex-direction:row;}
+.ux9{display:flex;flex-direction:row;align-items:center;font-size:24rpx;white-space:nowrap;}
+.ux10{width:38rpx;height:38rpx;border-radius:8rpx;}
+.ux15{height:16rpx;background-color:#f6f7f8;}
+.ux18{width:100%;display:flex;flex-direction:row;align-items:center;padding:22rpx 34rpx;height:134rpx;text-align:left;}
+.ux19{position:relative;flex-shrink:0;width:88rpx;height:88rpx;}
+.ux20{width:88rpx;height:88rpx;border-radius:50%;background-color:#f1f5f7;}
+.ux21{width:88rpx;height:88rpx;border-radius:50%;background-color:#f1f5f7;}
+.ux22{display:flex;flex-direction:row;align-items:center;justify-content:center;}
+.ux23{flex:1;min-width:0;margin-left:32rpx;}
+.ux24{display:flex;flex-direction:row;align-items:center;}
+.ux26{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:28rpx;font-weight:600;}
+.ux27{flex-shrink:0;font-size:18rpx;padding:4rpx 10rpx;background-color:#f7f7f7;border-radius:6rpx;color:#909597;}
+.ux28{margin-left:auto;padding-left:10rpx;flex-shrink:0;color:#a9adb0;font-size:17rpx;}
+.ux29{display:flex;flex-direction:row;align-items:center;margin-top:22rpx;min-height:32rpx;}
+.ux30{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#a9adaf;font-size:21rpx;}
+.ux31{flex-shrink:0;min-width:32rpx;line-height:32rpx;text-align:center;padding:0 7rpx;border-radius:50%;color:#fff;background-color:var(--brand);font-size:18rpx;}
+.ux32{height:16rpx;}
+.ux41{color:#202425;font-weight:600;}
+.ux52{background-color:var(--brand);}
+.ux53{position:absolute;right:24rpx;}
+/* #endif */
+</style>
+
+<style scoped>
+.social-notice-count{position:absolute;top:0;right:-25rpx;min-width:32rpx;height:32rpx;line-height:32rpx;padding:0 5rpx;text-align:center;border-radius:16rpx;background-color:#ff505e;color:#fff;font-size:17rpx;}
+.message-tabs,.header-body,.message-header{overflow:visible;}
+</style>

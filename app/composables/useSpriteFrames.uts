@@ -1,0 +1,12 @@
+import { computed, onBeforeUnmount, ref } from 'vue'
+/** Keep the original atlas frames and wall-clock timing without CSS keyframes. */
+export function useSpriteFrames(count: () => number, duration: number, frameMs: number) {
+  const frame = ref(Math.max(0, count() - 1))
+  let handle = 0, started = 0, active = false
+  function stop() { active = false; if (handle) cancelAnimationFrame(handle); handle = 0 }
+  function tick() { if (!active) return; const elapsed = Date.now() - started; frame.value = Math.min(count() - 1, Math.floor(elapsed / frameMs)); if (elapsed < duration) handle = requestAnimationFrame(tick); else stop() }
+  function start() { stop(); started = Date.now(); active = true; frame.value = 0; handle = requestAnimationFrame(tick) }
+  const style = computed(() => ({ width: count() * 100 + '%', height: '100%', transform: 'translateX(' + (-frame.value * 100 / count()) + '%)' }))
+  onBeforeUnmount(stop)
+  return { frame, style, start, stop }
+}

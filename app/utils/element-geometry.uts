@@ -1,0 +1,15 @@
+export interface ElementRect { top: number; bottom: number; left: number; width: number; height: number }
+export function rectById(id: string, instance?: unknown): Promise<ElementRect | null> {
+  // #ifdef APP || WEB
+  const element = uni.getElementById(id)
+  return Promise.resolve(element ? element.getBoundingClientRect() as ElementRect : null)
+  // #endif
+  // #ifdef MP-WEIXIN
+  return new Promise(resolve => { const query = uni.createSelectorQuery().in(instance as never); query.select('#' + id).boundingClientRect(value => resolve(value as ElementRect || null)).exec() })
+  // #endif
+}
+export function setElementStyle(id: string, property: string, value: string) {
+  // #ifdef APP || WEB
+  uni.getElementById(id)?.style.setProperty(property, value)
+  // #endif
+}

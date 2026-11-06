@@ -1,0 +1,38 @@
+<template>
+  <view class="member-header" :style="{ paddingTop: statusBarHeight + 'px' }">
+    <view class="member-nav">
+      <ActionButton class="member-back" press-motion aria-label="返回" @tap="back">
+        <image class="member-back-icon" :src="uiAsset('/static/images/membership/back.svg')" mode="aspectFit" />
+      </ActionButton>
+      <text v-if="title" class="member-nav-title">{{ title }}</text>
+      <slot />
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import ActionButton from '@/components/ActionButton.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { uiAsset } from '@/utils/ui-assets'
+
+withDefaults(defineProps<{ title?: string }>(), { title: '' })
+const { statusBarHeight } = useWindowInsets()
+
+function back() {
+  if (getCurrentPages().length > 1) uni.navigateBack()
+  else uni.reLaunch({ url: '/pages/index/index?tab=mine' })
+}
+</script>
+
+<style scoped>
+.member-header { flex-shrink: 0; }
+.member-nav { position: relative; flex-direction: row; align-items: center; justify-content: space-between; height: 92rpx; margin: 0 33rpx; }
+.member-back { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 92rpx; height: 92rpx; margin: 0; padding: 0; border: 1rpx solid #fff; border-radius: 46rpx; background-color: #f7f7f7; }
+.member-back-icon { width: 34rpx; height: 34rpx; }
+.member-nav-title { position: absolute; left: 100rpx; right: 100rpx; text-align: center; color: #191919; font-size: 34rpx; line-height: 48rpx; pointer-events: none; }
+/* #ifndef APP */
+.member-nav { display: flex; }
+.member-back { background-image: linear-gradient(145deg, #ededed, #fbfbfb); }
+.member-back::after { content: none; }
+/* #endif */
+</style>

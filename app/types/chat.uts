@@ -1,0 +1,10 @@
+export type ChatKind = 'text' | 'image' | 'emoji' | 'video' | 'post' | 'product'
+export interface ChatProductCard { id:string; name:string; coverUrl:string; priceFen:number; soldCount:number }
+export interface ChatPostCard { id:string; title:string; coverUrl:string; authorId:string; authorName:string; authorAvatar:string; authorAvatarFrame?:string; authorAvatarFrameExpiresAt?:number|null; video:boolean }
+export interface ChatAsset { id:string; kind:string; state:string; version:string; mime:string; extension:string; sizeBytes:number; width:number; height:number; durationMs:number; coverId:string; errorMessage:string }
+export interface ChatReply { messageId:string; senderId:string; senderName:string; sentAt:number; kind:ChatKind; summary:string; status:string }
+export interface ChatMessage { id:string; conversationId:string; senderId:string; clientId:string; kind:ChatKind; content:string; sentAt:number; revokeUntil:number; revoked:boolean; canRevoke:boolean; protectedReceipt:boolean; asset:ChatAsset|null; reply?:ChatReply|null; post?:ChatPostCard|null; product?:ChatProductCard|null; deleted?:boolean; localState?:string; localPath?:string; localWidth?:number; localHeight?:number; original?:boolean; emojiId?:string; error?:string }
+export interface ChatRestriction { blocked:boolean; globalMutedUntil:number; conversationMutedUntil:number }
+export interface ChatConversation { id:string; peerId:string; name:string; iconUrl:string; avatarFrame?:string; avatarFrameExpiresAt?:number|null; lastMsg:string; lastTime:number; sortTime:number; unread:number; isTop:boolean; isOfficial:boolean; time?:string; lastMessageId?:string; restriction?:ChatRestriction }
+export interface ChatEvent { sequence:number; kind:string; conversationId:string; messageId:string }
+export interface ChatOperation { operationId:string; messageId:string; kind:string; stage:string }

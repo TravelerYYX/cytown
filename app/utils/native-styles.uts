@@ -1,0 +1,40 @@
+import { ref } from 'vue'
+import { observeWindowResize } from './window-events'
+// #ifdef APP
+import { getReduceMotion } from '@/uni_modules/ct-platform'
+// #endif
+const reducedMotion = ref(false)
+export function refreshNativePreferences(): void {
+  // #ifdef APP
+  reducedMotion.value = getReduceMotion()
+  // #endif
+}
+export const uxNative =
+  // #ifdef APP
+  true
+  // #endif
+  // #ifndef APP
+  false
+  // #endif
+
+export function uxClass(value: unknown, name: string): boolean {
+  if (typeof value === 'string') return value.split(/\s+/).includes(name)
+  if (Array.isArray(value)) return value.some(item => uxClass(item, name))
+  return !!value && typeof value === 'object' && !!(value as Record<string, unknown>)[name]
+}
+const viewport = ref({ width: 375, height: 812 })
+let listening = false
+export function uxMedia(query: string): boolean {
+  if (!listening) {
+    listening = true
+    const update = () => { const info = uni.getWindowInfo(); viewport.value = { width: info.windowWidth, height: info.windowHeight } }
+    update(); refreshNativePreferences(); observeWindowResize(update)
+  }
+  const { width, height } = viewport.value
+  if (/orientation:\s*landscape/.test(query) && width <= height) return false
+  if (/orientation:\s*portrait/.test(query) && width > height) return false
+  const min = query.match(/min-width:\s*(\d+)px/), max = query.match(/max-width:\s*(\d+)px/)
+  if (min && width < Number(min[1]) || max && width > Number(max[1])) return false
+  if (query.includes('prefers-reduced-motion')) return reducedMotion.value
+  return true
+}

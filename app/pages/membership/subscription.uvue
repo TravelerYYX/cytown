@@ -1,0 +1,32 @@
+<template><view class="subscription-page"><MembershipHeader title="我的订阅" /><scroll-view direction="vertical" class="subscription-scroll"><view class="subscription-content">
+ <view class="subscription-card"><text class="subscription-name">{{member?.active?member?.plan?.name:'Free'}}</text><image v-if="member?.active&&member?.plan?.badgeUrl" :src="memberMedia(member?.plan?.badgeUrl)" class="subscription-badge" mode="aspectFit" /><text class="subscription-copy">{{member?.active?'有效至 '+new Date(member?.expiresAt||0).toLocaleString():'开通会员，解锁专属身份与头像框'}}</text><text v-for="(b,i) in (member?.active?member?.plan?.benefits:[])" :key="i" class="subscription-copy">{{b}}</text><ActionButton class="subscription-button" @tap="openProducts"><text class="button-text">{{member?.active?'续购一个月':'查看会员套餐'}}</text></ActionButton><text class="subscription-note">单次购买一个月，不自动扣款。经验与次元币到期不回收。</text></view>
+ <text v-if="error" class="subscription-error">{{error}}</text><ActionButton class="reload-button" :disabled="loading" @tap="load"><text>{{loading?'正在确认支付结果…':'刷新订阅与订单'}}</text></ActionButton>
+ <text class="history-title">购买记录</text><view v-for="o in orders" :key="o.id" class="order-card"><text class="order-name">{{o.plan.name}} · ¥{{(o.amountFen/100).toFixed(2)}}</text><text class="order-state">{{memberOrderLabel(o.status)}}</text><text class="order-id">{{o.id}}</text><text class="order-id">{{o.createdAt.replace('T',' ')}}</text><text v-if="o.errorMessage" class="subscription-note">{{o.errorMessage}}</text><text v-if="o.grantEnd" class="subscription-copy">延长至 {{o.grantEnd?.replace('T',' ')}}</text><ActionButton v-if="o.status==='PENDING'" class="subscription-button" :disabled="loading||paying" @tap="continuePay(o)"><text class="button-text">继续支付</text></ActionButton></view>
+ <ActionButton v-if="orders.length<total" class="reload-button" :disabled="loading" @tap="more"><text>加载更多</text></ActionButton><text v-if="!loading&&!orders.length" class="subscription-note">暂无购买记录</text>
+ </view></scroll-view></view></template>
+<script setup lang="uts">
+import ActionButton from '@/components/ActionButton.uvue'
+import MembershipHeader from '@/components/MembershipHeader.uvue'
+import {setStatusBar} from '@/utils/platform'
+import {isLoggedIn,getUserInfo,getSessionGeneration} from '@/utils/auth'
+import {fetchMembership,fetchMemberOrders,refreshMemberOrder,payMemberOrder,launchMemberPayment,refreshMemberAccount,memberMedia,memberOrderLabel} from '@/utils/membership-api'
+import type {MemberState,MemberOrder} from '@/utils/membership-api'
+import {onBeforeUnmount} from 'vue'
+const member=ref<MemberState|null>(null),orders=ref<MemberOrder[]>([]),total=ref(0),loading=ref(false),paying=ref(false),error=ref('')
+let page=1,timer=0,checks=0,visible=false,viewer=''
+function stop(){clearTimeout(timer);timer=0}
+async function load(){if(loading.value)return;if(!isLoggedIn()){uni.redirectTo({url:'/pages/login/index'});return}loading.value=true;error.value='';stop();const generation=getSessionGeneration();try{
+ const first=await fetchMemberOrders();const pending=first.records.filter(o=>o.status==='PENDING'||o.status==='PAID');for(const o of pending)await refreshMemberOrder(o.id)
+ const results=await Promise.all([fetchMembership(),fetchMemberOrders()]);if(generation!==getSessionGeneration())return;member.value=results[0];orders.value=results[1].records;total.value=results[1].total;page=1
+ const stillPending=orders.value.some(o=>o.status==='PENDING'||o.status==='PAID')
+ if(!stillPending){uni.removeStorageSync('ct.member.pending.'+getUserInfo()?.userId);await refreshMemberAccount()}
+ if(stillPending&&checks++<15&&visible)timer=setTimeout(load,2000)
+ }catch(e){error.value=(e as Error).message}finally{loading.value=false}}
+async function more(){loading.value=true;try{const r=await fetchMemberOrders(page+1);orders.value=[...orders.value,...r.records];total.value=r.total;page++}catch(e){error.value=(e as Error).message}finally{loading.value=false}}
+async function continuePay(o:MemberOrder){if(paying.value)return;if(new Date(o.expiresAt).getTime()<=Date.now()){await load();return}paying.value=true;try{await launchMemberPayment(await payMemberOrder(o.id))}catch(e){error.value=(e as Error).message}finally{paying.value=false;checks=0;load()}}
+function openProducts(){uni.navigateTo({url:'/pages/membership/index'})}
+onShow(()=>{const id=getUserInfo()?.userId||'';if(viewer!==id){member.value=null;orders.value=[];total.value=0;viewer=id}visible=true;checks=0;setStatusBar('dark');load()});onHide(()=>{visible=false;stop()});onBeforeUnmount(stop)
+</script>
+<style scoped>
+.subscription-page{position:absolute;top:0;right:0;bottom:0;left:0;background-color:#f6f6f6;display:flex;flex-direction:column}.subscription-scroll{flex:1;height:0}.subscription-content{padding:28rpx 32rpx 70rpx}.subscription-card,.order-card{padding:30rpx;border-radius:30rpx;background-color:#fff;margin-bottom:22rpx;display:flex;flex-direction:column}.subscription-name{font-size:44rpx;color:#191919}.subscription-badge{width:170rpx;height:60rpx;margin-top:18rpx}.subscription-copy{font-size:26rpx;color:#666;margin-top:16rpx}.subscription-button{background-color:#191919;border-radius:32rpx;min-height:72rpx;align-items:center;justify-content:center;margin-top:25rpx}.button-text{color:#fff;font-size:28rpx}.subscription-note,.order-id{font-size:22rpx;color:#999;margin-top:16rpx}.history-title{font-size:30rpx;color:#191919;margin:22rpx 0}.order-name{font-size:28rpx;color:#191919}.order-state{color:#1677ff;font-size:24rpx;margin-top:14rpx}.subscription-error{font-size:24rpx;color:#d33;padding:18rpx}.reload-button{padding:22rpx;align-items:center;justify-content:center}
+</style>

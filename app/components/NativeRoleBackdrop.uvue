@@ -1,0 +1,28 @@
+<template>
+  <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(a11yPrefix+'-0',{&quot;aria-hidden&quot;:&quot;true&quot;})" class="role-native-backdrop" >
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :aria-hidden="&quot;true&quot;" class="role-native-backdrop" >
+<!-- #endif -->
+    <image class="role-native-image" :src="uiAsset(source)" mode="aspectFill" />
+    <view class="role-native-shade" />
+    <view class="role-native-blue" />
+    <view class="role-native-depth" />
+    <view class="role-native-glow" />
+  </view>
+</template>
+<script setup lang="uts">
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import { uiAsset } from '@/utils/ui-assets'
+defineProps<{source:string}>()
+</script>
+<style>
+.role-native-backdrop{position:absolute;top:0;right:0;bottom:0;left:0;overflow:hidden;pointer-events:none;}
+.role-native-image{position:absolute;top:0;left:0;width:100%;height:100%;transform:scale(1.02);}
+.role-native-shade{position:absolute;top:0;right:0;bottom:0;left:0;background-color:rgba(0,0,0,.1);}
+.role-native-blue{position:absolute;top:0;right:0;bottom:0;left:0;background-image:linear-gradient(to right,rgba(0,80,179,.78) 0%,rgba(0,119,215,.62) 44%,rgba(0,94,184,.36) 100%);}
+.role-native-depth{position:absolute;top:0;right:0;bottom:0;left:0;background-image:linear-gradient(to bottom,rgba(0,92,188,.04) 12%,rgba(0,68,158,.48) 100%);}
+.role-native-glow{position:absolute;top:-88rpx;right:-46rpx;width:250rpx;height:150rpx;border-radius:50%;background-color:rgba(55,211,255,.1);box-shadow:0 0 18rpx 12rpx rgba(55,211,255,.1);}
+</style>

@@ -1,0 +1,129 @@
+<template>
+  <view v-if="rendered" class="dialog-layer" :class="[{open:entered},uxNative?'ux0':'',uxNative?'ux7':'']">
+    <view class="dialog-backdrop"  :class="[uxNative?'ux0':'',uxNative?'ux8':'',uxNative&amp;&amp;!!entered?'ux17':'']"/>
+    <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(uxNodePrefix+'-n0',{&quot;role&quot;:&quot;dialog&quot;,&quot;aria-modal&quot;:&quot;true&quot;})" class="confirm-dialog"   :class="[uxNative?'ux0':'',uxNative?'ux9':'',uxNative&amp;&amp;!!entered?'ux18':'']" :style="uxLayout(uxNodePrefix+'-n0',[{on:uxNative,declarations:{&quot;max-width&quot;:&quot;80%&quot;}}],{})" :id="uxNodePrefix+'-n0'">
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :role="&quot;dialog&quot;" :aria-modal="&quot;true&quot;" class="confirm-dialog"   :class="[uxNative?'ux0':'',uxNative?'ux9':'',uxNative&amp;&amp;!!entered?'ux18':'']" :style="uxLayout(uxNodePrefix+'-n0',[{on:uxNative,declarations:{&quot;max-width&quot;:&quot;80%&quot;}}],{})" :id="uxNodePrefix+'-n0'">
+<!-- #endif -->
+      <view class="dialog-copy" :class="[uxNative?'ux0':'',uxNative?'ux10':'']">
+        <text class="dialog-title" :class="[uxNative?'ux19':'',uxNative?'ux25':'',uxNative?'ux11':'']">{{ title }}</text>
+        <text class="dialog-message" :class="[uxNative?'ux19':'',uxNative?'ux25':'',uxNative?'ux12':'']">{{ message }}</text>
+      </view>
+      <view class="dialog-actions" :class="[uxNative?'ux0':'',uxNative?'ux13':'']">
+        <ActionButton :aria-label="String(cancelText)" class="dialog-button cancel" hover-class="dialog-button-hover" @tap="$emit('cancel')" :class="[uxNative?'ct-native-button':'',uxNative?'ux26':'',uxNative?'ux14':'']"><text :class="[uxNative?'ux19':'',uxNative?'ux32':'',uxNative?'ux25':'']">{{ cancelText }}</text></ActionButton>
+        <ActionButton :aria-label="String(confirmText)" class="dialog-button confirm" hover-class="dialog-button-hover" @tap="$emit('confirm')" :class="[uxNative?'ct-native-button':'',uxNative?'ux26':'',uxNative?'ux14':'',uxNative?'ux38':'',uxNative?'ux16':'']"><text :class="[uxNative?'ux19':'',uxNative?'ux32':'',uxNative?'ux39':'',uxNative?'ux25':'']">{{ confirmText }}</text></ActionButton>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import ActionButton from '@/components/ActionButton.uvue'
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { nextTick, onUnmounted, ref, watch } from 'vue'
+
+const props = withDefaults(defineProps<{ visible: boolean; title: string; message: string; confirmText?: string; cancelText?: string }>(), {
+  confirmText: '确认',
+  cancelText: '取消'
+})
+const emit = defineEmits<{ cancel: []; confirm: []; closed: [] }>()
+const rendered = ref(false)
+const entered = ref(false)
+let timer: ReturnType<typeof setTimeout> | undefined
+
+watch(() => props.visible, async visible => {
+  if (timer) clearTimeout(timer)
+  if (visible) {
+    rendered.value = true
+    entered.value = false
+    await nextTick()
+    timer = setTimeout(() => { entered.value = true }, 20)
+    return
+  }
+  if (!rendered.value) return
+  entered.value = false
+  timer = setTimeout(() => { rendered.value = false; emit('closed') }, 190)
+}, { immediate: true })
+
+onUnmounted(() => { if (timer) clearTimeout(timer) })
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.dialog-layer { position: fixed; inset: 0; z-index: 800; display: flex; align-items: center; justify-content: center; flex-direction: row; }
+.dialog-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, .58); opacity: 0; transition: opacity 180ms ease; }
+.confirm-dialog { position: relative; width: 600rpx; max-width: 80%; overflow: hidden; border-radius: 19rpx; background: #fff; opacity: 0; transform: scale(.94); transition: opacity 210ms ease, transform 210ms cubic-bezier(.2, .75, .3, 1); }
+.dialog-layer.open .dialog-backdrop { opacity: 1; }
+.dialog-layer.open .confirm-dialog { opacity: 1; transform: scale(1); }
+.dialog-copy { min-height: 150rpx; padding: 27rpx 30rpx 23rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.dialog-title { color: #242729; font-size: 28rpx; font-weight: 600; }
+.dialog-message { margin-top: 21rpx; color: #999fa3; font-size: 23rpx; text-align: center; }
+.dialog-actions { display: flex; height: 80rpx; border-top: 1rpx solid #f0f1f2; background: #fafafa; flex-direction: row; }
+.dialog-button { flex: 1; height: 80rpx; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: #8d9397; font-size: 25rpx; line-height: 80rpx; text-align: center; }
+.dialog-button::after { border: 0; }
+.dialog-button + .dialog-button { border-left: 1rpx solid #edf0f2; }
+.dialog-button.confirm { color: #079cf0; }
+.dialog-button-hover { background: #f0f2f3; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux19{color:var(--text-main);font-size:26rpx;}
+
+
+
+
+
+.ux32{color:#8d9397;font-size:25rpx;line-height:80rpx;text-align:center;}
+
+
+
+
+
+.ux39{color:#079cf0;}
+.ux0{}
+.ux25{}
+.ux26{}
+
+
+
+
+
+
+.ux7{position:fixed;top:0;right:0;bottom:0;left:0;z-index:800;display:flex;flex-direction:row;align-items:center;justify-content:center;}
+.ux8{position:absolute;top:0;right:0;bottom:0;left:0;background-color:rgba(0, 0, 0, .58);opacity:0;transition:opacity 180ms ease;}
+.ux9{position:relative;width:600rpx;overflow:hidden;border-radius:19rpx;background-color:#fff;opacity:0;transform:scale(.94);transition:opacity 210ms ease, transform 210ms cubic-bezier(.2, .75, .3, 1);}
+.ux10{min-height:150rpx;padding:27rpx 30rpx 23rpx;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.ux11{color:#242729;font-size:28rpx;font-weight:600;}
+.ux12{margin-top:21rpx;color:#999fa3;font-size:23rpx;text-align:center;}
+.ux13{display:flex;flex-direction:row;height:80rpx;border-top:1rpx solid #f0f1f2;background-color:#fafafa;}
+.ux14{flex:1;height:80rpx;margin:0;padding:0;border:0px;border-radius:0;background-color:transparent;color:#8d9397;font-size:25rpx;line-height:80rpx;text-align:center;}
+
+
+
+
+
+
+.ux38{border-left:1rpx solid #edf0f2;}
+.ux16{color:#079cf0;}
+.ux17{opacity:1;}
+.ux18{opacity:1;transform:scale(1);}
+/* #endif */
+</style>

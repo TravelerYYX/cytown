@@ -1,0 +1,30 @@
+<template><view class="row-arrow"   :class="[uxNative?'ux0':'',uxNative?'ux1':'']"><AppIcon name="chevron-round" tone="muted" :size="30"  /></view></template>
+<script setup lang="uts">
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import AppIcon from './AppIcon.uvue'
+</script>
+<style>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+
+
+.row-arrow { width: 30rpx; height: 30rpx; flex-shrink: 0; }
+
+
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+
+.ux0{}
+.ux1{width:30rpx;height:30rpx;flex-shrink:0;}
+/* #endif */
+</style>

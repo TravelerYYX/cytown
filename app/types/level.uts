@@ -1,0 +1,10 @@
+export interface LevelTier { id: number; minLevel: number; maxLevel: number; title: string; fullTitle: string; color: string; description: string; entryBonus: number }
+export interface LevelItem { level: number; requiredExp: number; badgeUrl: string }
+export interface LevelRule { action: string; name: string; experience: number; dailyLimit: number; enabled: boolean }
+export interface LevelConfig { version: number; tiers: LevelTier[]; levels: LevelItem[]; rules: LevelRule[] }
+export interface LevelProgress {
+  experience: number; level: number; title: string; fullTitle: string; color: string; description: string; badgeUrl: string
+  levelStartExp: number; nextLevelExp: number | null; remainingExp: number; maxLevel: boolean
+  signedToday: boolean; streakDays: number; rules: LevelRule[]; today: { action: string; earned: number }[]
+}
+export interface LevelHistory { id: string; action: string; amount: number; earnedDate: string; createTime: string }

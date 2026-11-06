@@ -1,0 +1,100 @@
+<template>
+  <view class="report-page" :style="{paddingTop:statusBarHeight+'px'}">
+    <view class="report-header"><ActionButton class="report-back" aria-label="返回" @tap="back"><AppIcon name="back" :size="42" /></ActionButton><text class="report-heading">举报</text><view class="report-header-space" /></view>
+    <scroll-view class="report-scroll" direction="vertical" :show-scrollbar="false">
+      <view class="report-form">
+        <ActionButton class="report-field" aria-label="举报类型" @tap="openPicker('type')"><view class="report-field-label"><text class="report-label">举报类型</text><text class="report-required">*</text></view><view class="report-field-value"><text class="report-value" :max-lines="1">{{typeName||'选择举报类型'}}</text><AppIcon name="chevron" tone="muted" :size="30" /></view></ActionButton>
+        <ActionButton class="report-field" aria-label="举报理由" @tap="openPicker('reason')"><view class="report-field-label"><text class="report-label">举报理由</text><text class="report-required">*</text></view><view class="report-field-value"><text class="report-value" :max-lines="1">{{reasonName||'选择举报理由'}}</text><AppIcon name="chevron" tone="muted" :size="30" /></view></ActionButton>
+        <view class="report-evidence-label"><text class="report-label">图片证据</text><text class="report-image-count">{{images.length}}/9</text></view>
+        <view class="report-images">
+          <view v-for="image in images" :key="image.key" class="report-image-cell">
+            <image class="report-image" :src="image.path" mode="aspectFill" @tap="preview(image.key)" />
+            <view v-if="image.busy" class="report-image-status"><text class="report-image-status-text">上传中…</text></view>
+            <ActionButton v-else-if="image.error" class="report-image-status" aria-label="重新上传" @tap="uploadImage(image.key)"><text class="report-image-status-text">点击重试</text></ActionButton>
+            <ActionButton class="report-image-remove" aria-label="移除图片" @tap="removeImage(image.key)"><AppIcon name="close" tone="white" :size="22" /></ActionButton>
+          </view>
+          <ActionButton v-if="images.length<9" class="report-add" aria-label="添加证据图片" :disabled="submitting" @tap="chooseImages"><AppIcon name="plus" :size="40" /></ActionButton>
+        </view>
+        <view class="report-content-label"><text class="report-label">举报内容</text><text class="report-required">*</text></view>
+        <view class="report-content-box"><textarea v-model="content" class="report-textarea" placeholder="输入你的举报内容" placeholder-class="report-placeholder" :maxlength="-1" :adjust-position="true" /><text class="report-content-count">{{contentLength}}/200</text></view>
+      </view>
+    </scroll-view>
+    <view class="report-submit-area" :style="{paddingBottom:Math.max(bottomInset,30*viewportWidth/750)+'px'}"><ActionButton class="report-submit" :class="{'report-submit-ready':canSubmit}" :disabled="!canSubmit" aria-label="提交举报" @tap="submit"><text class="report-submit-text" :class="{'report-submit-text-ready':canSubmit}">{{submitting?'提交中…':'提交'}}</text></ActionButton></view>
+    <ReportOptionSheet :visible="picker!==''" :title="pickerKind==='type'?'选择举报类型':'选择举报理由'" :options="pickerKind==='type'?options.types:options.reasons" :model-value="pickerKind==='type'?typeId:reasonId" :loading="loading" @close="picker=''" @select="selectOption" />
+  </view>
+</template>
+<script setup lang="uts">
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import ActionButton from '@/components/ActionButton.uvue'
+import AppIcon from '@/components/AppIcon.uvue'
+import ReportOptionSheet from '@/components/ReportOptionSheet.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { authRevision, getSessionGeneration, isLoggedIn } from '@/utils/auth'
+import { fetchReportOptions, submitReport } from '@/utils/report-api'
+import type { ReportOptions } from '@/utils/report-api'
+import { chooseAlbumImages } from '@/utils/media-picker'
+import { uploadPublishImage } from '@/utils/publish-api'
+import { setStatusBar } from '@/utils/platform'
+type Evidence={key:string;path:string;assetId:string;busy:boolean;error:boolean}
+const {statusBarHeight,bottomInset,viewportWidth}=useWindowInsets()
+const targetKind=ref(''),targetId=ref(''),typeId=ref(''),reasonId=ref(''),content=ref(''),picker=ref(''),pickerKind=ref('type'),loading=ref(false),submitting=ref(false),submitted=ref(false)
+const options=ref<ReportOptions>({types:[],reasons:[]}),images=ref<Evidence[]>([])
+let alive=true,loadRevision=0,sequence=0,sessionGeneration=getSessionGeneration()
+const typeName=computed(()=>options.value.types.find(x=>x.id===typeId.value)?.name||'')
+const reasonName=computed(()=>options.value.reasons.find(x=>x.id===reasonId.value)?.name||'')
+const contentLength=computed(()=>Array.from(content.value).length)
+const canSubmit=computed(()=>!!targetId.value&&!!typeName.value&&!!reasonName.value&&!!content.value.trim()&&contentLength.value<=200&&!loading.value&&!submitting.value&&!submitted.value&&images.value.every(x=>!x.busy&&!x.error&&!!x.assetId))
+watch(content,value=>{const characters=Array.from(value);if(characters.length>200)content.value=characters.slice(0,200).join('')})
+function back(){if(submitting.value)return;if(picker.value){picker.value='';return}getCurrentPages().length>1?uni.navigateBack({animationType:'slide-out-right',animationDuration:320}):uni.reLaunch({url:'/pages/index/index'})}
+async function loadOptions(){const revision=++loadRevision,session=getSessionGeneration();loading.value=true;try{const result=await fetchReportOptions();if(!alive||revision!==loadRevision||session!==getSessionGeneration())return;options.value=result;if(!result.types.some(x=>x.id===typeId.value))typeId.value='';if(!result.reasons.some(x=>x.id===reasonId.value))reasonId.value=''}catch{}finally{if(revision===loadRevision)loading.value=false}}
+function openPicker(kind:string){pickerKind.value=kind;picker.value=kind;void loadOptions()}
+function selectOption(id:string){if(picker.value==='type')typeId.value=id;else reasonId.value=id}
+function chooseImages(){chooseAlbumImages({count:9-images.value.length,sourceType:['album','camera'],success:result=>{if(!alive||submitting.value)return;for(const path of result.tempFilePaths.slice(0,9-images.value.length)){const key='evidence-'+(++sequence);images.value.push({key,path,assetId:'',busy:false,error:false});void uploadImage(key)}}})}
+async function uploadImage(key:string){const image=images.value.find(x=>x.key===key);if(!image||image.busy||submitting.value)return;const session=getSessionGeneration();image.busy=true;image.error=false;try{const asset=await uploadPublishImage(image.path);if(!alive||session!==getSessionGeneration()||!images.value.includes(image))return;if(asset.status!=='ready')throw new Error('图片上传未完成');image.assetId=String(asset.id)}catch{if(alive&&images.value.includes(image))image.error=true}finally{if(alive)image.busy=false}}
+function removeImage(key:string){if(!submitting.value)images.value=images.value.filter(x=>x.key!==key)}
+function preview(key:string){const index=images.value.findIndex(x=>x.key===key);if(index>=0)uni.previewImage({current:index,urls:images.value.map(x=>x.path)})}
+async function submit(){if(!canSubmit.value)return;submitting.value=true;const session=getSessionGeneration();try{await submitReport(targetKind.value,targetId.value,typeId.value,reasonId.value,content.value.trim(),images.value.map(x=>x.assetId));if(!alive||session!==getSessionGeneration())return;submitted.value=true;uni.showToast({title:'举报提交成功',icon:'none'});uni.navigateBack({animationType:'slide-out-right',animationDuration:320})}catch{if(alive)void loadOptions()}finally{submitting.value=false}}
+onLoad(q=>{targetKind.value=String(q?.targetKind||'');targetId.value=String(q?.targetId||'');if(!['user','post'].includes(targetKind.value)||!/^[1-9]\d*$/.test(targetId.value)){targetId.value='';uni.showToast({title:'举报对象无效',icon:'none'});return}if(!isLoggedIn()){uni.redirectTo({url:'/pages/login/index'});return}void loadOptions()})
+onShow(()=>setStatusBar('dark'))
+onBackPress(()=>{if(picker.value){picker.value='';return true}return submitting.value&&!submitted.value})
+watch(authRevision,()=>{const next=getSessionGeneration();if(next===sessionGeneration)return;sessionGeneration=next;images.value=[];typeId.value='';reasonId.value='';content.value='';options.value={types:[],reasons:[]};picker.value='';loadRevision++;if(alive)uni.navigateBack()})
+onBeforeUnmount(()=>{alive=false;loadRevision++})
+</script>
+<style scoped>
+.report-page{display:flex;flex-direction:column;width:100%;height:100%;background-color:#fff;}
+.report-header{display:flex;flex-direction:row;align-items:center;justify-content:space-between;height:90rpx;flex-shrink:0;padding:0 33rpx;}
+.report-back,.report-header-space{width:40rpx;height:66rpx;margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;}
+.report-back{display:flex;align-items:center;justify-content:center;}
+.report-heading{font-size:28rpx;line-height:40rpx;color:#283145;}
+.report-scroll{flex:1;height:0;min-height:0;}
+.report-form{padding:0 33rpx 30rpx;display:flex;flex-direction:column;}
+.report-field{display:flex;flex-direction:row;align-items:center;justify-content:space-between;width:100%;height:100rpx;flex-shrink:0;margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;}
+.report-field-label,.report-field-value,.report-evidence-label,.report-content-label{display:flex;flex-direction:row;align-items:center;}
+.report-field-value{flex:1;min-width:0;justify-content:flex-end;margin-left:25rpx;}
+.report-label{color:#283145;font-size:26rpx;line-height:36rpx;}
+.report-required{margin-left:12rpx;color:#f06464;font-size:22rpx;}
+.report-value{color:#737987;font-size:24rpx;line-height:36rpx;margin-right:10rpx;}
+.report-evidence-label{margin-top:37rpx;margin-bottom:17rpx;}
+.report-image-count{font-size:21rpx;color:#737987;margin-left:12rpx;}
+.report-images{display:flex;flex-direction:row;flex-wrap:wrap;}
+.report-add,.report-image-cell{position:relative;width:162rpx;height:154rpx;margin:0 16rpx 0 0;border-radius:16rpx;overflow:hidden;flex-shrink:0;}
+.report-add{display:flex;align-items:center;justify-content:center;padding:0;border-width:2rpx;border-style:solid;border-color:#d3d4d7;background-color:#f5f6fa;}
+.report-image-cell{margin-bottom:16rpx;}
+.report-image{width:100%;height:100%;}
+.report-image-status{position:absolute;top:0;right:0;bottom:0;left:0;display:flex;align-items:center;justify-content:center;margin:0;padding:0;border-width:0;background-color:#00000066;}
+.report-image-status-text{font-size:22rpx;color:#fff;}
+.report-image-remove{position:absolute;top:4rpx;right:4rpx;width:32rpx;height:32rpx;display:flex;align-items:center;justify-content:center;padding:0;margin:0;border-width:0;border-radius:16rpx;background-color:#00000088;}
+.report-content-label{margin-top:35rpx;margin-bottom:18rpx;}
+.report-content-box{position:relative;height:372rpx;background-color:#f5f6fa;border-radius:26rpx;padding:22rpx 25rpx 38rpx;}
+.report-textarea{width:100%;height:100%;font-size:25rpx;line-height:36rpx;color:#283145;background-color:transparent;}
+.report-placeholder{color:#969daa;font-size:25rpx;}
+.report-content-count{position:absolute;right:25rpx;bottom:23rpx;font-size:18rpx;line-height:24rpx;color:#959ca8;}
+.report-submit-area{flex-shrink:0;padding:20rpx 33rpx 30rpx;background-color:#fff;}
+.report-submit{display:flex;align-items:center;justify-content:center;height:92rpx;margin:0;padding:0;border-width:0;border-radius:26rpx;background-color:#f5f6fa;}
+.report-submit-ready{background-color:#2da7f7;}
+.report-submit-text{font-size:27rpx;line-height:40rpx;color:#bdc2cd;}
+.report-submit-text-ready{color:#fff;}
+/* #ifndef APP */
+.report-page{position:fixed;inset:0;box-sizing:border-box;}.report-page view,.report-page button,.report-page textarea{box-sizing:border-box;}.report-page button::after{border:0;}
+/* #endif */
+</style>

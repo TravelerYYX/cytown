@@ -1,0 +1,21 @@
+<template>
+  <view class="app-empty-state" :class="{'app-empty-compact': compact, 'app-empty-flush': flush}">
+    <image class="app-empty-image" :class="{'app-empty-compact-image': compact}" :src="AUTH_ASSETS.guestEmpty" mode="aspectFit" />
+    <text class="app-empty-copy" :class="{'app-empty-compact-copy': compact}">你看~这里空空如也</text>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { AUTH_ASSETS } from '@/config/assets'
+withDefaults(defineProps<{ compact?: boolean; flush?: boolean }>(), { compact: false, flush: false })
+</script>
+
+<style scoped>
+.app-empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; align-self: stretch; flex-shrink: 0; padding: 100rpx 20rpx 80rpx; }
+.app-empty-image { width: 360rpx; height: 240rpx; flex-shrink: 0; }
+.app-empty-copy { margin-top: 30rpx; color: #c5c5c5; font-size: 21rpx; line-height: 30rpx; text-align: center; }
+.app-empty-compact { padding: 32rpx 16rpx; }
+.app-empty-compact-image { width: 240rpx; height: 160rpx; }
+.app-empty-compact-copy { margin-top: 18rpx; }
+.app-empty-flush { padding: 0; }
+</style>

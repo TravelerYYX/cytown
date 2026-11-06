@@ -1,0 +1,125 @@
+<template>
+  <view class="topic-page" :class="[uxNative?'ux1':'',uxNative?'ux2':'']">
+    <view class="topic-status" :style="{ height: statusBarHeight + 'px' }"  :class="[uxNative?'ux1':'',uxNative?'ux3':'']"/>
+    <view class="topic-sheet" :style="{ paddingBottom: bottomPadding }" :class="[uxNative?'ux1':'',uxNative?'ux4':'']">
+      <view class="topic-header" :class="[uxNative?'ux1':'',uxNative?'ux5':'']"><ActionButton :aria-label="&quot;取消&quot;" @tap="goBack" :class="[uxNative?'ct-native-button':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux8':'']"><text :class="[uxNative?'ux9':'',uxNative?'ux10':'',uxNative?'ux11':'',uxNative?'ux12':'',uxNative?'ux13':'']">取消</text></ActionButton><text :class="[uxNative?'ux9':'',uxNative?'ux10':'',uxNative?'ux13':'',uxNative?'ux14':'']">选择话题（{{ selected.length }}/5）</text><ActionButton :aria-label="&quot;确认&quot;" class="confirm" @tap="confirm" :class="[uxNative?'ct-native-button':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux8':'',uxNative?'ux15':'']"><text :class="[uxNative?'ux9':'',uxNative?'ux10':'',uxNative?'ux11':'',uxNative?'ux12':'',uxNative?'ux16':'',uxNative?'ux13':'']">确认</text></ActionButton></view>
+      <view class="topic-intro" :class="[uxNative?'ux1':'',uxNative?'ux17':'']"><text :class="[uxNative?'ux9':'',uxNative?'ux10':'',uxNative?'ux18':'',uxNative?'ux13':'']">选择相关内容分类，最多参与5个话题</text></view>
+      <view class="topic-search" :class="[uxNative?'ux1':'',uxNative?'ux19':'']"><AppIcon name="search" tone="muted" :size="34"  :style="uxLayout(uxNodePrefix+'-g1000',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;36rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'"/><input v-model="keyword" placeholder="搜索或创建话题" @confirm="load"  :class="[uxNative?'ux9':'',uxNative?'ux10':'',uxNative?'ux20':'',uxNative?'ux21':'']" :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;36rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1001'"/><ActionButton :aria-label="&quot;创建&quot;" @tap="create" :class="[uxNative?'ct-native-button':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux22':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;36rpx&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1002'"><text :class="[uxNative?'ux9':'',uxNative?'ux10':'',uxNative?'ux11':'',uxNative?'ux23':'',uxNative?'ux13':'']">创建</text></ActionButton></view>
+      <view class="recommended-title" :class="[uxNative?'ux1':'',uxNative?'ux24':'']"><AppIcon name="topic" tone="muted" :size="35"  :style="uxLayout(uxNodePrefix+'-g1003',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1003'"/><text :class="[uxNative?'ux9':'',uxNative?'ux10':'',uxNative?'ux25':'',uxNative?'ux13':'']" :style="uxLayout(uxNodePrefix+'-g1004',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1004'">{{ keyword ? '搜索结果' : '推荐话题' }}</text></view>
+      <scroll-view class="topic-list" direction="vertical" :show-scrollbar="false" :class="[uxNative?'ux26':'',uxNative?'ux27':'']">
+        <ActionButton :aria-label="topic.name + (topic.hot?' 热':'') + ' ' + (topic.description || '暂无介绍')" v-for="(topic, __uxIndex0) in topics" :key="topic.id" class="topic-row" :class="[uxNative?'ct-native-button':'',{selected:has(topic.id)},uxNative?'ux6':'',uxNative?'ux34':'',uxNative?'ux7':'',uxNative&amp;&amp;!!has(topic.id)?'ux43':'']" @tap="toggle(topic)">
+          <SkeletonBlock v-if="!topic.coverUrl" :width="92" :height="92" :radius="14" label="话题头像"  :style="uxLayout(uxNodePrefix+'-g1005'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;22rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1005'+'-'+[__uxIndex0].join('-')"/>
+          <image v-else class="topic-cover" :src="uiAsset(base + topic.coverUrl)" mode="aspectFill"  :class="[uxNative?'ux35':'']" :style="uxLayout(uxNodePrefix+'-g1006'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;22rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:true,declarations:{__index:String(0+(!topic.coverUrl?1:0))}}],{})" :id="uxNodePrefix+'-g1006'+'-'+[__uxIndex0].join('-')"/>
+          <view class="topic-copy" :class="[uxNative?'ux1':'',uxNative?'ux36':'']" :style="uxLayout(uxNodePrefix+'-g1007'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;22rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:true,declarations:{__index:String(0+(!topic.coverUrl?1:0)+1)}}],{})" :id="uxNodePrefix+'-g1007'+'-'+[__uxIndex0].join('-')"><view class="topic-name-line" :class="[uxNative?'ux1':'',uxNative?'ux37':'']"><text class="topic-name" :class="[uxNative?'ux9':'',uxNative?'ux10':'',uxNative?'ux48':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux38':'']" :style="uxLayout(uxNodePrefix+'-n0'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;max-width&quot;:&quot;70%&quot;}}],{})" :id="uxNodePrefix+'-n0'+'-'+[__uxIndex0].join('-')">{{ topic.name }}</text><text v-if="topic.hot" class="hot-tag" :class="[uxNative?'ux9':'',uxNative?'ux10':'',uxNative?'ux48':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux39':'']">热</text><AppIcon v-if="has(topic.id)" class="check" name="check" tone="cyan" :size="30"  :class="[uxNative?'ux40':'']"/></view><text class="description" :class="[uxNative?'ux9':'',uxNative?'ux10':'',uxNative?'ux48':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux41':'']">{{ topic.description || '暂无介绍' }}</text></view>
+        </ActionButton>
+        <view v-if="loadError"><text>{{loadError}}</text><ActionButton aria-label="重新加载话题" @tap="load"><text>点击重试</text></ActionButton></view><EmptyState v-if="!loading && !loadError && !topics.length" />
+      </scroll-view>
+    </view>
+    <EyeCareOverlay />
+  </view>
+</template>
+<script setup lang="uts">
+import EmptyState from '@/components/EmptyState.uvue'
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, ref } from 'vue'
+
+import AppIcon from '@/components/AppIcon.uvue'
+import SkeletonBlock from '@/components/SkeletonBlock.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { API_BASE_URL } from '@/config/env'
+import { createCustomTopic, fetchTopics } from '@/utils/publish-api'
+import type { Topic } from '@/types/publish'
+const base = API_BASE_URL
+const { statusBarHeight, bottomInset } = useWindowInsets()
+const bottomPadding = computed(() => 'max(' + bottomInset.value + 'px, env(safe-area-inset-bottom, 0px))')
+const topics = ref<Topic[]>([]), selected = ref<Topic[]>([]), keyword = ref(''), loading = ref(false), loadError = ref('')
+const has = (id: number) => selected.value.some(item => item.id === id)
+function toggle(topic: Topic) { const index = selected.value.findIndex(item => item.id === topic.id); if (index >= 0) selected.value.splice(index, 1); else if (selected.value.length < 5) selected.value.push(topic); else uni.showToast({ title: '最多选择5个话题', icon: 'none' }) }
+async function load() { loading.value = true; loadError.value = ''; try { topics.value = await fetchTopics(keyword.value.trim()) } catch { loadError.value = '话题加载失败，请重试' } finally { loading.value = false } }
+async function create() { const name = keyword.value.trim(); if (!name) return uni.showToast({ title: '请输入话题名称', icon: 'none' }); try { const topic = await createCustomTopic(name); if (!topics.value.some(item => item.id === topic.id)) topics.value.unshift(topic); if (!has(topic.id) && selected.value.length < 5) selected.value.push(topic); uni.showToast({ title: topic.status === 0 ? '话题已提交审核' : '已选择话题', icon: 'none' }) } catch {} }
+function confirm() { uni.setStorageSync('publish-topic-selection', selected.value); goBack() }
+const goBack = () => getCurrentPages().length > 1 ? uni.navigateBack() : uni.redirectTo({ url: '/pages/publish/index' })
+onLoad(() => { const value = uni.getStorageSync('publish-topic-selection'); if (Array.isArray(value)) selected.value = value.slice(0, 5) })
+onShow(() => { uni.setNavigationBarColor({ frontColor: '#000000', backgroundColor: '#a8a8a8' }); void load() })
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.topic-page{position:fixed;inset:0;display:flex;flex-direction:column;background:#a8a8a8;color:#25282a}.topic-status{flex-shrink:0}.topic-sheet{min-height:0;flex:1;display:flex;flex-direction:column;background:#fff;border-radius:42rpx 42rpx 0 0;overflow:hidden}.topic-header{height:108rpx;display:flex;align-items:center;justify-content:space-between;padding:0 34rpx;border-bottom:2rpx solid #f1f1f1;flex-direction:row}.topic-header button{min-width:84rpx;color:#929799;font-size:24rpx;text-align:left}.topic-header>text{font-size:27rpx;font-weight:600}.topic-header .confirm{color:#10b9ef;text-align:right}.topic-intro{padding:26rpx 34rpx 18rpx;color:#9da2a5;font-size:21rpx}.topic-search{height:68rpx;margin:0 34rpx;display:flex;align-items:center;gap:12rpx;padding:0 18rpx;border-radius:36rpx;background:#f4f5f6;flex-direction:row}.topic-search input{min-width:0;flex:1}.topic-search button{color:#10b9ef;font-size:22rpx}.recommended-title{height:94rpx;display:flex;align-items:flex-end;gap:12rpx;padding:0 34rpx 20rpx;font-size:25rpx;font-weight:600;flex-direction:row}.topic-list{height:0;min-height:0;flex:1}.topic-row{width:100%;min-height:136rpx;display:flex;align-items:center;gap:22rpx;padding:16rpx 34rpx;text-align:left;flex-direction:row}.topic-row.selected{background:#f2fbff}.topic-cover{width:92rpx;height:92rpx;border-radius:14rpx}.topic-copy{min-width:0;flex:1}.topic-name-line{display:flex;align-items:center;flex-direction:row}.topic-name{max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:25rpx;font-weight:600}.hot-tag{margin-left:10rpx;padding:2rpx 7rpx;border-radius:6rpx;background:#ff831c;color:#fff;font-size:18rpx}.check{margin-left:auto;color:#10b9ef;font-size:30rpx}.description{display:block;margin-top:14rpx;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#aeb3b5;font-size:20rpx}.empty{padding:90rpx 30rpx;text-align:center;color:#aaa;font-size:22rpx}
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux9{color:var(--text-main);font-size:26rpx;}
+.ux10{color:#25282a;}
+.ux11{line-height:normal;}
+.ux12{color:#929799;font-size:24rpx;text-align:left;}
+.ux16{color:#10b9ef;text-align:right;}
+.ux18{color:#9da2a5;font-size:21rpx;}
+.ux23{color:#10b9ef;font-size:22rpx;}
+.ux25{font-size:25rpx;font-weight:600;}
+
+
+
+
+.ux48{text-align:left;}
+
+
+
+
+.ux53{text-align:center;color:#aaa;font-size:22rpx;}
+.ux1{}
+.ux26{}
+.ux13{}
+.ux20{}
+.ux6{}
+
+
+
+
+
+
+.ux2{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;background-color:#a8a8a8;color:#25282a;}
+.ux3{flex-shrink:0;}
+.ux4{min-height:0;flex:1;display:flex;flex-direction:column;background-color:#fff;border-radius:42rpx 42rpx 0 0;overflow:hidden;}
+.ux5{height:108rpx;display:flex;flex-direction:row;align-items:center;justify-content:space-between;padding:0 34rpx;border-bottom:2rpx solid #f1f1f1;}
+.ux17{padding:26rpx 34rpx 18rpx;color:#9da2a5;font-size:21rpx;}
+.ux19{height:68rpx;margin:0 34rpx;display:flex;flex-direction:row;align-items:center;padding:0 18rpx;border-radius:36rpx;background-color:#f4f5f6;}
+.ux24{height:94rpx;display:flex;flex-direction:row;align-items:flex-end;padding:0 34rpx 20rpx;font-size:25rpx;font-weight:600;}
+.ux27{height:0;min-height:0;flex:1;}
+.ux34{width:100%;min-height:136rpx;display:flex;flex-direction:row;align-items:center;padding:16rpx 34rpx;text-align:left;}
+.ux35{width:92rpx;height:92rpx;border-radius:14rpx;}
+.ux36{min-width:0;flex:1;}
+.ux37{display:flex;flex-direction:row;align-items:center;}
+.ux38{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:25rpx;font-weight:600;}
+.ux39{margin-left:10rpx;padding:2rpx 7rpx;border-radius:6rpx;background-color:#ff831c;color:#fff;font-size:18rpx;}
+.ux40{margin-left:auto;color:#10b9ef;font-size:30rpx;}
+.ux41{display:flex;flex-direction:column;margin-top:14rpx;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#aeb3b5;font-size:20rpx;}
+.ux42{padding:90rpx 30rpx;text-align:center;color:#aaa;font-size:22rpx;}
+.ux7{margin:0;padding:0;border:0px;border-radius:0;background-color:transparent;line-height:normal;overflow:visible;}
+.ux8{min-width:84rpx;color:#929799;font-size:24rpx;text-align:left;}
+.ux14{font-size:27rpx;font-weight:600;}
+.ux21{min-width:0;flex:1;}
+.ux22{color:#10b9ef;font-size:22rpx;}
+.ux15{color:#10b9ef;text-align:right;}
+.ux43{background-color:#f2fbff;}
+/* #endif */
+</style>

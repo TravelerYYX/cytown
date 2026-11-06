@@ -1,0 +1,14 @@
+<template>
+  <image v-if="level > 0" :src="source" mode="aspectFit" :style="{ width: size + 'rpx', height: size + 'rpx', flexShrink: 0 }" @error="fallback" />
+</template>
+<script setup lang="uts">
+import { computed, onMounted, ref, watch } from 'vue'
+import { fetchLevelConfig, levelBadgeUrl } from '@/utils/level-api'
+const props = withDefaults(defineProps<{ level: number; size?: number }>(), { size: 42 })
+const failed = ref(false)
+const url = computed(() => levelBadgeUrl(props.level))
+watch(url, () => { failed.value = false })
+const source = computed(() => failed.value ? '/static/images/levels/level-' + Math.max(1, Math.min(60, props.level)) + '.png' : url.value)
+function fallback() { failed.value = true }
+onMounted(() => { void fetchLevelConfig().catch(() => {}) })
+</script>

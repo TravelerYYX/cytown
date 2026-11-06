@@ -1,0 +1,167 @@
+<template>
+  <view class="up-page">
+    <PaneScroll class="up-scroll" :active="visible" :post-items="activeTab==='publish' ? posts : []" post-variant="mine" :viewport-width="viewportWidth" :transition-key="activeTab" :lower-threshold="180" @scrolltolower="loadMore">
+      <template #before>
+        <view class="up-header" :style="{paddingTop:profileTopInset+'px'}">
+          <!-- #ifdef APP -->
+          <view class="up-native-background"><image class="up-native-art" src="/static/images/assets/my_background.jpg" mode="aspectFill" :style="nativeBackgroundStyle" /></view>
+          <!-- #endif -->
+          <!-- #ifndef APP -->
+          <view class="up-background" />
+          <!-- #endif -->
+          <view class="up-dim" />
+          <view class="up-nav"><ActionButton class="up-nav-button" aria-label="返回" @tap="back"><AppIcon name="back" tone="white" :size="46" /></ActionButton><ActionButton class="up-nav-button" aria-label="更多操作" @tap="safetyVisible=true"><AppIcon name="more" tone="white" :size="40" /></ActionButton></view>
+          <template v-if="profile">
+            <view class="up-identity">
+              <view id="up-avatar-window" class="up-avatar-window"><UserAvatar class="up-avatar" :src="profile!.avatar" :user-id="profile!.userId" :frame-id="profile!.avatarFrame" :frame-expires-at="profile!.avatarFrameExpiresAt ?? undefined" :size="117" /></view>
+              <view class="up-identity-copy"><view class="up-name"><UserName :user-id="profile!.userId" :nickname="profile!.nickname" :level="0" :size="36" color="#ffffff" /></view><view class="up-meta"><text class="up-gender-symbol">{{ profile!.gender===1?'♂':profile!.gender===2?'♀':'' }}</text><text class="up-meta-text">{{ profile!.gender===1?'男':profile!.gender===2?'女':'性别保密' }}</text><text class="up-province">IP：{{ profile!.ipProvince || '未知' }}</text></view></view>
+            </view>
+            <text class="up-signature" :max-lines="1">{{ profile!.signature || '这个人很懒，什么都没写' }}</text>
+            <view class="up-stats"><view class="up-stat"><text class="up-stat-value">{{ count(profile!.statistics.followerCount) }}</text><text class="up-stat-label">粉丝</text></view><view class="up-stat"><text class="up-stat-value">{{ count(profile!.statistics.followingCount) }}</text><text class="up-stat-label">关注</text></view><view class="up-stat"><text class="up-stat-value">{{ count(profile!.statistics.receivedLikeCount) }}</text><text class="up-stat-label">获赞</text></view></view>
+            <scroll-view class="up-card-scroll" direction="horizontal" :show-scrollbar="false"><view class="up-card-track"><CommunityProfileCard :profile="profile!" /></view></scroll-view>
+          </template>
+          <view v-else class="up-profile-state"><text class="up-profile-message">{{ profileLoading?'加载中…':profileError }}</text><ActionButton v-if="profileError" class="up-profile-retry" aria-label="重试加载主页" @tap="reload"><text class="up-profile-retry-text">重试</text></ActionButton></view>
+        </view>
+        <view id="up-tabs" class="up-tabs"><view class="up-tab-items"><ActionButton v-for="tab in tabs" :key="tab.id" class="up-tab" :aria-label="tab.name" @tap="activeTab=tab.id"><text class="up-tab-label" :class="{'up-tab-active':activeTab===tab.id}">{{tab.name}}</text><view v-if="activeTab===tab.id" class="up-tab-indicator" /></ActionButton></view><ActionButton class="up-search" aria-label="搜索发布内容" @tap="noop"><AppIcon name="search" :size="44" /></ActionButton></view>
+      </template>
+      <view class="up-list-footer">
+        <template v-if="profile && activeTab==='publish'">
+          <view v-if="postsLoading&&!posts.length" class="up-list-state"><text class="up-list-message">发布内容加载中…</text></view>
+          <view v-else-if="postsError" class="up-list-state"><text class="up-list-message">{{postsError}}</text><ActionButton class="up-retry" aria-label="重新加载发布内容" @tap="loadMore"><text class="up-retry-text">重试</text></ActionButton></view>
+          <EmptyState v-else-if="!posts.length" />
+          <view v-else class="up-list-state"><text class="up-list-message">{{postsLoading?'加载中…':hasMore?'上拉加载更多':'已经到底了'}}</text></view>
+        </template>
+        <EmptyState v-else-if="profile" />
+      </view>
+    </PaneScroll>
+    <view v-if="profile" id="up-actions" class="up-actions" :style="{paddingBottom:(bottomInset+22*viewportWidth/750)+'px'}"><ActionButton id="up-chat" class="up-chat" aria-label="聊天" :disabled="chatBusy" @tap="chat"><text class="up-chat-text">{{chatBusy?'打开中…':'聊天'}}</text></ActionButton><ActionButton id="up-follow" class="up-follow" :class="{'up-follow-selected':following}" :aria-label="followLabel" :disabled="followBusy" @tap="follow"><AppIcon v-if="!following" name="plus" tone="white" :size="36" /><text class="up-follow-text">{{followLabel}}</text></ActionButton></view>
+    <SafetyActions :visible="safetyVisible" :user-id="userId" :show-block="true" :blocked="profile?.blockedByMe??false" @close="safetyVisible=false" @changed="changeBlock" />
+    <EyeCareOverlay />
+  </view>
+</template>
+<script setup lang="uts">
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import PaneScroll from '@/components/PaneScroll.uvue'
+import SafetyActions from '@/components/SafetyActions.uvue'
+import UserAvatar from '@/components/UserAvatar.uvue'
+import UserName from '@/components/UserName.uvue'
+import ActionButton from '@/components/ActionButton.uvue'
+import AppIcon from '@/components/AppIcon.uvue'
+import CommunityProfileCard from '@/components/CommunityProfileCard.uvue'
+import EmptyState from '@/components/EmptyState.uvue'
+import EyeCareOverlay from '@/components/EyeCareOverlay.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { authRevision, getUserInfo, getSessionGeneration, isLoggedIn } from '@/utils/auth'
+import { openUserProfile } from '@/utils/navigation'
+import { setStatusBar } from '@/utils/platform'
+import { fetchUserProfile, fetchUserPosts, openProfileChat } from '@/utils/user-profile'
+import type { UserProfile } from '@/utils/user-profile'
+import { toPost } from '@/utils/post-api'
+import type { Post } from '@/types/home'
+import { ensureInteractionLogin, interactionBusy, interactionRevision, performFollow, relationshipStates, setRelationship } from '@/utils/interactions'
+const {statusBarHeight,bottomInset,viewportWidth}=useWindowInsets()
+const profileTopInset=computed(()=>{
+  // #ifdef APP
+  return Math.max(statusBarHeight.value,64*viewportWidth.value/750)
+  // #endif
+  // #ifndef APP
+  return statusBarHeight.value
+  // #endif
+})
+const nativeBackgroundStyle=computed(()=>{const width=viewportWidth.value;return {width:width+'px',height:width*1740/1125+'px',top:'0px'}})
+const userId=ref(''),profile=ref<UserProfile|null>(null),profileLoading=ref(true),profileError=ref(''),visible=ref(true)
+const posts=ref<Post[]>([]),postsLoading=ref(false),postsError=ref(''),hasMore=ref(true),activeTab=ref('publish'),chatBusy=ref(false)
+const tabs=[{id:'publish',name:'发布'},{id:'comment',name:'评论'},{id:'collection',name:'合集'},{id:'favorite',name:'收藏'}]
+let revision=0,pageNum=1,viewer=getUserInfo()?.userId||'',loaded=false
+const following=computed(()=>relationshipStates[userId.value]?.following ?? profile.value?.following ?? false)
+const followedBy=computed(()=>relationshipStates[userId.value]?.followedBy ?? profile.value?.followedBy ?? false)
+const followLabel=computed(()=>following.value?(followedBy.value?'互相关注':'已关注'):(followedBy.value?'回关':'关注'))
+const followBusy=computed(()=>interactionBusy.has('follow:'+userId.value))
+const safetyVisible=ref(false)
+function changeBlock(value:boolean){if(profile.value)profile.value.blockedByMe=value}
+const noop=()=>{}
+const count=(value:number)=>value>=10000?(value/10000).toFixed(1).replace(/\.0$/,'')+'万':String(value??0)
+function back(){getCurrentPages().length>1?uni.navigateBack():uni.reLaunch({url:'/pages/index/index'})}
+function isSelf(){if(isLoggedIn()&&userId.value===getUserInfo()?.userId){openUserProfile(userId.value);return true}return false}
+async function loadProfile(){
+  const request=revision,session=getSessionGeneration(),stateRevision=interactionRevision.value
+  profileLoading.value=true;profileError.value=''
+  try{const data=await fetchUserProfile(userId.value);if(request!==revision||session!==getSessionGeneration())return;profile.value=data;if(stateRevision===interactionRevision.value)setRelationship(data.userId,data.following,data.followedBy)}
+  catch(e){if(request===revision){profileError.value=e instanceof Error?e.message:'主页加载失败';profile.value=null;posts.value=[];hasMore.value=false}}
+  finally{if(request===revision)profileLoading.value=false}
+}
+async function loadMore(){
+  if(!profile.value||activeTab.value!=='publish'||postsLoading.value||!hasMore.value)return
+  const request=revision,session=getSessionGeneration(),stateRevision=interactionRevision.value
+  postsLoading.value=true;postsError.value=''
+  try{const page=await fetchUserPosts(userId.value,pageNum);if(request!==revision||session!==getSessionGeneration())return;const ids=new Set(posts.value.map(p=>p.id));posts.value.push(...page.records.filter(p=>!ids.has(p.id)).map(p=>toPost(p,stateRevision)));hasMore.value=pageNum<page.pages&&page.records.length>0;pageNum++}
+  catch(e){if(request===revision)postsError.value=e instanceof Error?e.message:'发布内容加载失败'}finally{if(request===revision)postsLoading.value=false}
+}
+async function reload(){revision++;profile.value=null;posts.value=[];postsLoading.value=false;postsError.value='';hasMore.value=true;pageNum=1;await loadProfile();await loadMore()}
+async function follow(){const request=revision,session=getSessionGeneration();const before=following.value;const result=await performFollow(userId.value);if(result&&request===revision&&session===getSessionGeneration()&&profile.value&&result.active!==before)profile.value.statistics.followerCount=Math.max(0,profile.value.statistics.followerCount+(result.active?1:-1))}
+async function chat(){if(chatBusy.value||!ensureInteractionLogin())return;chatBusy.value=true;const request=revision,session=getSessionGeneration();try{const conversation=await openProfileChat(userId.value);if(request!==revision||session!==getSessionGeneration())return;uni.navigateTo({url:'/pages/chat/index?id='+encodeURIComponent(conversation.id)})}catch{}finally{chatBusy.value=false}}
+onLoad(options=>{userId.value=String(options?.userId||'');loaded=true;if(!/^[1-9]\d*$/.test(userId.value)){profileLoading.value=false;profileError.value='用户不存在';return}if(!isSelf())void reload()})
+onShow(()=>{visible.value=true;setStatusBar('light');if(loaded&&!isSelf()&&profile.value)void loadProfile()})
+onHide(()=>{visible.value=false})
+watch(activeTab,()=>{if(activeTab.value==='publish'&&!posts.value.length)void loadMore()})
+watch(authRevision,()=>{const next=isLoggedIn()?getUserInfo()?.userId||'':'';if(viewer===next)return;viewer=next;revision++;chatBusy.value=false;if(loaded&&!isSelf())void reload()})
+onBeforeUnmount(()=>{revision++})
+</script>
+<style scoped>
+.up-page{display:flex;flex-direction:column;width:100%;height:100%;background-color:#fff;overflow:hidden;}
+.up-scroll{flex:1;height:0;min-height:0;}
+.up-header{position:relative;display:flex;flex-direction:column;padding-bottom:92rpx;background-color:#00539d;}
+/* #ifndef APP */
+.up-background{position:absolute;top:0;right:0;bottom:0;left:0;background-image:url('~@/static/images/assets/my_background.jpg');background-size:100% auto;background-position:left top;}
+/* #endif */
+.up-native-background{position:absolute;top:0;right:0;bottom:0;left:0;overflow:hidden;}
+.up-native-art{position:absolute;left:0;}
+.up-dim{position:absolute;top:0;right:0;bottom:0;left:0;background-image:linear-gradient(to bottom,rgba(0,0,0,0.10),rgba(0,0,0,0.30));}
+.up-nav{position:relative;display:flex;flex-direction:row;align-items:center;justify-content:space-between;height:100rpx;padding:0 28rpx;flex-shrink:0;}
+.up-nav-button{width:58rpx;height:72rpx;padding:0;margin:0;border-width:0;border-radius:0;background-color:transparent;}
+.up-identity{position:relative;display:flex;flex-direction:row;align-items:center;height:118rpx;margin:48rpx 34rpx 0;overflow:visible;flex-shrink:0;}
+.up-avatar-window{position:relative;flex-shrink:0;width:117rpx;height:117rpx;overflow:visible;}
+.up-avatar{position:absolute;left:-21rpx;top:-21rpx;}
+.up-identity-copy{display:flex;flex-direction:column;flex:1;min-width:0;margin-left:54rpx;}
+.up-name{font-size:31rpx;line-height:47rpx;color:#fff;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.up-meta{display:flex;flex-direction:row;align-items:center;height:32rpx;margin-top:6rpx;}
+.up-gender-symbol{font-size:27rpx;line-height:32rpx;color:rgba(215,236,255,0.58);margin-right:8rpx;}
+.up-meta-text{font-size:17rpx;line-height:30rpx;color:rgba(215,236,255,0.58);}
+.up-province{margin-left:18rpx;font-size:17rpx;line-height:30rpx;color:rgba(215,236,255,0.58);}
+.up-signature{position:relative;margin:40rpx 34rpx 0;height:32rpx;font-size:21rpx;line-height:32rpx;color:#fff;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.up-stats{position:relative;display:flex;flex-direction:row;align-items:center;height:36rpx;margin:32rpx 34rpx 0;flex-shrink:0;}
+.up-stat{display:flex;flex-direction:row;align-items:center;margin-right:28rpx;}
+.up-stat-value{font-size:23rpx;line-height:36rpx;color:#fff;}
+.up-stat-label{font-size:17rpx;line-height:36rpx;margin-left:10rpx;color:rgba(215,236,255,0.65);}
+.up-card-scroll{position:relative;height:184rpx;margin-top:44rpx;flex-shrink:0;}
+.up-card-track{display:flex;flex-direction:row;padding:0 34rpx;}
+.up-profile-state{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;height:534rpx;}
+.up-profile-message{font-size:26rpx;color:#fff;}
+.up-profile-retry{margin-top:24rpx;padding:12rpx 30rpx;border-radius:12rpx;background-color:rgba(255,255,255,0.2);}
+.up-profile-retry-text{font-size:24rpx;color:#fff;}
+.up-tabs{position:relative;display:flex;flex-direction:row;align-items:center;justify-content:space-between;height:100rpx;border-radius:42rpx 42rpx 0 0;background-color:#fff;margin-top:-42rpx;padding:0 33rpx;flex-shrink:0;}
+.up-tab-items{display:flex;flex-direction:row;align-items:center;}
+.up-tab{position:relative;display:flex;flex-direction:column;width:75rpx;height:76rpx;margin:0 28rpx 0 0;padding:0;border-width:0;border-radius:0;background-color:transparent;}
+.up-tab-label{font-size:27rpx;line-height:48rpx;color:#979aa4;}
+.up-tab-active{color:#283145;font-weight:600;}
+.up-tab-indicator{position:absolute;bottom:14rpx;left:17rpx;width:41rpx;height:8rpx;border-radius:4rpx;background-color:#00a2ff;}
+.up-search{width:44rpx;height:70rpx;margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;}
+.up-list-footer{background-color:#fff;min-height:140rpx;}
+.up-list-state{display:flex;flex-direction:column;align-items:center;padding:50rpx 24rpx;}
+.up-list-message{font-size:23rpx;line-height:34rpx;color:#aaa;}
+.up-retry{margin-top:18rpx;padding:12rpx 30rpx;border-radius:12rpx;background-color:#f4f4f4;}
+.up-retry-text{font-size:24rpx;color:#555;}
+.up-actions{display:flex;flex-direction:row;align-items:center;flex-shrink:0;padding:26rpx 34rpx 22rpx;border-top-width:1rpx;border-top-color:#f3f4f6;background-color:#fff;}
+.up-chat{display:flex;flex-direction:row;align-items:center;justify-content:center;flex:0.62;height:74rpx;margin:0 26rpx 0 0;padding:0;border-width:2rpx;border-style:solid;border-color:#2a9eef;border-radius:24rpx;background-color:#fff;}
+.up-chat-text{font-size:26rpx;line-height:40rpx;font-weight:600;color:#239eee;}
+.up-follow{display:flex;flex-direction:row;align-items:center;justify-content:center;flex:1;height:74rpx;margin:0;padding:0;border-width:0;border-radius:24rpx;background-color:#00a2ff;}
+.up-follow-selected{background-color:#83c9f5;}
+.up-follow-text{font-size:26rpx;line-height:40rpx;color:#fff;margin-left:8rpx;}
+/* #ifndef APP */
+.up-page{position:fixed;inset:0;box-sizing:border-box;}
+.up-page view,.up-page button{box-sizing:border-box;}
+.up-page button{display:flex;align-items:center;justify-content:center;line-height:normal;}
+.up-page button::after{border:0;}
+.up-tabs{margin-top:-42rpx;}
+/* #endif */
+</style>

@@ -1,0 +1,273 @@
+<template>
+  <view class="tags-page" :style="{ paddingTop: statusBarHeight + 'px' }" :class="[uxNative?'ux2':'',uxNative?'ux3':'']">
+    <view class="tags-nav" :class="[uxNative?'ux2':'',uxNative?'ux4':'']">
+      <ActionButton class="back-button" aria-label="返回" @tap="back" :class="[uxNative?'ux5':'',uxNative?'ux6':'']"><AppIcon name="back" :size="42" /></ActionButton>
+      <text :class="[uxNative?'ux7':'',uxNative?'ux8':'',uxNative?'ux9':'']">个性标签</text>
+    </view>
+
+    <view class="selected-panel" :class="[uxNative?'ux2':'',uxNative?'ux10':'']">
+      <scroll-view direction="horizontal" class="selected-scroll" :show-scrollbar="false" :class="[uxNative?'ux11':'',uxNative?'ux12':'']">
+        <view class="selected-list" :class="[uxNative?'ux2':'',uxNative?'ux13':'']" :style="uxLayout(uxNodePrefix+'-n0',[{on:uxNative,declarations:{&quot;min-width&quot;:&quot;100%&quot;}}],{})" :id="uxNodePrefix+'-n0'">
+          <ActionButton :aria-label="String(tag.name) + ' ' + &quot;×&quot;" v-for="(tag, index) in selected" :key="tagKey(tag)" class="selected-chip" :disabled="saving" @tap="remove(index)" :class="[uxNative?'ux5':'',uxNative?'ux14':'']" :style="uxLayout(uxNodePrefix+'-g1000'+'-'+[index].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+index)}}],{})" :id="uxNodePrefix+'-g1000'+'-'+[index].join('-')">
+            <text :class="[uxNative?'ux7':'',uxNative?'ux15':'',uxNative?'ux16':'',uxNative?'ux9':'']" :style="uxLayout(uxNodePrefix+'-g1001'+'-'+[index].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;23rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;46rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1001'+'-'+[index].join('-')">{{ tag.name }}</text><text class="chip-remove" :class="[uxNative?'ux7':'',uxNative?'ux15':'',uxNative?'ux16':'',uxNative?'ux9':'',uxNative?'ux17':'']" :style="uxLayout(uxNodePrefix+'-g1002'+'-'+[index].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;23rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;46rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1002'+'-'+[index].join('-')">×</text>
+          </ActionButton>
+          <text v-if="!selected.length" class="selected-empty" :class="[uxNative?'ux7':'',uxNative?'ux15':'',uxNative?'ux9':'',uxNative?'ux18':'']" :style="uxLayout(uxNodePrefix+'-g1003',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+selected.length)}}],{})" :id="uxNodePrefix+'-g1003'">请选择你的个性标签</text>
+        </view>
+      </scroll-view>
+    </view>
+
+    <view v-if="library.length" class="library-panel" :class="[uxNative?'ux2':'',uxNative?'ux19':'']">
+      <scroll-view direction="vertical" class="category-scroll" :show-scrollbar="false" :class="[uxNative?'ux11':'',uxNative?'ux20':'']">
+        <ActionButton :aria-label="String(group.category || '默认')" v-for="(group, index) in library" :key="group.category || index" class="category-button" :class="[{active:index===activeCategory},uxNative?'ux5':'',uxNative?'ux27':'',uxNative&amp;&amp;!!(index===activeCategory)?'ux38':'']" @tap="activeCategory = index">
+          <text :class="[uxNative?'ux7':'',uxNative?'ux46':'',uxNative&amp;&amp;!!(index===activeCategory)?'ux52':'',uxNative?'ux9':'']">{{ group.category || '默认' }}</text>
+        </ActionButton>
+        <ActionButton :aria-label="&quot;自定义&quot;" class="category-button" :class="[{active:activeCategory===library.length},uxNative?'ux5':'',uxNative?'ux27':'',uxNative&amp;&amp;!!(activeCategory===library.length)?'ux38':'']" @tap="activeCategory = library.length"><text :class="[uxNative?'ux7':'',uxNative?'ux46':'',uxNative&amp;&amp;!!(activeCategory===library.length)?'ux52':'',uxNative?'ux9':'']">自定义</text></ActionButton>
+      </scroll-view>
+
+      <view class="tag-column" :class="[uxNative?'ux2':'',uxNative?'ux28':'']">
+        <text class="column-title" :class="[uxNative?'ux7':'',uxNative?'ux9':'',uxNative?'ux29':'']">{{ currentCategoryName }}</text>
+        <view v-if="showingCustom" class="custom-editor" :class="[uxNative?'ux2':'',uxNative?'ux30':'']">
+          <input
+            v-model="customName"
+            maxlength="20"
+            :disabled="saving"
+            placeholder="输入自定义标签（1-20字）"
+            confirm-type="done"
+            @confirm="addCustom"
+           :class="[uxNative?'ux7':'',uxNative?'ux53':'',uxNative?'ux54':'']" :style="uxLayout(uxNodePrefix+'-g1004',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;14rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1004'"/>
+          <ActionButton :aria-label="&quot;添加&quot;" class="custom-add" :disabled="saving || !customName.trim()" @tap="addCustom" :class="[uxNative?'ux5':'',uxNative?'ux31':'',uxNative&amp;&amp;!!(saving||!customName.trim())?'ux55':'']" :style="uxLayout(uxNodePrefix+'-g1005',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;14rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1005'"><text :class="[uxNative?'ux7':'',uxNative?'ux56':'',uxNative&amp;&amp;!!(saving||!customName.trim())?'ux57':'',uxNative?'ux9':'']">添加</text></ActionButton>
+        </view>
+        <scroll-view direction="vertical" class="tag-scroll" :show-scrollbar="false" :class="[uxNative?'ux11':'',uxNative?'ux32':'']">
+          <view class="tag-grid" :class="[uxNative?'ux2':'',uxNative?'ux33':'']">
+            <ActionButton :aria-label="String(tag.name)" v-for="(tag, __uxIndex0) in currentTags" :key="tag.id" class="tag-option" :class="[{on:isSelected(tag.id)},uxNative?'ux5':'',uxNative?'ux34':'',uxNative&amp;&amp;!!isSelected(tag.id)?'ux39':'']" :disabled="saving" @tap="toggle(tag)" :style="uxLayout(uxNodePrefix+'-g1006'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;17rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__columns&quot;:&quot;3&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(0+__uxIndex0)}}],{})" :id="uxNodePrefix+'-g1006'+'-'+[__uxIndex0].join('-')">
+              <text :class="[uxNative?'ux7':'',uxNative?'ux68':'',uxNative?'ux9':'']">{{ tag.name }}</text>
+            </ActionButton>
+            <ActionButton :aria-label="String(tag.name)" v-for="(tag, __uxIndex1) in currentCustomTags" :key="tagKey(tag)" class="tag-option on" :disabled="saving" @tap="removeCustom(tag)" :class="[uxNative?'ux5':'',uxNative?'ux34':'',uxNative?'ux39':'']" :style="uxLayout(uxNodePrefix+'-g1007'+'-'+[__uxIndex1].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;17rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__columns&quot;:&quot;3&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(0+currentTags.length+__uxIndex1)}}],{})" :id="uxNodePrefix+'-g1007'+'-'+[__uxIndex1].join('-')">
+              <text :class="[uxNative?'ux7':'',uxNative?'ux68':'',uxNative?'ux9':'']">{{ tag.name }}</text>
+            </ActionButton>
+          </view>
+          <EmptyState v-if="!currentTags.length && !currentCustomTags.length" compact />
+        </scroll-view>
+      </view>
+    </view>
+
+    <EmptyState v-else-if="loaded" />
+
+    <view class="tags-footer" :class="[uxNative?'ux2':'',uxNative?'ux36':'']" :style="uxLayout(uxNodePrefix+'-n1',[{on:uxNative,declarations:{&quot;padding&quot;:&quot;22rpx 34rpx max(26rpx, env(safe-area-inset-bottom))&quot;}}],{})" :id="uxNodePrefix+'-n1'">
+      <ActionButton :aria-label="&quot;保存&quot;" class="save-button" :disabled="saving" :loading="saving" @tap="save" :class="[uxNative?'ux5':'',uxNative?'ux37':'',uxNative&amp;&amp;!!saving?'ux58':'']"><text :class="[uxNative?'ux7':'',uxNative?'ux75':'',uxNative&amp;&amp;!!saving?'ux76':'',uxNative?'ux9':'']">保存</text></ActionButton>
+    </view>
+    <EyeCareOverlay />
+  </view>
+</template>
+
+<script setup lang="uts">
+import EmptyState from '@/components/EmptyState.uvue'
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, ref } from 'vue'
+
+import AppIcon from '@/components/AppIcon.uvue'
+import EyeCareOverlay from '@/components/EyeCareOverlay.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { getUserInfo, isLoggedIn, saveUserInfo } from '@/utils/auth'
+import { fetchTagLibrary, updateTags } from '@/utils/auth-api'
+import type { TagCategory, TagItem, UpdateTagItem } from '@/types/auth'
+
+type SelectedTag = { tagId: string | null; name: string; custom: boolean }
+const MAX_TAGS = 10
+const { statusBarHeight } = useWindowInsets()
+const user = ref(getUserInfo())
+const selected = ref<SelectedTag[]>([])
+const library = ref<TagCategory[]>([])
+const loaded = ref(false)
+const saving = ref(false)
+const activeCategory = ref(0)
+const customName = ref('')
+let disposed = false
+
+const customTags = computed(() => selected.value.filter(tag => tag.custom))
+const showingCustom = computed(() => activeCategory.value === library.value.length)
+const currentGroup = computed(() => library.value[activeCategory.value])
+const currentCategoryName = computed(() => showingCustom.value ? '自定义' : (currentGroup.value?.category || '默认'))
+const currentTags = computed(() => showingCustom.value ? [] : (currentGroup.value?.tags || []))
+const currentCustomTags = computed(() => showingCustom.value ? customTags.value : [])
+const tagKey = (tag: SelectedTag) => (tag.custom ? 'c:' : 's:') + tag.name.toLowerCase()
+const isSelected = (tagId: string) => selected.value.some(t => t.tagId === tagId)
+
+function toast(title: string) { uni.showToast({ title, icon: 'none' }) }
+function back() { getCurrentPages().length > 1 ? uni.navigateBack() : uni.reLaunch({ url: '/pages/index/index' }) }
+function remove(index: number) { if (!saving.value) selected.value.splice(index, 1) }
+function removeCustom(tag: SelectedTag) {
+  const index = selected.value.findIndex(item => tagKey(item) === tagKey(tag))
+  if (index >= 0) remove(index)
+}
+function addCustom() {
+  const name = customName.value.trim()
+  if (!name) return
+  if ([...name].length > 20) { toast('标签名需为1-20个字符'); return }
+  if (selected.value.some(tag => tag.name.toLowerCase() === name.toLowerCase())) { toast('标签已存在'); return }
+  if (selected.value.length >= MAX_TAGS) { toast('最多选择10个标签'); return }
+  selected.value.push({ tagId: null, name, custom: true })
+  customName.value = ''
+}
+function toggle(tag: TagItem) {
+  const index = selected.value.findIndex(t => t.tagId === tag.id)
+  if (index >= 0) { selected.value.splice(index, 1); return }
+  if (selected.value.length >= MAX_TAGS) { toast('最多选择10个标签'); return }
+  selected.value.push({ tagId: tag.id, name: tag.name, custom: false })
+}
+async function save() {
+  if (saving.value) return
+  saving.value = true
+  try {
+    const items: UpdateTagItem[] = selected.value.map(t => t.custom ? { customName: t.name } : { tagId: t.tagId! })
+    const updated = await updateTags(items)
+    if (disposed) return
+    user.value = updated
+    saveUserInfo(updated)
+    uni.showToast({ title: '已保存', icon: 'success' })
+    setTimeout(() => { if (!disposed) uni.navigateBack() }, 600)
+  } catch { /* 请求层统一提示。 */ } finally { saving.value = false }
+}
+onShow(async () => {
+  if (!isLoggedIn()) { uni.reLaunch({ url: '/pages/login/index' }); return }
+  user.value = getUserInfo()
+  selected.value = (user.value?.tags || []).map(t => ({ tagId: t.tagId, name: t.name, custom: t.custom }))
+  activeCategory.value = 0
+  customName.value = ''
+  try {
+    const result = await fetchTagLibrary()
+    if (!disposed) library.value = result
+    if (!disposed) loaded.value = true
+  } catch { /* 请求层统一提示，失败时不显示空列表。 */ }
+})
+onUnload(() => { disposed = true })
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.tags-page { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; background: #fff; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.tags-nav { position: relative; display: flex; align-items: center; justify-content: center; height: 118rpx; flex-shrink: 0; color: #242729; font-size: 31rpx; font-weight: 600; flex-direction: row; }
+.back-button { position: absolute; left: 28rpx; top: 50%; display: flex; align-items: center; justify-content: center; width: 58rpx; height: 66rpx; margin: 0; padding: 0; transform: translateY(-50%); background: transparent; flex-direction: row; }
+.back-button::after,.selected-chip::after,.category-button::after,.tag-option::after,.custom-add::after,.save-button::after { border: 0; }
+.selected-panel { flex-shrink: 0; height: 184rpx; padding: 35rpx 34rpx 29rpx; border-bottom: 2rpx solid #f0f1f2; }
+.selected-scroll { width: 100%; height: 120rpx; white-space: nowrap; }
+.selected-list { display: inline-flex; align-items: flex-start; gap: 18rpx; min-width: 100%; flex-direction: row; }
+.selected-chip { display: inline-flex; align-items: center; justify-content: center; gap: 23rpx; min-width: 164rpx; height: 76rpx; margin: 0; padding: 0 23rpx; border: 3rpx solid #4ddbf3; border-radius: 17rpx; background: #cef5fa; color: #282c2e; font-size: 25rpx; line-height: 1; white-space: nowrap; flex-direction: row; }
+.chip-remove { font-size: 40rpx; font-weight: 600; line-height: 1; }
+.selected-empty { color: #a1a6a9; font-size: 24rpx; line-height: 76rpx; }
+.library-panel { display: flex; height: 0; flex: 1; min-height: 0; padding-bottom: 130rpx; flex-direction: row; }
+.category-scroll { width: 194rpx; height: 100%; flex-shrink: 0; background: #f7f8f9; }
+.category-button { display: flex; align-items: center; width: 100%; height: 104rpx; margin: 0; padding: 0 34rpx; background: #f7f8f9; color: #8f9497; border-radius: 0; font-size: 26rpx; line-height: 1; text-align: left; flex-direction: row; }
+.category-button.active { color: #43ccec; background: #fff; }
+.tag-column { display: flex; min-width: 0; flex: 1; flex-direction: column; padding: 31rpx 31rpx 0 27rpx; }
+.column-title { flex-shrink: 0; margin-bottom: 21rpx; color: #989da0; font-size: 23rpx; }
+.custom-editor { display: flex; align-items: center; gap: 14rpx; margin-bottom: 24rpx; flex-direction: row; }
+.custom-editor input { height: 70rpx; min-width: 0; flex: 1; padding: 0 18rpx; border: 2rpx solid #edf0f1; border-radius: 14rpx; background: #f6f7f8; color: #303436; font-size: 22rpx; }
+.custom-add { flex-shrink: 0; width: 92rpx; height: 70rpx; margin: 0; padding: 0; border-radius: 14rpx; background: #61d6ef; color: #253338; font-size: 22rpx; line-height: 70rpx; }
+.custom-add[disabled] { background: #d9f2f6; color: #91a8ac; }
+.tag-scroll { height: 0; flex: 1; }
+.tag-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 17rpx; padding-bottom: 36rpx; }
+.tag-option { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 66rpx; margin: 0; padding: 12rpx 8rpx; background: #f6f7f8; color: #303436; border-radius: 16rpx; font-size: 23rpx; line-height: 1.25; text-align: center; white-space: normal; word-break: break-all; flex-direction: row; }
+.tag-option.on { border: 3rpx solid #52d8ef; background: #c9f3f8; padding: 9rpx 5rpx; }
+.empty-library { display: flex; align-items: center; justify-content: center; height: 0; flex: 1; padding-bottom: 130rpx; color: #9ba3aa; font-size: 24rpx; flex-direction: row; }
+.tags-footer { position: absolute; right: 0; bottom: 0; left: 0; z-index: 3; padding: 22rpx 34rpx max(26rpx, env(safe-area-inset-bottom)); background: rgba(255,255,255,.97); }
+.save-button { height: 91rpx; margin: 0; padding: 0; border-radius: 22rpx; background: #61d6ef; color: #253338; font-size: 28rpx; line-height: 91rpx; }
+.save-button[disabled] { background: #bfeef6; color: #78949a; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux7{color:var(--text-main);font-size:26rpx;}
+.ux8{color:#242729;font-size:31rpx;font-weight:600;}
+.ux15{white-space:nowrap;}
+.ux16{color:#282c2e;font-size:25rpx;line-height:25rpx;white-space:nowrap;}
+
+
+
+
+
+
+.ux46{color:#8f9497;font-size:26rpx;line-height:26rpx;text-align:left;}
+
+
+
+
+
+.ux52{color:#43ccec;}
+.ux56{color:#253338;font-size:22rpx;line-height:70rpx;}
+.ux57{color:#91a8ac;}
+
+
+
+
+
+
+
+
+
+.ux68{color:#303436;font-size:23rpx;line-height:28.75rpx;text-align:center;white-space:normal;}
+
+
+
+
+
+.ux74{color:#9ba3aa;font-size:24rpx;}
+.ux75{color:#253338;font-size:28rpx;line-height:91rpx;}
+.ux76{color:#78949a;}
+.ux2{}
+.ux11{}
+.ux9{}
+.ux53{}
+.ux5{}
+
+
+
+
+
+
+.ux3{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;overflow:hidden;background-color:#fff;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);}
+.ux4{position:relative;display:flex;flex-direction:row;align-items:center;justify-content:center;height:118rpx;flex-shrink:0;color:#242729;font-size:31rpx;font-weight:600;}
+.ux6{position:absolute;left:28rpx;top:50%;display:flex;flex-direction:row;align-items:center;justify-content:center;width:58rpx;height:66rpx;margin:0;padding:0;transform:translateY(-50%);background-color:transparent;}
+.ux10{flex-shrink:0;height:184rpx;padding:35rpx 34rpx 29rpx;border-bottom:2rpx solid #f0f1f2;}
+.ux12{width:100%;height:120rpx;white-space:nowrap;}
+.ux13{display:flex;flex-direction:row;align-items:flex-start;}
+.ux14{display:flex;flex-direction:row;align-items:center;justify-content:center;min-width:164rpx;height:76rpx;margin:0;padding:0 23rpx;border:3rpx solid #4ddbf3;border-radius:17rpx;background-color:#cef5fa;color:#282c2e;font-size:25rpx;line-height:25rpx;white-space:nowrap;}
+.ux17{font-size:40rpx;font-weight:600;line-height:40rpx;}
+.ux18{color:#a1a6a9;font-size:24rpx;line-height:76rpx;}
+.ux19{display:flex;flex-direction:row;height:0;flex:1;min-height:0;padding-bottom:130rpx;}
+.ux20{width:194rpx;height:100%;flex-shrink:0;background-color:#f7f8f9;}
+.ux27{display:flex;flex-direction:row;align-items:center;width:100%;height:104rpx;margin:0;padding:0 34rpx;background-color:#f7f8f9;color:#8f9497;border-radius:0;font-size:26rpx;line-height:26rpx;text-align:left;}
+.ux28{display:flex;min-width:0;flex:1;flex-direction:column;padding:31rpx 31rpx 0 27rpx;}
+.ux29{flex-shrink:0;margin-bottom:21rpx;color:#989da0;font-size:23rpx;}
+.ux30{display:flex;flex-direction:row;align-items:center;margin-bottom:24rpx;}
+.ux31{flex-shrink:0;width:92rpx;height:70rpx;margin:0;padding:0;border-radius:14rpx;background-color:#61d6ef;color:#253338;font-size:22rpx;line-height:70rpx;}
+.ux32{height:0;flex:1;}
+.ux33{display:flex;flex-direction:column;padding-bottom:36rpx;flex-direction:row;flex-wrap:wrap;}
+.ux34{display:flex;flex-direction:row;align-items:center;justify-content:center;width:100%;min-height:66rpx;margin:0;padding:12rpx 8rpx;background-color:#f6f7f8;color:#303436;border-radius:16rpx;font-size:23rpx;line-height:28.75rpx;text-align:center;white-space:normal;}
+.ux35{display:flex;flex-direction:row;align-items:center;justify-content:center;height:0;flex:1;padding-bottom:130rpx;color:#9ba3aa;font-size:24rpx;}
+.ux36{position:absolute;right:0;bottom:0;left:0;z-index:3;background-color:rgba(255,255,255,.97);}
+.ux37{height:91rpx;margin:0;padding:0;border-radius:22rpx;background-color:#61d6ef;color:#253338;font-size:28rpx;line-height:91rpx;}
+.ux54{height:70rpx;min-width:0;flex:1;padding:0 18rpx;border:2rpx solid #edf0f1;border-radius:14rpx;background-color:#f6f7f8;color:#303436;font-size:22rpx;}
+.ux38{color:#43ccec;background-color:#fff;}
+.ux55{background-color:#d9f2f6;color:#91a8ac;}
+.ux39{border:3rpx solid #52d8ef;background-color:#c9f3f8;padding:9rpx 5rpx;}
+.ux58{background-color:#bfeef6;color:#78949a;}
+/* #endif */
+</style>

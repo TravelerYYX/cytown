@@ -1,0 +1,143 @@
+<template>
+  <view class="tab-bar" :style="{ paddingBottom: bottomPadding }" :class="[uxNative?'ux1':'',uxNative?'ux2':'']">
+    <ActionButton v-for="(tab, __uxIndex0) in tabs" :key="tab.key" class="tab-item" :class="[uxNative?'ct-native-button':'',{selected:active===tab.key,publish:tab.key==='publish'},uxNative?'ux3':'',uxNative?'ux10':'',uxNative&amp;&amp;!!(tab.key==='publish')?'ux17':'',uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape)&quot;)?'ux19':'',uxNative&amp;&amp;!!(tab.key==='publish')&amp;&amp;uxMedia(&quot;(orientation: landscape)&quot;)?'ux23':'']" :aria-label="tab.key === 'publish' ? '发布' : tab.label" @tap="onTabTap(tab.key)">
+      <image v-if="tab.key === 'publish'" class="publish-image" :src="uiAsset(TAB_ASSETS.publish)" mode="aspectFit"  :class="[uxNative?'ux18':'',uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape)&quot;)?'ux24':'']"/>
+      <template v-else>
+        <view class="tab-icon" :class="[uxNative?'ux1':'',uxNative?'ux11':'',uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape)&quot;)?'ux20':'']">
+          <AppIcon v-if="tab.key === 'home' && active === 'home' && homeMode === 'top'" name="top" tone="cyan" :size="52" />
+          <view v-else-if="active === tab.key" class="selected-image" :class="[uxNative?'ux1':'',uxNative?'ux12':'',uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape)&quot;)?'ux21':'']">
+            <image :key="tab.key + '-' + playbackId" class="selected-frames" :style="sprite.style.value" @load="playingTab === tab.key && sprite.start()" :class="[{playing:playingTab===tab.key},uxNative?'ux13':'',uxNative&amp;&amp;!!(playingTab===tab.key)?'ux27':'']" :src="uiAsset(TAB_ASSETS[tab.key])" mode="scaleToFill" />
+          </view>
+          <image v-else class="reference-nav-icon" :class="['reference-nav-' + tab.key, {'reference-nav-landscape':uxMedia('(orientation: landscape)')}]" :src="uiAsset(tab.key === 'mine' ? '/static/icons/mine-muted.svg' : '/static/icons/reference-nav-' + tab.key + '.svg')" mode="aspectFit" />
+          <text v-if="tab.key === 'message' && badge > 0" class="badge" :class="[uxNative?'ux29':'',uxNative?'ux35':'',uxNative?'ux15':'',uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape)&quot;)?'ux25':'']">{{ badge > 99 ? '99+' : badge }}</text>
+          <view v-if="!guestStyle && ((tab.key === 'follow' && followDot) || (tab.key === 'mine' && active !== 'mine'))" class="red-dot"  :class="[uxNative?'ux1':'',uxNative?'ux16':'',uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape)&quot;)?'ux26':'']"/>
+        </view>
+        <text class="tab-label" :class="[uxNative?'ux29':'',uxNative?'ux35':'',uxNative?'ux14':'',uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape)&quot;)?'ux22':'',uxNative&amp;&amp;!!(active===tab.key)?'ux28':'']">{{ tab.key === 'home' && active === 'home' && homeMode === 'top' ? '回顶部' : tab.label }}</text>
+      </template>
+    </ActionButton>
+  </view>
+</template>
+<script setup lang="uts">
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, ref, watch } from 'vue'
+import { useSpriteFrames } from '@/composables/useSpriteFrames'
+import AppIcon from './AppIcon.uvue'
+import { TAB_ASSETS } from '@/config/assets'
+import type { HomeTabMode, IconName, TabItemKey } from '@/types/home'
+const props = withDefaults(defineProps<{ active: TabItemKey; badge?: number; followDot?: boolean; bottomInset?: number; homeMode?: HomeTabMode; guestStyle?: boolean }>(), { badge: 0, followDot: false, bottomInset: 0, homeMode: 'home', guestStyle: false })
+const emit = defineEmits<{ (e: 'change', key: TabItemKey): void }>()
+const playingTab = ref<TabItemKey | null>(null)
+const playbackId = ref(0)
+const sprite = useSpriteFrames(() => 15, 600, 600 / 14)
+const onTabTap = (key: TabItemKey) => {
+  if (key !== 'publish') {
+    const returningToTop = key === 'home' && props.active === 'home' && props.homeMode === 'top'
+    sprite.stop(); playingTab.value = returningToTop ? null : key
+    playbackId.value++
+  }
+  emit('change', key)
+}
+watch(() => props.active, active => {
+  if (playingTab.value !== active) playingTab.value = null
+})
+watch(() => props.homeMode, mode => {
+  if (mode === 'top' && playingTab.value === 'home') playingTab.value = null
+})
+const bottomPadding = computed(() => uxNative ? Math.max(props.bottomInset,uni.getWindowInfo().safeAreaInsets?.bottom||0)+'px' : 'max(' + props.bottomInset + 'px, env(safe-area-inset-bottom, 0px))')
+const tabs: { key: TabItemKey; label: string; icon: IconName }[] = [
+  { key: 'home', label: '首页', icon: 'home' }, { key: 'follow', label: '关注', icon: 'compass' },
+  { key: 'publish', label: '', icon: 'plus' }, { key: 'message', label: '消息', icon: 'comment' }, { key: 'mine', label: '我的', icon: 'mine' }
+]
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.tab-bar { position: relative; z-index: 30; display: flex; flex-shrink: 0; width: 100%; background: #f7f7f7; border-top: 1rpx solid #f5f5f5; box-sizing: content-box; flex-direction: row; }
+.tab-item { flex: 1; min-width: 0; height: 128rpx; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 22rpx; }
+.tab-icon { position: relative; width: 52rpx; height: 52rpx; }
+.selected-image { display: block; width: 52rpx; height: 52rpx; overflow: hidden; }
+/* 15 original frames at 40 ms each; keep the last frame when idle. */
+.selected-frames { display: block; width: 1500%; max-width: none; height: 100%; transform: translateX(-93.3333333333%); }
+.selected-frames.playing { animation: tab-select 600ms steps(14, end) 1 forwards; }
+@keyframes tab-select {
+  from { transform: translateX(0); }
+  93.3333333333%, to { transform: translateX(-93.3333333333%); }
+}
+.tab-label { margin-top: 14rpx; color: #505557; font-size: 16rpx; line-height: 20rpx; }
+.selected .tab-label { color: var(--brand); }
+.badge { position: absolute; right: -20rpx; top: -6rpx; width: 36rpx; height: 36rpx; line-height: 32rpx; text-align: center; border-radius: 50%; padding: 0; background: var(--danger); color: #fff; font-size: 16rpx; font-weight: 400; border: 2rpx solid #f7f7f7; box-sizing: border-box; }
+.red-dot { position: absolute; right: -6rpx; top: -2rpx; width: 14rpx; height: 14rpx; border: 2rpx solid #f7f7f7; border-radius: 50%; background: var(--danger); }
+.publish { padding-top: 20rpx; }
+.publish-image { width: 78rpx; height: 68rpx; }
+@media (orientation: landscape) {
+  .tab-item { height: 72px; padding-top: 8px; }
+  .tab-icon, .selected-image { width: 34px; height: 34px; }
+  .tab-icon :deep(.app-icon) { width: 34px !important; height: 34px !important; }
+  .tab-label { margin-top: 6px; font-size: 11px; }
+  .publish { padding-top: 8px; }
+  .publish-image { width: 52px; height: 48px; }
+  .badge { right: -10px; top: -3px; width: 20px; height: 20px; line-height: 18px; font-size: 9px; border-width: 1px; }
+  .red-dot { width: 9px; height: 9px; right: -4px; top: -1px; border-width: 1px; }
+}
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux29{color:var(--text-main);font-size:26rpx;}
+
+
+
+
+
+.ux1{}
+.ux35{}
+.ux3{}
+
+
+
+
+
+
+.ux2{position:relative;z-index:30;display:flex;flex-direction:row;flex-shrink:0;width:100%;background-color:#f7f7f7;border-top:1rpx solid #f5f5f5;box-sizing:content-box;}
+.ux10{flex:1;min-width:0;height:128rpx;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:22rpx;}
+.ux11{position:relative;width:52rpx;height:52rpx;}
+.ux12{display:flex;flex-direction:column;width:52rpx;height:52rpx;overflow:hidden;}
+.ux13{display:flex;flex-direction:column;width:1500%;height:100%;transform:translateX(-93.3333333333%);}
+.ux14{margin-top:14rpx;color:#505557;font-size:16rpx;line-height:20rpx;}
+.ux15{position:absolute;right:-20rpx;top:-6rpx;width:36rpx;height:36rpx;line-height:32rpx;text-align:center;border-radius:50%;padding:0;background-color:var(--danger);color:#fff;font-size:16rpx;font-weight:400;border:2rpx solid #f7f7f7;box-sizing:border-box;}
+.ux16{position:absolute;right:-6rpx;top:-2rpx;width:14rpx;height:14rpx;border:2rpx solid #f7f7f7;border-radius:50%;background-color:var(--danger);}
+.ux17{padding-top:20rpx;}
+.ux18{width:78rpx;height:68rpx;}
+.ux19{height:72px;padding-top:8px;}
+.ux20{width:34px;height:34px;}
+.ux21{width:34px;height:34px;}
+.ux22{margin-top:6px;font-size:11px;}
+.ux23{padding-top:8px;}
+.ux24{width:52px;height:48px;}
+.ux25{right:-10px;top:-3px;width:20px;height:20px;line-height:18px;font-size:9px;border-width:1px;}
+.ux26{width:9px;height:9px;right:-4px;top:-1px;border-width:1px;}
+.ux27{}
+.ux28{color:var(--brand);}
+/* #endif */
+</style>
+
+<style scoped>
+.reference-nav-icon { width: 52rpx; height: 52rpx; flex-shrink: 0; }
+/* Match the home's visible artwork size despite different asset padding. */
+.reference-nav-follow { transform: scale(0.82); }
+.reference-nav-message { transform: scale(0.89); }
+.reference-nav-mine { transform: scale(0.92); }
+.tab-icon { overflow: visible; }
+.reference-nav-landscape { width: 34px; height: 34px; }
+</style>

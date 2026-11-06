@@ -1,0 +1,20 @@
+import { request } from '../request';
+export const fetchPublishSettings=()=>request<Api.Publish.Settings>({url:'/publish/settings'});
+export const updatePublishSettings=(data:Api.Publish.Settings)=>request<Api.Publish.Settings>({url:'/publish/settings/update',method:'post',data});
+export const fetchPublishRules=()=>request<Api.Publish.Rule[]>({url:'/publish/rules'});
+export const updatePublishRule=(data:Api.Publish.Rule)=>request<Api.Publish.Rule>({url:'/publish/rules/update',method:'post',data});
+export const fetchAdminTopics=()=>request<Api.Publish.Topic[]>({url:'/publish/topics'});
+export const saveAdminTopic=(data:Api.Publish.Topic)=>request<Api.Publish.Topic>({url:'/publish/topics/save',method:'post',data});
+export const deleteAdminTopic=(id:number)=>request<void>({url:'/publish/topics/delete',method:'post',data:{id}});
+export const sortAdminTopics=(ids:number[])=>request<void>({url:'/publish/topics/sort',method:'post',data:{ids}});
+export const fetchPublishGroups=()=>request<Api.Publish.Group[]>({url:'/publish/catalog/groups'});
+export const fetchPublishEmojis=()=>request<Api.Publish.Emoji[]>({url:'/publish/catalog/emojis'});
+export const fetchPublishColors=()=>request<Api.Publish.Color[]>({url:'/publish/catalog/colors'});
+export const fetchPublishDividers=()=>request<Api.Publish.Divider[]>({url:'/publish/catalog/dividers'});
+export const savePublishGroup=(data:Api.Publish.Group)=>request<Api.Publish.Group>({url:'/publish/catalog/group/save',method:'post',data});
+export const savePublishEmoji=(data:Api.Publish.Emoji)=>request<Api.Publish.Emoji>({url:'/publish/catalog/emoji/save',method:'post',data});
+export const savePublishColor=(data:Api.Publish.Color)=>request<Api.Publish.Color>({url:'/publish/catalog/color/save',method:'post',data});
+export const savePublishDivider=(data:Api.Publish.Divider)=>request<Api.Publish.Divider>({url:'/publish/catalog/divider/save',method:'post',data});
+export const deletePublishCatalog=(type:string,id:number)=>request<void>({url:'/publish/catalog/delete',method:'post',data:{type,id}});
+export async function fetchPublishHealth(){const result=await request<Api.Publish.Health>({url:'/publish/health'});return{...result,data:result.data??undefined};}
+export const rebuildPublishFeed=()=>request<number>({url:'/publish/feed/rebuild',method:'post'});

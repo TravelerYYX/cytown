@@ -1,0 +1,136 @@
+<template>
+ <view class="share-host" @tap.stop>
+  <view v-if="rendered" class="share-layer">
+   <view class="share-mask" :style="{opacity:entered?0.45:0}" @tap="close" />
+   <view v-if="menuRendered" class="share-panel share-menu" :style="{transform:menuEntered?'translateY(0%)':'translateY(100%)',paddingBottom:Math.max(bottomInset,12)+'px'}">
+    <view class="share-options">
+     <ActionButton class="share-option" aria-label="分享给好友" @tap="chooseFriends"><view class="share-circle"><image class="share-option-icon" :src="uiAsset('/static/icons/share-friend.svg')" mode="aspectFit" /></view><text class="share-label">分享给好友</text></ActionButton>
+     <ActionButton v-if="post" class="share-option" aria-label="转发到动态" @tap="repost"><view class="share-circle"><AppIcon name="share" :size="42" /></view><text class="share-label">转发到动态</text></ActionButton>
+     <ActionButton class="share-option" aria-label="复制链接" :disabled="copying" @tap="copy"><view class="share-circle"><image class="share-option-icon" :src="uiAsset('/static/icons/share-link.svg')" mode="aspectFit" /></view><text class="share-label">{{copying?'复制中…':'复制链接'}}</text></ActionButton>
+    </view>
+    <view v-if="management &amp;&amp; (canReport || saveEnabled || originalEnabled)" class="share-management">
+     <view class="share-management-options">
+      <ActionButton v-if="saveEnabled" class="share-option" aria-label="保存" :disabled="saveDisabled" @tap="chooseSave"><view class="share-circle"><image class="share-management-icon" :src="uiAsset('/static/icons/download-muted.svg')" mode="aspectFit" /></view><text class="share-label">{{saveLabel}}</text></ActionButton>
+      <ActionButton v-if="originalEnabled" class="share-option" aria-label="查看原图" :disabled="originalLoaded" @tap="chooseOriginal"><view class="share-circle"><AppIcon :name="originalLoaded?'check':'search'" tone="muted" :size="42" /></view><text class="share-label">{{originalLoaded?'已加载原图':'查看原图'}}</text></ActionButton>
+      <ActionButton v-if="canReport" class="share-option" aria-label="举报" @tap="chooseReport"><view class="share-circle"><image class="share-management-icon" :src="uiAsset('/static/icons/report.svg')" mode="aspectFit" /></view><text class="share-label">举报</text></ActionButton>
+     </view>
+    </view>
+    <ActionButton class="share-cancel" aria-label="取消分享" @tap="close"><text class="share-cancel-text">取消</text></ActionButton>
+   </view>
+   <view v-if="friendsRendered" class="share-panel share-friends-panel" :style="{transform:friendsEntered?'translateY(0%)':'translateY(100%)',paddingBottom:Math.max(bottomInset,30)+'px'}">
+    <view class="share-heading"><text class="share-heading-text">分享给</text><ActionButton class="share-close" aria-label="关闭好友选择" @tap="close"><image class="share-close-icon" :src="uiAsset('/static/icons/share-close.svg')" mode="aspectFit" /></ActionButton></view>
+    <scroll-view class="share-friends" direction="horizontal" :show-scrollbar="false">
+     <view class="share-friends-row" :style="{width:(friends.length*142+30)+'rpx'}">
+      <ActionButton v-for="friend in friends" :key="friend.id" class="share-friend" :aria-label="'选择'+friend.name" :aria-pressed="selected?.id===friend.id" :disabled="busy" @tap="selected=friend">
+       <view class="share-avatar-wrap"><image class="share-avatar" :src="uiAsset(friend.iconUrl?.startsWith('/static/')?friend.iconUrl:avatarSrc(friend.iconUrl))" mode="aspectFill" @error="friend.iconUrl=DEFAULT_AVATAR" /><view v-if="selected?.id===friend.id" class="share-check"><text class="share-check-text">✓</text></view></view>
+       <text class="share-friend-name" :max-lines="1">{{friend.name}}</text>
+      </ActionButton>
+     </view>
+    </scroll-view>
+    <text v-if="loading" class="share-empty share-empty-position">好友加载中…</text>
+    <ActionButton v-else-if="error" class="share-retry" aria-label="重试加载好友" @tap="loadFriends"><text class="share-empty">{{error}}，点击重试</text></ActionButton>
+    <text v-else-if="!friends.length" class="share-empty share-empty-position">暂无可分享的好友，先去关注感兴趣的人吧</text>
+    <view v-if="selectionRendered" class="share-confirm" :style="{opacity:selectionEntered?1:0,transform:selectionEntered?'translateY(0rpx)':'translateY(24rpx)'}">
+     <view class="share-selected"><text class="share-selected-text">发送给 {{selected?.name}}</text><text class="share-post-title" :max-lines="1">{{shareTitle}}</text></view>
+     <ActionButton class="share-send" :disabled="!selected||busy" :aria-label="product ? '发送商品' : '发送帖子'" @tap="send"><text class="share-send-text">{{busy?'发送中…':pending?.localState==='failed'&amp;&amp;pending?.conversationId===selected?.id?'重新发送':'发送'}}</text></ActionButton>
+    </view>
+   </view>
+  </view>
+ </view>
+</template>
+<script setup lang="uts">
+import {computed,ref,watch,onBeforeUnmount} from 'vue'
+import ActionButton from './ActionButton.uvue'
+import AppIcon from './AppIcon.uvue'
+import {usePublishSheetMotion} from '@/composables/usePublishSheetMotion'
+import {useWindowInsets} from '@/composables/useWindowInsets'
+import {ensureInteractionLogin} from '@/utils/interactions'
+import {getSessionGeneration,authRevision,getUserInfo,avatarSrc,DEFAULT_AVATAR} from '@/utils/auth'
+import {uiAsset} from '@/utils/ui-assets'
+import {openReport} from '@/utils/report-api'
+import {chatList} from '@/utils/chat-api'
+import {newChatMessage,sendChatMessage,chatRows} from '@/utils/chat-state'
+import {postShareCard,postShareLink} from '@/utils/post-share'
+import type {Post} from '@/types/home'
+import {shopShareLink} from '@/utils/shop-api'
+import type {ChatConversation,ChatMessage,ChatProductCard} from '@/types/chat'
+const props=withDefaults(defineProps<{visible:boolean;post?:Post;product?:ChatProductCard;management?:boolean;saveEnabled?:boolean;saveDisabled?:boolean;saveLabel?:string;originalEnabled?:boolean;originalLoaded?:boolean}>(),{management:false,saveEnabled:false,saveDisabled:false,saveLabel:'保存',originalEnabled:false,originalLoaded:false}),emit=defineEmits<{close:[];save:[];original:[]}>()
+const choosing=ref(false)
+const {rendered,entered}=usePublishSheetMotion(()=>props.visible),{bottomInset}=useWindowInsets()
+const {rendered:menuRendered,entered:menuEntered}=usePublishSheetMotion(()=>props.visible&&!choosing.value)
+const {rendered:friendsRendered,entered:friendsEntered}=usePublishSheetMotion(()=>props.visible&&choosing.value)
+const friends=ref<ChatConversation[]>([]),selected=ref<ChatConversation|null>(null),loading=ref(false),error=ref(''),busy=ref(false),copying=ref(false)
+const {rendered:selectionRendered,entered:selectionEntered}=usePublishSheetMotion(()=>props.visible&&choosing.value&&!!selected.value)
+const pending=ref<ChatMessage|null>(null)
+const canReport=computed(()=>props.post!=null&&props.post.author.id!==getUserInfo()?.userId)
+const shareId=computed(()=>props.product?.id||props.post?.id||'')
+const shareTitle=computed(()=>props.product?.name||props.post?.title||props.post?.content||'分享帖子')
+let generation=0,timer:ReturnType<typeof setTimeout>|undefined
+function close(){emit('close')}
+function toast(title:string){uni.showToast({title,icon:'none'})}
+async function chooseFriends(){if(!menuEntered.value||!ensureInteractionLogin())return;choosing.value=true;await loadFriends()}
+function afterClose(action:()=>void){close();clearTimeout(timer);timer=setTimeout(action,320)}
+function chooseSave(){if(menuEntered.value&&!props.saveDisabled){close();emit('save')}}
+function chooseOriginal(){if(menuEntered.value&&!props.originalLoaded){close();emit('original')}}
+function chooseReport(){if(menuEntered.value&&props.post){const target=props.post.id;afterClose(()=>openReport('post',target))}}
+async function loadFriends(){const current=++generation,session=getSessionGeneration();loading.value=true;error.value='';try{const rows=await chatList();if(current===generation&&session===getSessionGeneration())friends.value=rows}catch(e){if(current===generation)error.value=e instanceof Error?e.message:'好友加载失败'}finally{if(current===generation)loading.value=false}}
+async function send(){
+ if(!props.visible||!friendsEntered.value||!selected.value||busy.value||!ensureInteractionLogin())return
+ const friend=selected.value,session=getSessionGeneration(),current=generation,post=props.post,product=props.product
+ if(!post&&!product)return
+ busy.value=true
+ try{
+  const message=pending.value?.conversationId===friend.id?pending.value:newChatMessage(friend,product?'product':'post','','',false,'',null,true,post?postShareCard(post):null,product||null)
+  pending.value=message
+  await sendChatMessage(friend.peerId,message)
+  if(session!==getSessionGeneration()||current!==generation)return
+  const result=chatRows(friend.id).find(row=>row.clientId===message.clientId)
+  if(result?.localState){pending.value=result;toast(result.error||'发送失败，请重试');return}
+  toast('已分享给'+friend.name);close()
+ }finally{if(session===getSessionGeneration()&&current===generation)busy.value=false}
+}
+async function copy(){
+ if(copying.value||!menuEntered.value)return
+ copying.value=true;const current=generation,id=shareId.value
+ try{const result=await (props.product?shopShareLink(id):postShareLink(id));if(current!==generation||!props.visible||id!==shareId.value)return;await new Promise<void>((resolve,reject)=>uni.setClipboardData({data:result.text,showToast:false,success:()=>resolve(),fail:()=>reject(new Error('复制失败，请重试'))}));if(current===generation){toast('链接已复制');close()}}catch(e){if(current===generation)toast(e instanceof Error?e.message:'复制失败，请重试')}finally{copying.value=false}
+}
+function repost(){if(!menuEntered.value||!props.post||!ensureInteractionLogin())return;const id=props.post.id;afterClose(()=>uni.navigateTo({url:'/pages/publish/index?repostOfPostId='+encodeURIComponent(id)}))}
+watch(()=>[props.visible,shareId.value],()=>{generation++;loading.value=false;busy.value=false;if(props.visible){choosing.value=false;selected.value=null;error.value='';friends.value=[];pending.value=null}})
+watch(authRevision,()=>{generation++;clearTimeout(timer);close()})
+onBackPress(()=>{
+ if(!props.visible)return false
+ close()
+ return true
+})
+onBeforeUnmount(()=>{generation++;clearTimeout(timer)})
+</script>
+<style scoped>
+.share-layer{position:fixed;top:0;right:0;bottom:0;left:0;z-index:800;}
+.share-mask{position:absolute;top:0;right:0;bottom:0;left:0;background-color:#000;transition-property:opacity;transition-duration:320ms;transition-timing-function:cubic-bezier(.16,1,.3,1);}
+.share-panel{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;border-radius:24rpx 24rpx 0 0;background-color:#fff;transition-property:transform;transition-duration:320ms;transition-timing-function:cubic-bezier(.16,1,.3,1);}
+.share-options,.share-management-options{display:flex;flex-direction:row;align-items:flex-start;padding:28rpx 21rpx 26rpx;}
+.share-option{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;flex-shrink:0;width:132rpx;margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;}
+.share-circle{width:100rpx;height:100rpx;border-radius:50rpx;background-color:#f5f7fa;display:flex;align-items:center;justify-content:center;}
+.share-option-icon{width:50rpx;height:50rpx;}.share-management-icon{width:42rpx;height:42rpx;}
+.share-label{font-size:23rpx;line-height:34rpx;color:#283145;margin-top:12rpx;white-space:nowrap;}
+.share-management{margin:0 25rpx;border-top:2rpx solid #f5f6f8;}.share-management-options{padding:20rpx 0 26rpx;}
+.share-cancel{display:flex;align-items:center;justify-content:center;height:78rpx;margin:0;padding:0;border-width:0;border-top:2rpx solid #f5f6f8;border-radius:0;background-color:transparent;}.share-cancel-text{font-size:28rpx;line-height:40rpx;color:#283145;}
+.share-friends-panel{min-height:356rpx;background-color:#f3f3f4;}
+.share-heading{display:flex;flex-direction:row;align-items:center;justify-content:space-between;margin:34rpx 34rpx 28rpx 44rpx;}
+.share-heading-text{font-size:36rpx;line-height:58rpx;font-weight:600;color:#191c26;}
+.share-close{display:flex;align-items:center;justify-content:center;flex-shrink:0;width:58rpx;height:58rpx;margin:0;padding:0;border-width:0;border-radius:29rpx;background-color:#e8e8e9;}.share-close-icon{width:30rpx;height:30rpx;}
+.share-friends{width:100%;height:174rpx;flex-shrink:0;}.share-friends-row{display:flex;flex-direction:row;align-items:flex-start;padding:0 15rpx;}
+.share-friend{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;flex-shrink:0;width:142rpx;margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;}
+.share-avatar-wrap{position:relative;width:107rpx;height:107rpx;flex-shrink:0;}.share-avatar{width:107rpx;height:107rpx;border-radius:54rpx;background-color:#e8e8ea;}
+.share-friend-name{width:132rpx;margin-top:14rpx;font-size:27rpx;line-height:40rpx;color:#191c26;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.share-check{position:absolute;right:0;bottom:0;width:30rpx;height:30rpx;border-radius:15rpx;background-color:#a294ff;border:3rpx solid #f3f3f4;display:flex;align-items:center;justify-content:center;}.share-check-text{font-size:21rpx;line-height:24rpx;color:#fff;}
+.share-empty{font-size:25rpx;line-height:40rpx;color:#85858d;text-align:center;}
+.share-empty-position{position:absolute;top:150rpx;left:30rpx;right:30rpx;}
+.share-retry{position:absolute;top:130rpx;left:0;right:0;min-height:100rpx;margin:0;background-color:transparent;border-width:0;}
+.share-confirm{display:flex;flex-direction:row;align-items:center;margin:4rpx 34rpx 0;padding:20rpx 0 0;border-top:2rpx solid #e8e8ea;transition-property:transform,opacity;transition-duration:320ms;transition-timing-function:cubic-bezier(.16,1,.3,1);}
+.share-selected{flex:1;min-width:0;display:flex;flex-direction:column;}.share-selected-text{font-size:23rpx;line-height:34rpx;color:#85858d;}.share-post-title{margin-top:6rpx;font-size:25rpx;line-height:36rpx;color:#191c26;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.share-send{display:flex;align-items:center;justify-content:center;flex-shrink:0;margin:0 0 0 24rpx;padding:0 28rpx;height:70rpx;border-width:0;border-radius:35rpx;background-color:#a294ff;}.share-send-text{font-size:27rpx;line-height:38rpx;color:#fff;font-weight:600;}
+/* #ifndef APP */
+.share-panel,.share-panel *{box-sizing:border-box;}button:after{border:0;}
+/* #endif */
+</style>

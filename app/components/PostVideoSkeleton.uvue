@@ -1,0 +1,88 @@
+<template>
+  <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(uxNodePrefix+'-n0',{&quot;aria-label&quot;:&quot;视频播放器 UI 占位&quot;})" class="post-video" :class="[media.layout,uxNative?'ux0':'',uxNative?'ux7':'']"  :style="uxLayout(uxNodePrefix+'-n0',[],{})" :id="uxNodePrefix+'-n0'">
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :aria-label="&quot;视频播放器 UI 占位&quot;" class="post-video" :class="[media.layout,uxNative?'ux0':'',uxNative?'ux7':'']"  :style="uxLayout(uxNodePrefix+'-n0',[],{})" :id="uxNodePrefix+'-n0'">
+<!-- #endif -->
+    <view class="video-stage" @tap="controlsVisible = !controlsVisible" :class="[uxNative?'ux0':'',uxNative?'ux8':'']" :style="uxLayout(uxNodePrefix+'-g1000',[{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'">
+      <video v-if="media.url" class="real-video" :src="source" :poster="poster" controls  :class="[uxNative?'ux9':'']" :style="uxLayout(uxNodePrefix+'-n1',[{on:uxNative,declarations:{&quot;aspect-ratio&quot;:&quot;16/9&quot;}}],{})" :id="uxNodePrefix+'-n1'"/>
+      <MediaSkeleton v-else :media="media" :controls="false" />
+      <view v-if="controlsVisible" class="player-controls" :class="[uxNative?'ux0':'',uxNative?'ux10':'']">
+        <AppIcon name="play" tone="white" :size="40"  :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;20rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;64rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1001'"/><text :class="[uxNative?'ux17':'',uxNative?'ux20':'',uxNative?'ux21':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;20rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;64rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1002'">00:00</text>
+        <view class="player-track" :class="[uxNative?'ux0':'',uxNative?'ux11':'']" :style="uxLayout(uxNodePrefix+'-g1003',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;20rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;64rpx&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1003'"><view class="player-elapsed"  :class="[uxNative?'ux0':'',uxNative?'ux12':'']"/><view class="player-thumb"  :class="[uxNative?'ux0':'',uxNative?'ux13':'']"/></view>
+        <text :class="[uxNative?'ux17':'',uxNative?'ux20':'',uxNative?'ux21':'']" :style="uxLayout(uxNodePrefix+'-g1004',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;20rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;64rpx&quot;}},{on:true,declarations:{__index:String(0+1+1+1)}}],{})" :id="uxNodePrefix+'-g1004'">{{ media.duration || '00:00' }}</text><AppIcon name="fullscreen" tone="white" :size="36"  :style="uxLayout(uxNodePrefix+'-g1005',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;20rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;64rpx&quot;}},{on:true,declarations:{__index:String(0+1+1+1+1)}}],{})" :id="uxNodePrefix+'-g1005'"/>
+      </view>
+    </view>
+    <view class="player-bottom" :class="[uxNative?'ux0':'',uxNative?'ux14':'']" :style="uxLayout(uxNodePrefix+'-g1006',[{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1006'"><view v-if="!controlsVisible" class="minimal-track" :class="[uxNative?'ux0':'',uxNative?'ux15':'']"><view  :class="[uxNative?'ux0':'',uxNative?'ux16':'']"/></view></view>
+  </view>
+</template>
+<script setup lang="uts">
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { ref } from 'vue'
+import AppIcon from './AppIcon.uvue'
+import MediaSkeleton from './MediaSkeleton.uvue'
+import type { MediaSkeletonSpec } from '@/types/home'
+import { computed } from 'vue'
+import { API_BASE_URL } from '@/config/env'
+const props=defineProps<{ media: MediaSkeletonSpec }>()
+const source=computed(()=>props.media.url?.startsWith('http')?props.media.url:API_BASE_URL+(props.media.url||''))
+const poster=computed(()=>props.media.coverUrl?(props.media.coverUrl.startsWith('http')?props.media.coverUrl:API_BASE_URL+props.media.coverUrl):'')
+// Only toggles the two reference UI states; no video element, timer or playback implementation.
+const controlsVisible = ref(true)
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.post-video { background: #111; }
+.video-stage { position: relative; }
+.real-video { width:100%; aspect-ratio:16/9; display:block; }
+.video-stage :deep(.media-skeleton) { border-radius: 0; }
+.player-controls { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 20rpx; min-height: 68rpx; padding: 12rpx 32rpx; background: rgba(0, 0, 0, .58); color: #fff; font-size: 18rpx; flex-direction: row; }
+.player-track { position: relative; flex: 1; height: 4rpx; background: #b6b6b6; border-radius: 3rpx; }
+.player-elapsed { width: 0; height: 100%; background: var(--brand); }
+.player-thumb { position: absolute; top: -6rpx; left: 0; width: 16rpx; height: 16rpx; border-radius: 50%; background: #fff; }
+.player-bottom { position: relative; height: 36rpx; }
+.minimal-track { position: absolute; bottom: 0; left: 0; right: 0; height: 4rpx; background: #999; }
+.minimal-track > view { width: 0; height: 100%; background: var(--brand); }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux17{color:var(--text-main);font-size:26rpx;}
+
+
+.ux20{color:#fff;font-size:18rpx;}
+.ux0{}
+.ux21{}
+
+
+
+
+
+
+.ux7{background-color:#111;}
+.ux8{position:relative;}
+.ux9{width:100%;display:flex;flex-direction:column;}
+.ux10{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:row;align-items:center;min-height:68rpx;padding:12rpx 32rpx;background-color:rgba(0, 0, 0, .58);color:#fff;font-size:18rpx;}
+.ux11{position:relative;flex:1;height:4rpx;background-color:#b6b6b6;border-radius:3rpx;}
+.ux12{width:0;height:100%;background-color:var(--brand);}
+.ux13{position:absolute;top:-6rpx;left:0;width:16rpx;height:16rpx;border-radius:50%;background-color:#fff;}
+.ux14{position:relative;height:36rpx;}
+.ux15{position:absolute;bottom:0;left:0;right:0;height:4rpx;background-color:#999;}
+.ux16{width:0;height:100%;background-color:var(--brand);}
+/* #endif */
+</style>

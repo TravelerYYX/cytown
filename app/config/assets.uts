@@ -1,0 +1,25 @@
+/** Only decorative backgrounds and UI assets may be loaded in this phase. */
+export const BACKGROUNDS = { home: '/static/images/home-banner.jpg' } as const
+export const TAB_ASSETS = {
+  home: '/static/images/icon_home_rb_btn_home_selected_frames.png',
+  follow: '/static/images/icon_home_rb_btn_dynamic_selected_frames.png',
+  message: '/static/images/icon_home_rb_btn_message_selected_frames.png',
+  mine: '/static/images/icon_home_rb_btn_me_selected_frames.png',
+  publish: '/static/images/icon_home_post.png'
+} as const
+export const ICON_DIRECTORY = '/static/icons/'
+/** Local illustrations for authentication, guest profile, and shared list empty states. */
+export const AUTH_ASSETS = {
+  banner: '/static/images/auth/login-banner.png',
+  guestBackground: '/static/images/auth/guest-background.png',
+  guestAvatar: '/static/images/auth/guest-avatar.png',
+  guestEmpty: '/static/images/auth/guest-empty.png'
+} as const
+/** 角色卡片可选背景（static/images/assets/user_background 目录下的全部图片，服务端只存文件名）。 */
+export const CARD_BACKGROUND_DIRECTORY = '/static/images/assets/user_background/'
+export const CARD_BACKGROUNDS = ['01.png', '02.png', '04.png', '05.png'] as const
+export const DEFAULT_CARD_BACKGROUND = '01.png'
+export function cardBackgroundUrl(name?: string | null): string {
+  const file = name && (CARD_BACKGROUNDS as readonly string[]).includes(name) ? name : DEFAULT_CARD_BACKGROUND
+  return CARD_BACKGROUND_DIRECTORY + file
+}

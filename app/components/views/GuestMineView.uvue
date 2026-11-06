@@ -1,0 +1,199 @@
+<template>
+  <view class="screen guest-mine-view" :class="[uxNative?'ux2':'',uxNative?'ux3':'',uxNative?'ux4':'']">
+    <scroll-view class="screen-scroll" direction="vertical" :show-scrollbar="false" :class="[uxNative?'ux5':'',uxNative?'ux6':'']">
+      <view class="guest-header" :style="uxLayout(uxNodePrefix+'-n0',[],{ paddingTop: statusBarHeight + 'px', height: 'calc(420rpx + ' + statusBarHeight + 'px)' })" :class="[uxNative?'ux2':'',uxNative?'ux7':'']" :id="uxNodePrefix+'-n0'">
+        <image class="guest-background" :src="uiAsset(AUTH_ASSETS.guestBackground)" mode="scaleToFill"  :class="[uxNative?'ux8':'']"/>
+        <view class="guest-tint"  :class="[uxNative?'ux2':'',uxNative?'ux9':'']"/>
+        <view class="guest-body" :class="[uxNative?'ux2':'',uxNative?'ux10':'']">
+          <view class="guest-toolbar" :class="[uxNative?'ux2':'',uxNative?'ux11':'']">
+            <ActionButton class="icon-button" aria-label="扫一扫" @tap="placeholder('扫一扫')" :class="[uxNative?'ct-native-button':'',uxNative?'ux12':'',uxNative?'ux13':'']" :style="uxLayout(uxNodePrefix+'-g1000',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;56rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'"><AppIcon name="scan" :size="42" tone="white" /></ActionButton>
+            <view class="toolbar-spacer"  :class="[uxNative?'ux2':'',uxNative?'ux14':'']" :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;56rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1001'"/>
+            <ActionButton class="icon-button" aria-label="设置" @tap="openSettings" :class="[uxNative?'ct-native-button':'',uxNative?'ux12':'',uxNative?'ux13':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;56rpx&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1002'"><AppIcon name="settings" :size="44" tone="white" /></ActionButton>
+            <ActionButton class="icon-button" aria-label="个人菜单" @tap="emit('menu')" :class="[uxNative?'ct-native-button':'',uxNative?'ux12':'',uxNative?'ux13':'']" :style="uxLayout(uxNodePrefix+'-g1003',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;56rpx&quot;}},{on:true,declarations:{__index:String(0+1+1+1)}}],{})" :id="uxNodePrefix+'-g1003'"><AppIcon name="menu" :size="44" tone="white" /></ActionButton>
+          </view>
+          <view class="guest-identity" :class="[uxNative?'ux2':'',uxNative?'ux15':'']">
+            <ActionButton class="guest-avatar" aria-label="点击登录" @tap="openLogin" :class="[uxNative?'ct-native-button':'',uxNative?'ux12':'',uxNative?'ux16':'']" :style="uxLayout(uxNodePrefix+'-g1004',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;48rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1004'"><image :src="uiAsset(AUTH_ASSETS.guestAvatar)" mode="aspectFill"  :class="[uxNative?'ux17':'']"/></ActionButton>
+            <ActionButton :aria-label="&quot;点击登录&quot;" class="guest-login" @tap="openLogin" :class="[uxNative?'ct-native-button':'',uxNative?'ux12':'',uxNative?'ux18':'']" :style="uxLayout(uxNodePrefix+'-g1005',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;48rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1005'"><text :class="[uxNative?'ux19':'',uxNative?'ux20':'',uxNative?'ux21':'']">点击登录</text></ActionButton>
+          </view>
+          <text class="guest-caption" :class="[uxNative?'ux19':'',uxNative?'ux21':'',uxNative?'ux22':'']">登录解锁更多内容</text>
+          <view class="guest-stats" :class="[uxNative?'ux2':'',uxNative?'ux23':'']">
+            <ActionButton :aria-label="&quot;0&quot; + ' ' + String(label)" v-for="(label, __uxIndex0) in ['粉丝', '关注', '获赞']" :key="label" @tap="openLogin" :class="[uxNative?'ct-native-button':'',uxNative?'ux12':'',uxNative?'ux24':'']" :style="uxLayout(uxNodePrefix+'-g1006'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;25rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+__uxIndex0)}}],{})" :id="uxNodePrefix+'-g1006'+'-'+[__uxIndex0].join('-')"><!-- #ifdef APP --><NativeStatLabel value="0" :label="label" :label-size="17" label-color="#89b7d7" /><!-- #endif --><!-- #ifndef APP --><text class="guest-stat-value" :class="[uxNative?'ux19':'',uxNative?'ux25':'',uxNative?'ux21':'',uxNative?'ux26':'']" :style="uxLayout(uxNodePrefix+'-g1007'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1007'+'-'+[__uxIndex0].join('-')">0</text><text :class="[uxNative?'ux19':'',uxNative?'ux25':'',uxNative?'ux21':'']" :style="uxLayout(uxNodePrefix+'-g1008'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1008'+'-'+[__uxIndex0].join('-')">{{ label }}</text><!-- #endif --></ActionButton>
+          </view>
+        </view>
+      </view>
+      <view class="guest-panel" :class="[{'no-entries':!entries.length},uxNative?'ux2':'',uxNative?'ux30':'',uxNative&amp;&amp;!!!entries.length?'ux37':'']" :style="uxLayout(uxNodePrefix+'-n1',[{on:uxNative,declarations:{&quot;min-height&quot;:&quot;calc(100vh - 564rpx)&quot;}}],{})" :id="uxNodePrefix+'-n1'">
+        <MineQuickEntries :entries="entries" guest />
+        <ChannelTabs :tabs="mineChannels" :active="activeChannel" searchable @change="activeChannel = String($event.id)" @search="openLogin" />
+        <view :key="activeChannel" class="guest-empty" @touchstart="channelSwipe.start" @touchmove="channelSwipe.move" @touchend="channelSwipe.end" @touchcancel="channelSwipe.cancel" :class="[channelDirection,uxNative?'ux2':'',uxNative?'ux36':'',uxNative&amp;&amp;uxClass(channelDirection,&quot;from-right&quot;)?'ux39':'',uxNative&amp;&amp;uxClass(channelDirection,&quot;from-left&quot;)?'ux40':'',uxNative&amp;&amp;uxClass(channelDirection,&quot;from-right&quot;)&amp;&amp;uxMedia(&quot;(prefers-reduced-motion: reduce)&quot;)?'ux41':'',uxNative&amp;&amp;uxClass(channelDirection,&quot;from-left&quot;)&amp;&amp;uxMedia(&quot;(prefers-reduced-motion: reduce)&quot;)?'ux42':'']" :style="uxLayout(uxNodePrefix+'-n2',[],{})" :id="uxNodePrefix+'-n2'">
+          <EmptyState flush />
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</template>
+<script setup lang="uts">
+import EmptyState from '@/components/EmptyState.uvue'
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+// #ifdef APP
+import NativeStatLabel from '@/components/NativeStatLabel.uvue'
+// #endif
+import { useHorizontalSwipe } from '@/composables/useHorizontalSwipe'
+import { useChannelTransition } from '@/composables/useChannelTransition'
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { ref, watch } from 'vue'
+import AppIcon from '@/components/AppIcon.uvue'
+import ChannelTabs from '@/components/ChannelTabs.uvue'
+import MineQuickEntries from '@/components/MineQuickEntries.uvue'
+import { AUTH_ASSETS } from '@/config/assets'
+import { mineChannels } from '@/mock/mine'
+import type { MineEntry, ViewProps } from '@/types/home.uts'
+const props = defineProps<ViewProps & { entries: MineEntry[] }>()
+const emit = defineEmits<{ menu: [] }>()
+const activeChannel = ref('publish')
+const channelSwipe = useHorizontalSwipe(() => props.active, () => activeChannel.value, direction => {
+  const index = mineChannels.findIndex(channel => channel.id === activeChannel.value)
+  const next = mineChannels[index + direction]
+  if (index >= 0 && next) activeChannel.value = String(next.id)
+})
+const channelDirection = ref('')
+const channelTransition = useChannelTransition(() => uxNodePrefix+'-n2', () => props.active)
+watch(activeChannel, (next, previous) => {
+  channelDirection.value = mineChannels.findIndex(channel => channel.id === next) > mineChannels.findIndex(channel => channel.id === previous) ? 'from-right' : 'from-left'
+  void channelTransition.play(channelDirection.value)
+})
+const openLogin = () => uni.navigateTo({ url: '/pages/login/index' })
+const openSettings = () => uni.navigateTo({ url: '/pages/settings/index' })
+const placeholder = (title: string) => { if (title === '扫一扫') openScanner() }
+import { openScanner } from '@/utils/navigation'
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.guest-mine-view { background: #fff; }
+.guest-header { position: relative; background: #0764b5; }
+.guest-background { position: absolute; inset: 0; width: 100%; height: 100%; }
+.guest-tint { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,40,160,.33), rgba(0,145,125,.2)); pointer-events: none; }
+.guest-body { position: relative; }
+.guest-toolbar { height: 96rpx; padding: 0 28rpx; display: flex; align-items: center; gap: 16rpx; flex-direction: row; }
+.toolbar-spacer { flex: 1; }
+.guest-identity { display: flex; align-items: center; gap: 48rpx; margin: 29rpx 29rpx 0; height: 103rpx; flex-direction: row; }
+.guest-avatar { flex-shrink: 0; width: 103rpx; height: 103rpx; }
+.guest-avatar image { display: block; width: 100%; height: 100%; border-radius: 50%; }
+.guest-login { color: #fff !important; font-size: 32rpx !important; text-align: left; }
+.guest-caption { display: block; margin: 35rpx 29rpx 0; font-size: 21rpx; line-height: 30rpx; color: #fff; }
+.guest-stats { display: flex; gap: 25rpx; margin: 24rpx 29rpx 0; flex-direction: row; }
+.guest-stats button { display: flex; align-items: baseline; gap: 8rpx; color: #89b7d7; font-size: 17rpx; flex-direction: row; }
+.guest-stat-value { font-size: 26rpx; color: #fff; line-height: 32rpx; }
+.guest-panel { position: relative; min-height: calc(100vh - 564rpx); margin-top: -28rpx; border-radius: 41.667rpx 41.667rpx 0 0; background: #fff; padding-top: 0; overflow: hidden; }
+.guest-panel.no-entries { padding-top: 0; }
+.no-entries .guest-channels { margin-top: 0; }
+.guest-channels { display: flex; align-items: center; margin-top: 28rpx; padding: 0 29rpx; height: 72rpx; flex-direction: row; }
+.guest-channel { position: relative; width: 89rpx; height: 72rpx; flex-shrink: 0; display: flex; align-items: center; font-size: 25rpx; color: #818181; flex-direction: row; }
+.guest-channel.selected { color: #272727; font-weight: 600; }
+.guest-underline { position: absolute; bottom: 8rpx; left: 4rpx; width: 36rpx; height: 7rpx; border-radius: 5rpx; background: transparent; }
+.guest-channel.selected .guest-underline { background: #50cbe5; }
+.channel-spacer { flex: 1; }
+.guest-search { width: 42rpx; }
+.guest-empty { display: flex; flex-direction: column; align-items: center; padding-top: 210rpx; padding-bottom: 80rpx; }
+.guest-empty image { display: block; width: 300rpx; height: 215rpx; }
+.guest-empty text { margin-top: 30rpx; color: #c5c5c5; font-size: 21rpx; line-height: 30rpx; }
+.guest-empty.from-right { animation: guest-channel-from-right 220ms ease-out; }
+.guest-empty.from-left { animation: guest-channel-from-left 220ms ease-out; }
+@keyframes guest-channel-from-right { from { opacity: .35; transform: translateX(28rpx); } to { opacity: 1; transform: translateX(0); } }
+@keyframes guest-channel-from-left { from { opacity: .35; transform: translateX(-28rpx); } to { opacity: 1; transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .guest-empty.from-right, .guest-empty.from-left { animation: none; }
+}
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux19{color:var(--text-main);font-size:26rpx;}
+.ux20{color:#fff;font-size:32rpx;text-align:left;}
+
+
+
+
+
+
+
+
+
+
+
+.ux60{font-size:25rpx;color:#818181;}
+
+
+
+
+
+
+.ux67{color:#272727;font-weight:600;}
+
+
+
+
+
+
+.ux2{}
+.ux5{}
+.ux21{}
+.ux12{}
+
+.ux13{display:flex;flex-direction:row;align-items:center;justify-content:center;width:64rpx;height:64rpx;flex-shrink:0;}
+.ux3{position:absolute;top:0;right:0;bottom:0;left:0;background-color:var(--surface);overflow:hidden;}
+.ux6{width:100%;height:100%;}
+
+
+.ux4{background-color:#fff;}
+.ux7{position:relative;background-color:#0764b5;}
+.ux8{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;}
+.ux9{position:absolute;top:0;right:0;bottom:0;left:0;background-image:linear-gradient(to bottom, rgba(0,40,160,.33), rgba(0,145,125,.2));pointer-events:none;}
+.ux10{position:relative;}
+.ux11{height:96rpx;padding:0 28rpx;display:flex;flex-direction:row;align-items:center;}
+.ux14{flex:1;}
+.ux15{display:flex;flex-direction:row;align-items:center;margin:29rpx 29rpx 0;height:103rpx;}
+.ux16{flex-shrink:0;width:103rpx;height:103rpx;}
+.ux18{color:#fff!important;font-size:32rpx!important;text-align:left;}
+.ux22{display:flex;flex-direction:column;margin:35rpx 29rpx 0;font-size:21rpx;line-height:30rpx;color:#fff;}
+.ux23{display:flex;flex-direction:row;margin:24rpx 29rpx 0;}
+
+.ux30{position:relative;margin-top:-28rpx;border-radius:41.667rpx 41.667rpx 0 0;background-color:#fff;padding-top:0;overflow:hidden;}
+.ux31{display:flex;flex-direction:row;align-items:center;margin-top:28rpx;padding:0 29rpx;height:72rpx;}
+.ux32{position:relative;width:89rpx;height:72rpx;flex-shrink:0;display:flex;flex-direction:row;align-items:center;font-size:25rpx;color:#818181;}
+.ux33{position:absolute;bottom:8rpx;left:4rpx;width:36rpx;height:7rpx;border-radius:5rpx;background-color:transparent;}
+.ux34{flex:1;}
+.ux35{width:42rpx;}
+.ux36{display:flex;flex-direction:column;align-items:center;padding-top:210rpx;padding-bottom:80rpx;}
+
+
+
+
+
+.ux17{display:flex;flex-direction:column;width:100%;height:100%;border-radius:50%;}
+.ux24{display:flex;flex-direction:row;align-items:center;color:#89b7d7;font-size:17rpx;}
+.ux69{display:flex;flex-direction:column;width:300rpx;height:215rpx;}
+.ux68{margin-top:30rpx;color:#c5c5c5;font-size:21rpx;line-height:30rpx;}
+.ux37{padding-top:0;}
+.ux43{margin-top:0;}
+.ux38{color:#272727;font-weight:600;}
+.ux39{}
+.ux40{}
+.ux41{}
+.ux42{}
+.ux49{background-color:#50cbe5;}
+/* #endif */
+</style>

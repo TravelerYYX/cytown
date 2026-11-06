@@ -1,0 +1,19 @@
+import { onMounted, onUnmounted, ref } from 'vue'
+import { observeWindowResize } from '@/utils/window-events'
+
+export function useWindowInsets() {
+  const statusBarHeight = ref(0)
+  const bottomInset = ref(0)
+  const viewportWidth = ref(375)
+  const update = () => {
+    const info = typeof uni.getWindowInfo === 'function' ? uni.getWindowInfo() : uni.getSystemInfoSync()
+    statusBarHeight.value = Math.max(0, info.statusBarHeight || 0)
+    bottomInset.value = Math.max(0, info.safeAreaInsets?.bottom || 0)
+    viewportWidth.value = info.windowWidth
+  }
+  update()
+  const unobserve = observeWindowResize(update)
+  onMounted(update)
+  onUnmounted(unobserve)
+  return { statusBarHeight, bottomInset, viewportWidth }
+}

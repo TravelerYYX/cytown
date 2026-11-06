@@ -1,0 +1,11 @@
+/** Native ImageDecoder does not decode these local SVG assets. Keep their original proportions and artwork via derived PNGs. */
+export function uiAsset(value:string|null|undefined):string {
+  const source=value??''
+  // #ifndef WEB
+  if(source.startsWith('/static/') && source.endsWith('.svg'))return '/static/native-raster/'+source.slice(8,-4)+'.png'
+  // #endif
+  // #ifdef WEB
+  if(typeof window!=='undefined'&&window.location.pathname.startsWith('/post-preview/')&&source.startsWith('/static/'))return '/post-preview'+source
+  // #endif
+  return source
+}

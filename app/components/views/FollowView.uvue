@@ -1,0 +1,97 @@
+<template>
+  <view class="screen follow-view" :class="[uxNative?'ux0':'',uxNative?'ux1':'',uxNative?'ux2':'']">
+    <PaneScroll :video-top-inset="statusBarHeight + 128 * viewportWidth / 750" class="screen-scroll" :post-items="posts" post-variant="follow" :viewport-width="viewportWidth" :active="paneVisible" scroll-y :scroll-top="requestedTop" :show-scrollbar="false" :lower-threshold="120" @scroll="onScroll" @scrolltolower="loadMore" @busy="fresh.busy()" @idle="fresh.idle()" :class="[uxNative?'ux3':'']">
+      <template #before><view :style="uxLayout(uxNodePrefix+'-n0',[],{ height: 'calc(' + statusBarHeight + 'px + 128rpx)' })"  :class="[uxNative?'ux0':'']" :id="uxNodePrefix+'-n0'"/></template>
+      <EmptyState v-if="!isLoggedIn() || (!loading && !error && !posts.length)" />
+      <view v-else class="load-tip" :class="[uxNative?'ux0':'',uxNative?'ux4':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'']">{{ loading?'加载中…':error||(hasMore?'上拉加载更多':'已经到底了') }}</text></view>
+    </PaneScroll>
+    <view class="follow-header" :style="{ paddingTop: statusBarHeight + 'px' }" :class="[uxNative?'ux0':'',uxNative?'ux8':'']"><view class="header-title" :class="[uxNative?'ux0':'',uxNative?'ux9':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux10':'',uxNative?'ux7':'']">关注</text></view></view>
+  </view>
+</template>
+<script setup lang="uts">
+import EmptyState from '@/components/EmptyState.uvue'
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import PaneScroll from '@/components/PaneScroll.uvue'
+import { usePaneVisibility } from '@/composables/usePaneVisibility'
+import { usePaneScroll } from '@/composables/usePaneScroll'
+import { useFreshTask } from '@/composables/useFreshTask'
+import { usePostOwnership } from '@/composables/usePostOwnership'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { fetchFollowingPosts, toPost } from '@/utils/post-api'
+import { authRevision, getUserInfo, isLoggedIn } from '@/utils/auth'
+import { membershipRevision } from '@/utils/interactions'
+import type { Post, ViewProps } from '@/types/home.uts'
+const props = defineProps<ViewProps>()
+const paneVisible = usePaneVisibility(() => props.active)
+const { requestedTop, onScroll } = usePaneScroll(() => props.active)
+const posts = ref<Post[]>([]), loading = ref(false), error = ref(''), hasMore = ref(true)
+usePostOwnership(() => posts.value)
+let page = 1, generation = 0, dirty = false
+function reset() { generation++; posts.value = []; page = 1; hasMore.value = true; loading.value = false; error.value = '' }
+async function loadMore() {
+  if (!paneVisible.value || loading.value || !hasMore.value || !isLoggedIn()) return
+  const token = generation; loading.value = true; error.value = ''
+  try {
+    const result = await fetchFollowingPosts(page)
+    if (token !== generation) return
+    const ids = new Set(posts.value.map(post => post.id))
+    posts.value.push(...result.records.filter(record => !ids.has(record.id)).map(record => toPost(record)))
+    page++; hasMore.value = page <= result.pages; fresh.touch()
+  } catch (e) { if (token === generation) error.value = e instanceof Error ? e.message : '关注动态加载失败' }
+  finally { if (token === generation) loading.value = false }
+}
+async function validate() {
+  if (!posts.value.length) return loadMore()
+  if (loading.value || !isLoggedIn()) return
+  const token = generation
+  const membership = membershipRevision.following
+  const result = await fetchFollowingPosts(1)
+  if (token !== generation || membership !== membershipRevision.following) return
+  if (dirty) {
+    posts.value = result.records.map(record => toPost(record)); page = 2; hasMore.value = page <= result.pages; dirty = false
+  } else {
+    const ids = new Set(posts.value.map(post => post.id))
+    for (const record of result.records) if (ids.has(record.id)) toPost(record)
+  }
+}
+const fresh = useFreshTask(() => paneVisible.value, validate)
+const viewer = computed(() => { void authRevision.value; return isLoggedIn() ? getUserInfo()?.userId : null })
+watch(viewer, () => { reset(); fresh.invalidate() })
+watch(() => membershipRevision.following, () => { dirty = true; fresh.invalidate() })
+watch(paneVisible, value => { if (value && !posts.value.length) void loadMore() }, { immediate: true, flush: 'post' })
+onBeforeUnmount(() => { generation++ })
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.follow-view { background: #ffffff; }
+.follow-header { z-index: 2; position: absolute; top: 0; left: 0; right: 0; background: #ffffff;  }
+.header-title { height: 128rpx; display: flex; align-items: center; justify-content: center; font-size: 36rpx; font-weight: 600; flex-direction: row; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux5{color:var(--text-main);font-size:26rpx;}
+.ux6{text-align:center;color:var(--text-sub);font-size:22rpx;}
+.ux10{font-size:36rpx;font-weight:600;}
+.ux0{}
+.ux7{}
+.ux1{position:absolute;top:0;right:0;bottom:0;left:0;background-color:var(--surface);overflow:hidden;}
+.ux3{width:100%;height:100%;}
+.ux4{text-align:center;color:var(--text-sub);font-size:22rpx;padding:30rpx 0 40rpx;}
+.ux2{background-color:#ffffff;}
+.ux8{z-index:2;position:absolute;top:0;left:0;right:0;background-color:#ffffff;}
+.ux9{height:128rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;font-size:36rpx;font-weight:600;}
+/* #endif */
+</style>

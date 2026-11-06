@@ -1,0 +1,29 @@
+import { UIApplication, UIAccessibility } from 'UIKit'
+import { URL } from 'Foundation'
+export function startQrCamera(complete:(value:string)=>void):void {
+  QrImageDecoder.startCamera()
+  uni.createCameraContext()?.onIosCameraOriginalFrame(buffer=>{QrImageDecoder.frame(buffer,completion=complete)})
+}
+export function stopQrCamera():void {
+  uni.createCameraContext()?.offIosCameraOriginalFrame()
+  QrImageDecoder.stopCamera()
+}
+export function decodeQrImage(path:string):Promise<string> {
+  return new Promise((resolve,reject)=>{
+    QrImageDecoder.decode(UTSiOS.getResourcePath(path) ?? path,completion=(value:string,error:string)=>{
+      if(error.length>0)reject(new Error(error));else resolve(value)
+    })
+  })
+}
+import { OpenExternalURL, GetReduceMotion, NativeSemantics, ApplyNativeSemantics, ReleaseNativeSemantics } from '../interface.uts'
+import { applyIOSSemantics as applySemantics, releaseIOSSemantics as releaseSemantics } from './accessibility.uts'
+export const applyNativeSemantics:ApplyNativeSemantics=(id:string,spec:NativeSemantics):Promise<boolean>=>applySemantics(id,spec)
+export const releaseNativeSemantics:ReleaseNativeSemantics=(id:string):void=>releaseSemantics(id)
+
+export const getReduceMotion: GetReduceMotion = (): boolean => UIAccessibility.isReduceMotionEnabled
+
+export const openExternalURL: OpenExternalURL = (url: string): void => {
+  const uri = new URL(string = url)
+  if (uri == null || !UIApplication.shared.canOpenURL(uri!)) throw new Error('无法打开该链接')
+  UIApplication.shared.open(uri!)
+}

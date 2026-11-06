@@ -1,0 +1,64 @@
+<template>
+  <view class="mine-comment-card" :data-comment-id="comment.id">
+    <UserAvatar :src="comment.authorAvatar" :user-id="comment.authorId || undefined" :frame-id="comment.authorAvatarFrame" :frame-expires-at="comment.authorAvatarFrameExpiresAt ?? undefined" :size="76" />
+    <view class="mine-comment-body">
+      <UserName :user-id="comment.authorId || undefined" :nickname="comment.authorNickname" :size="25" color="#989c9f" />
+      <view class="mine-comment-content" @tap="open">
+        <text v-if="comment.replyToNickname" class="mine-comment-target">回复 {{ comment.replyToNickname }}：</text>
+        <text v-if="comment.content" class="mine-comment-text">{{ comment.content }}</text>
+        <image v-if="comment.contentType==='sticker' && comment.stickerUrl" class="mine-comment-sticker" :src="uiAsset(assetUrl(comment.stickerUrl))" mode="aspectFit" />
+        <view v-if="comment.media.length" class="mine-comment-images">
+          <ActionButton v-for="(image,index) in comment.media" :key="image.id" class="mine-comment-image" :class="{'mine-comment-image-single':comment.media.length===1}" :aria-label="'查看评论图片'+(Number(index)+1)" @tap.stop="preview(Number(index))">
+            <CachedImage :src="assetUrl(image.url)" mode="aspectFill" variant="preview" />
+          </ActionButton>
+        </view>
+      </view>
+      <view class="mine-comment-source" @tap="open"><text class="mine-comment-source-text" :max-lines="1">{{ comment.postAvailable ? sourceLabel+' · '+comment.postTitle : '帖子已下架' }}</text></view>
+      <view class="mine-comment-footer">
+        <text class="mine-comment-time">{{ comment.createTime.slice(5,10)+(comment.region?' '+comment.region:'') }}</text>
+        <CommentLikeButton :comment="comment" :active="active" :disabled="!comment.postAvailable" :size="38" />
+      </view>
+    </view>
+  </view>
+</template>
+<script setup lang="uts">
+import { computed } from 'vue'
+import UserAvatar from './UserAvatar.uvue'
+import UserName from './UserName.uvue'
+import CachedImage from './CachedImage.uvue'
+import ActionButton from './ActionButton.uvue'
+import CommentLikeButton from './CommentLikeButton.uvue'
+import { API_BASE_URL } from '@/config/env'
+import { uiAsset } from '@/utils/ui-assets'
+import type { MineCommentResponse } from '@/types/post-api'
+const props = withDefaults(defineProps<{ comment: MineCommentResponse; active?: boolean }>(), { active: true })
+const sourceLabel = computed(() => props.comment.postMode==='video' ? '来自视频' : props.comment.postMode==='image' ? '来自图文' : '来自帖子')
+const assetUrl = (path: string) => /^https?:\/\//i.test(path) || path.startsWith('/static/') ? path : API_BASE_URL + path
+function open() {
+  if (!props.comment.postAvailable || !props.active) return
+  uni.navigateTo({ url: '/pages/post/index?id='+encodeURIComponent(props.comment.postId)+'&commentId='+encodeURIComponent(props.comment.id) })
+}
+function preview(index: number) {
+  const urls = props.comment.media.map(image => assetUrl(image.url))
+  uni.previewImage({ current: urls[index], urls })
+}
+</script>
+<style scoped>
+.mine-comment-card{display:flex;flex-direction:row;align-items:flex-start;padding:34rpx 32rpx 38rpx;background-color:#fff;}
+.mine-comment-body{flex:1;min-width:0;margin-left:23rpx;}
+.mine-comment-content{display:flex;flex-direction:column;align-self:stretch;margin-top:16rpx;}
+.mine-comment-text{color:#363a3c;font-size:25rpx;line-height:42rpx;white-space:pre-wrap;}
+.mine-comment-target{color:#31597e;font-size:24rpx;line-height:38rpx;}
+.mine-comment-sticker{width:112rpx;height:112rpx;}
+.mine-comment-images{display:flex;flex-direction:row;flex-wrap:wrap;margin-top:12rpx;}
+.mine-comment-image{width:150rpx;height:150rpx;margin:0 8rpx 8rpx 0;padding:0;border-width:0;border-radius:12rpx;overflow:hidden;background-color:#f1f2f3;}
+.mine-comment-image-single{width:320rpx;height:240rpx;}
+.mine-comment-source{align-self:stretch;margin-top:18rpx;overflow:hidden;}
+.mine-comment-source-text{color:#989c9f;font-size:23rpx;line-height:36rpx;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mine-comment-footer{display:flex;flex-direction:row;align-items:center;justify-content:space-between;min-height:48rpx;margin-top:6rpx;}
+.mine-comment-time{flex:1;color:#989c9f;font-size:22rpx;line-height:34rpx;}
+/* #ifndef APP */
+.mine-comment-text{overflow-wrap:anywhere;}
+.mine-comment-image::after{border:0;}
+/* #endif */
+</style>

@@ -1,0 +1,239 @@
+<template>
+  <view class="avatar-page" :style="{ paddingTop: statusBarHeight + 'px' }" :class="[uxNative?'ux2':'',uxNative?'ux3':'']">
+    <view class="avatar-nav" :class="[uxNative?'ux2':'',uxNative?'ux4':'']">
+      <ActionButton class="nav-button" aria-label="返回" @tap="back" :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'']"><AppIcon name="back" :size="42" /></ActionButton>
+      <text class="nav-title" :class="[uxNative?'ux8':'',uxNative?'ux9':'',uxNative?'ux10':'']">修改头像</text>
+      <ActionButton class="help-button" aria-label="头像设置帮助" @tap="showHelp" :class="[uxNative?'ux5':'',uxNative?'ux11':'',uxNative?'ux12':'']"><text :class="[uxNative?'ux8':'',uxNative?'ux13':'',uxNative?'ux9':'']">?</text></ActionButton>
+    </view>
+
+    <scroll-view direction="vertical" class="avatar-scroll" :class="[uxNative?'ux14':'',uxNative?'ux15':'']">
+      <view class="avatar-hero" :class="[uxNative?'ux2':'',uxNative?'ux16':'']">
+        <view class="preview" :class="[uxNative?'ux2':'',uxNative?'ux17':'']"><image :src="uiAsset(previewUrl)" mode="aspectFill"  :class="[uxNative?'ux18':'']"/></view>
+        <view class="avatar-actions" :class="[uxNative?'ux2':'',uxNative?'ux19':'']">
+          <ActionButton :aria-label="String(uploading ? '上传中…' : '自定义头像') + ' ' + &quot;本次免费&quot;" class="custom-button" :disabled="uploading || selecting" @tap="chooseAvatar" :class="[uxNative?'ux5':'',uxNative?'ux20':'']">
+            <AppIcon name="image" :size="30"  :style="uxLayout(uxNodePrefix+'-g1000',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;44rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'"/>
+            <text :class="[uxNative?'ux8':'',uxNative?'ux21':'',uxNative?'ux9':'']" :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;44rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1001'">{{ uploading ? '上传中…' : '自定义头像' }}</text>
+            <text class="free-badge" :class="[uxNative?'ux8':'',uxNative?'ux21':'',uxNative?'ux9':'',uxNative?'ux22':'']">本次免费</text>
+          </ActionButton>
+          <ActionButton :aria-label="String(selecting ? '保存中' : '确认')" class="confirm-button" :disabled="!pendingAvatar || uploading || selecting" :loading="selecting" @tap="confirmAvatar" :class="[uxNative?'ux5':'',uxNative?'ux23':'',uxNative&amp;&amp;!!(!pendingAvatar||uploading||selecting)?'ux24':'']">
+            <text :class="[uxNative?'ux8':'',uxNative?'ux25':'',uxNative&amp;&amp;!!(!pendingAvatar||uploading||selecting)?'ux26':'',uxNative?'ux9':'']">{{ selecting ? '保存中' : '确认' }}</text>
+          </ActionButton>
+        </view>
+      </view>
+
+      <view class="avatar-library" :class="[uxNative?'ux2':'',uxNative?'ux27':'']" :style="uxLayout(uxNodePrefix+'-n0',[{on:uxNative,declarations:{&quot;min-height&quot;:&quot;100%&quot;,&quot;padding&quot;:&quot;28rpx 48rpx max(50rpx, env(safe-area-inset-bottom))&quot;}}],{})" :id="uxNodePrefix+'-n0'">
+        <template v-if="groups.dynamic.length">
+          <text class="group-title" :class="[uxNative?'ux8':'',uxNative?'ux9':'',uxNative?'ux28':'']">动态头像</text>
+          <view class="avatar-grid dynamic-grid" :class="[uxNative?'ux2':'',uxNative?'ux29':'',uxNative?'ux30':'']">
+            <ActionButton :aria-label="&quot;动态头像&quot;" v-for="(item, __uxIndex0) in groups.dynamic" :key="item.id" class="avatar-cell dynamic-cell" :class="[{active:isPending(item.id)},uxNative?'ux5':'',uxNative?'ux39':'']" :disabled="uploading || selecting" @tap="select(item)" :style="uxLayout(uxNodePrefix+'-g1002'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__direction&quot;:&quot;column&quot;}},{on:uxNative,declarations:{&quot;__gap&quot;:&quot;0rpx 74rpx&quot;,&quot;__columns&quot;:&quot;2&quot;,&quot;__wrap&quot;:&quot;wrap&quot;,&quot;__direction&quot;:&quot;row&quot;,__trackWidth:&quot;160rpx&quot;}},{on:true,declarations:{__index:String(0+__uxIndex0)}}],{})" :id="uxNodePrefix+'-g1002'+'-'+[__uxIndex0].join('-')">
+              <view class="avatar-ring" :class="[uxNative?'ux2':'',uxNative?'ux40':'',uxNative?'ux43':'',uxNative&amp;&amp;!!isPending(item.id)?'ux44':'']" :style="uxLayout(uxNodePrefix+'-n1'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;aspect-ratio&quot;:&quot;1&quot;}}],{})" :id="uxNodePrefix+'-n1'+'-'+[__uxIndex0].join('-')"><image :src="uiAsset(fullUrl(item.url))" mode="aspectFill"  :class="[uxNative?'ux45':'']"/></view>
+              <text class="avatar-name" :class="[uxNative?'ux8':'',uxNative?'ux51':'',uxNative?'ux9':'',uxNative?'ux41':'']">动态头像</text>
+            </ActionButton>
+          </view>
+        </template>
+
+        <template v-if="groups.static.length">
+          <text class="group-title static-title" :class="[uxNative?'ux8':'',uxNative?'ux9':'',uxNative?'ux28':'',uxNative?'ux37':'']">系统头像</text>
+          <view class="avatar-grid static-grid" :class="[uxNative?'ux2':'',uxNative?'ux29':'',uxNative?'ux38':'']">
+            <ActionButton :aria-label="'头像 ' + String(__uxIndex1 + 1)" v-for="(item, __uxIndex1) in groups.static" :key="item.id" class="avatar-cell" :class="[{active:isPending(item.id)},uxNative?'ux5':'',uxNative?'ux39':'']" :disabled="uploading || selecting" @tap="select(item)" :style="uxLayout(uxNodePrefix+'-g1003'+'-'+[__uxIndex1].join('-'),[{on:uxNative,declarations:{&quot;__direction&quot;:&quot;column&quot;}},{on:uxNative,declarations:{&quot;__gap&quot;:&quot;28rpx 44rpx&quot;,&quot;__columns&quot;:&quot;4&quot;,&quot;__wrap&quot;:&quot;wrap&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+__uxIndex1)}}],{})" :id="uxNodePrefix+'-g1003'+'-'+[__uxIndex1].join('-')">
+              <view class="avatar-ring" :class="[uxNative?'ux2':'',uxNative?'ux40':'',uxNative&amp;&amp;!!isPending(item.id)?'ux44':'']" :style="uxLayout(uxNodePrefix+'-n2'+'-'+[__uxIndex1].join('-'),[{on:uxNative,declarations:{&quot;aspect-ratio&quot;:&quot;1&quot;}}],{})" :id="uxNodePrefix+'-n2'+'-'+[__uxIndex1].join('-')"><image :src="uiAsset(fullUrl(item.url))" mode="aspectFill"  :class="[uxNative?'ux45':'']"/></view>
+            </ActionButton>
+          </view>
+        </template>
+
+        <EmptyState v-if="loaded && !groups.dynamic.length && !groups.static.length" />
+      </view>
+    </scroll-view>
+    <EyeCareOverlay />
+  </view>
+</template>
+
+<script setup lang="uts">
+import { chooseAlbumImages } from '@/utils/media-picker'
+import EmptyState from '@/components/EmptyState.uvue'
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { mediaUrl as resourceUrl } from '@/utils/media-cache'
+
+import { computed, ref } from 'vue'
+
+import AppIcon from '@/components/AppIcon.uvue'
+import EyeCareOverlay from '@/components/EyeCareOverlay.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { API_BASE_URL } from '@/config/env'
+import { avatarUrl, getUserInfo, isLoggedIn, saveUserInfo } from '@/utils/auth'
+import { fetchSystemAvatars, selectSystemAvatar, updateAvatar } from '@/utils/auth-api'
+import type { SystemAvatarGroup, SystemAvatarItem } from '@/types/auth'
+
+const { statusBarHeight } = useWindowInsets()
+const user = ref(getUserInfo())
+const groups = ref<SystemAvatarGroup>({ dynamic: [], static: [] })
+const loaded = ref(false)
+const uploading = ref(false)
+const selecting = ref(false)
+const pendingAvatar = ref<SystemAvatarItem | null>(null)
+let disposed = false
+
+const fullUrl = resourceUrl
+const previewUrl = computed(() => pendingAvatar.value ? fullUrl(pendingAvatar.value.url) : avatarUrl(user.value))
+const isPending = (id: string) => pendingAvatar.value?.id === id
+
+function back() { getCurrentPages().length > 1 ? uni.navigateBack() : uni.reLaunch({ url: '/pages/index/index' }) }
+function showHelp() { uni.showToast({ title: '选择头像后点击确认即可更换', icon: 'none' }) }
+function select(item: SystemAvatarItem) { if (!uploading.value && !selecting.value) pendingAvatar.value = item }
+
+function chooseAvatar() {
+  if (uploading.value || selecting.value) return
+  chooseAlbumImages({
+    count: 1, sourceType: ['album', 'camera'], crop: { width: 600, height: 600, quality: 85 },
+    success: async result => {
+      if (disposed) return
+      const file = Array.isArray(result.tempFiles) ? result.tempFiles[0] : result.tempFiles
+      const path = result.tempFilePaths?.[0]
+      if (!path) return
+      if (file && file.size > 2 * 1024 * 1024) { uni.showToast({ title: '头像大小不能超过2MB', icon: 'none' }); return }
+      uploading.value = true
+      try {
+        const updated = await updateAvatar(path)
+        if (disposed) return
+        pendingAvatar.value = null
+        user.value = updated
+        saveUserInfo(updated)
+        uni.showToast({ title: '头像已更新', icon: 'success' })
+      } catch { /* 请求层统一提示。 */ } finally { uploading.value = false }
+    }
+  })
+}
+
+async function confirmAvatar() {
+  if (!pendingAvatar.value || uploading.value || selecting.value) return
+  selecting.value = true
+  try {
+    const updated = await selectSystemAvatar(pendingAvatar.value.id)
+    if (disposed) return
+    user.value = updated
+    saveUserInfo(updated)
+    pendingAvatar.value = null
+    uni.showToast({ title: '头像已更新', icon: 'success' })
+  } catch { /* 请求层统一提示。 */ } finally { selecting.value = false }
+}
+
+onShow(async () => {
+  if (!isLoggedIn()) { uni.reLaunch({ url: '/pages/login/index' }); return }
+  user.value = getUserInfo()
+  pendingAvatar.value = null
+  try {
+    const result = await fetchSystemAvatars()
+    if (!disposed) groups.value = result
+    if (!disposed) loaded.value = true
+  } catch { /* 请求层统一提示，失败时不显示空列表。 */ }
+})
+onUnload(() => { disposed = true })
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.avatar-page { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; background: #f5f6f7; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.avatar-nav { position: relative; display: flex; align-items: center; justify-content: center; height: 96rpx; padding: 0 30rpx; flex-shrink: 0; background: #f5f6f7; flex-direction: row; }
+.nav-title { color: #242729; font-size: 29rpx; font-weight: 600; }
+.nav-button,.help-button { position: absolute; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; margin: 0; padding: 0; background: transparent; flex-direction: row; }
+.nav-button { left: 24rpx; width: 56rpx; height: 64rpx; }
+.help-button { right: 34rpx; width: 36rpx; height: 36rpx; border: 3rpx solid #8b9195; border-radius: 50%; color: #858b8f; font-size: 23rpx; font-weight: 700; line-height: 30rpx; }
+.nav-button::after,.help-button::after,.custom-button::after,.confirm-button::after,.avatar-cell::after { border: 0; }
+.avatar-scroll { height: 0; flex: 1; }
+.avatar-hero { padding: 46rpx 34rpx 24rpx; background: #f5f6f7; }
+.preview { display: flex; justify-content: center; flex-direction: row; }
+.preview image { width: 246rpx; height: 246rpx; border: 2rpx solid #d9dde0; border-radius: 50%; background: #fff; }
+.avatar-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 66rpx; flex-direction: row; }
+.custom-button { position: relative; display: flex; align-items: center; gap: 12rpx; height: 66rpx; margin: 0; padding: 0 22rpx; overflow: visible; background: #fff; color: #25292b; border-radius: 11rpx; font-size: 23rpx; line-height: 1; flex-direction: row; }
+.free-badge { position: absolute; top: -22rpx; right: 0; padding: 4rpx 10rpx; color: #e59b54; background: #fff0df; border-radius: 9rpx 9rpx 9rpx 0; font-size: 15rpx; white-space: nowrap; }
+.confirm-button { width: 164rpx; height: 66rpx; margin: 0; padding: 0; border-radius: 13rpx; background: #91d2f6; color: #fff; font-size: 24rpx; line-height: 66rpx; }
+.confirm-button[disabled] { background: #aadcf7; color: rgba(255,255,255,.86); }
+.avatar-library { min-height: 100%; padding: 28rpx 48rpx max(50rpx, env(safe-area-inset-bottom)); background: #fff; border-radius: 34rpx 34rpx 0 0; }
+.group-title { display: block; margin: 0 0 25rpx; color: #222628; font-size: 27rpx; font-weight: 600; }
+.static-title { margin-top: 40rpx; }
+.avatar-grid { display: grid; }
+.dynamic-grid { grid-template-columns: repeat(2, 160rpx); column-gap: 74rpx; }
+.static-grid { grid-template-columns: repeat(4, 1fr); gap: 28rpx 44rpx; }
+.avatar-cell { display: flex; flex-direction: column; align-items: center; min-width: 0; margin: 0; padding: 0; overflow: visible; background: transparent; border-radius: 0; line-height: 1; }
+.avatar-ring { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 1; padding: 4rpx; border: 4rpx solid transparent; border-radius: 50%; flex-direction: row; }
+.avatar-cell image { display: block; width: 100%; height: 100%; border-radius: 50%; background: #f1f4f5; }
+.avatar-cell.active .avatar-ring { border-color: #62d8f1; }
+.avatar-name { width: 210rpx; margin-top: 17rpx; overflow: hidden; color: #303436; font-size: 18rpx; line-height: 1.4; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.dynamic-cell .avatar-ring { width: 150rpx; height: 150rpx; }
+.empty-hint { display: block; margin-top: 70rpx; color: #9ba3aa; font-size: 24rpx; text-align: center; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux8{color:var(--text-main);font-size:26rpx;}
+.ux13{color:#858b8f;font-size:23rpx;font-weight:700;line-height:30rpx;}
+.ux21{color:#25292b;font-size:23rpx;line-height:23rpx;}
+.ux25{color:#fff;font-size:24rpx;line-height:66rpx;}
+.ux26{color:rgba(255,255,255,.86);}
+
+
+
+
+
+.ux51{line-height:26rpx;}
+
+
+.ux2{}
+.ux14{}
+.ux9{}
+.ux5{}
+
+
+
+
+
+
+.ux3{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;overflow:hidden;background-color:#f5f6f7;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);}
+.ux4{position:relative;display:flex;flex-direction:row;align-items:center;justify-content:center;height:96rpx;padding:0 30rpx;flex-shrink:0;background-color:#f5f6f7;}
+.ux10{color:#242729;font-size:29rpx;font-weight:600;}
+.ux6{position:absolute;top:50%;transform:translateY(-50%);display:flex;flex-direction:row;align-items:center;justify-content:center;margin:0;padding:0;background-color:transparent;}
+.ux11{position:absolute;top:50%;transform:translateY(-50%);display:flex;flex-direction:row;align-items:center;justify-content:center;margin:0;padding:0;background-color:transparent;}
+.ux7{left:24rpx;width:56rpx;height:64rpx;}
+.ux12{right:34rpx;width:36rpx;height:36rpx;border:3rpx solid #8b9195;border-radius:50%;color:#858b8f;font-size:23rpx;font-weight:700;line-height:30rpx;}
+.ux15{height:0;flex:1;}
+.ux16{padding:46rpx 34rpx 24rpx;background-color:#f5f6f7;}
+.ux17{display:flex;flex-direction:row;justify-content:center;}
+.ux19{display:flex;flex-direction:row;align-items:center;justify-content:space-between;margin-top:66rpx;}
+.ux20{position:relative;display:flex;flex-direction:row;align-items:center;height:66rpx;margin:0;padding:0 22rpx;overflow:visible;background-color:#fff;color:#25292b;border-radius:11rpx;font-size:23rpx;line-height:23rpx;}
+.ux22{position:absolute;top:-22rpx;right:0;padding:4rpx 10rpx;color:#e59b54;background-color:#fff0df;border-radius:9rpx 9rpx 9rpx 0;font-size:15rpx;white-space:nowrap;}
+.ux23{width:164rpx;height:66rpx;margin:0;padding:0;border-radius:13rpx;background-color:#91d2f6;color:#fff;font-size:24rpx;line-height:66rpx;}
+.ux27{background-color:#fff;border-radius:34rpx 34rpx 0 0;}
+.ux28{display:flex;flex-direction:column;margin:0 0 25rpx;color:#222628;font-size:27rpx;font-weight:600;}
+.ux37{margin-top:40rpx;}
+.ux29{display:flex;flex-direction:column;}
+.ux30{flex-direction:row;flex-wrap:wrap;}
+.ux38{flex-direction:row;flex-wrap:wrap;}
+.ux39{display:flex;flex-direction:column;align-items:center;min-width:0;margin:0;padding:0;overflow:visible;background-color:transparent;border-radius:0;line-height:26rpx;}
+.ux40{display:flex;flex-direction:row;align-items:center;justify-content:center;width:100%;padding:4rpx;border:4rpx solid transparent;border-radius:50%;}
+.ux41{width:210rpx;margin-top:17rpx;overflow:hidden;color:#303436;font-size:18rpx;line-height:25.2rpx;text-align:center;text-overflow:ellipsis;white-space:nowrap;}
+.ux42{display:flex;flex-direction:column;margin-top:70rpx;color:#9ba3aa;font-size:24rpx;text-align:center;}
+.ux18{width:246rpx;height:246rpx;border:2rpx solid #d9dde0;border-radius:50%;background-color:#fff;}
+.ux45{display:flex;flex-direction:column;width:100%;height:100%;border-radius:50%;background-color:#f1f4f5;}
+.ux24{background-color:#aadcf7;color:rgba(255,255,255,.86);}
+.ux43{width:150rpx;height:150rpx;}
+.ux44{border-color:#62d8f1;}
+/* #endif */
+</style>

@@ -1,0 +1,150 @@
+<template>
+  <view v-if="rendered" class="mine-menu-layer">
+    <view class="mine-menu-shade" :class="{ 'is-open': entered }" @tap="emit('close')" @touchmove.stop.prevent />
+    <!-- #ifdef APP -->
+    <view class="mine-menu-drawer" :class="{ 'is-open': entered }" v-bind="a11yAttrs(prefix, {role:'dialog', 'aria-modal':true, 'aria-label':'个人菜单'})" :id="prefix" @tap.stop>
+    <!-- #endif -->
+    <!-- #ifndef APP -->
+    <view class="mine-menu-drawer" :class="{ 'is-open': entered }" role="dialog" aria-modal="true" aria-label="个人菜单" :id="prefix" @tap.stop>
+    <!-- #endif -->
+      <scroll-view class="mine-menu-scroll" direction="vertical" :show-scrollbar="false">
+        <view class="mine-menu-content" :style="{paddingTop: Math.max(statusBarHeight, viewportWidth * 120.833 / 750) + 'px'}">
+          <view class="mine-menu-card">
+            <ActionButton class="mine-menu-row" aria-label="我的收藏" @tap="selectFavorites">
+              <image class="mine-menu-icon" :src="uiAsset('/static/icons/mine-menu-favorite.svg')" mode="aspectFit" />
+              <text class="mine-menu-title">我的收藏</text>
+            </ActionButton>
+            <ActionButton class="mine-menu-row" aria-label="个性装扮" @tap="selectDecoration">
+              <image class="mine-menu-icon" :src="uiAsset('/static/icons/mine-menu-decoration.svg')" mode="aspectFit" />
+              <text class="mine-menu-title">个性装扮</text>
+            </ActionButton>
+          </view>
+          <view v-if="entries.length" class="mine-menu-card mine-menu-configured">
+            <ActionButton v-for="entry in entries" :key="entry.id" class="mine-menu-row" :aria-label="entry.title" @tap="selectEntry(entry)">
+              <image class="mine-menu-icon" :src="uiAsset(entry.id === -1 ? entry.iconUrl : mediaUrl(entry.iconUrl))" mode="aspectFit" />
+              <text class="mine-menu-title">{{ entry.title }}</text>
+              <text v-if="isCoinEntry(entry) && loggedIn" class="mine-menu-balance">余额:{{ balance }}</text>
+            </ActionButton>
+          </view>
+        </view>
+      </scroll-view>
+      <view class="mine-menu-footer" :style="{paddingBottom: Math.max(bottomInset, viewportWidth * 58.333 / 750) + 'px'}">
+        <ActionButton class="mine-menu-tool" aria-label="设置" @tap="selectSettings">
+          <view class="mine-menu-tool-circle"><image class="mine-menu-tool-icon" :src="uiAsset('/static/icons/mine-menu-settings.svg')" mode="aspectFit" /></view>
+          <text class="mine-menu-tool-title">设置</text>
+        </ActionButton>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import ActionButton from '@/components/ActionButton.uvue'
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+import { authRevision, getUserInfo, isLoggedIn } from '@/utils/auth'
+import { openConfiguredEntry, openDestination } from '@/utils/navigation'
+import { ensureInteractionLogin } from '@/utils/interactions'
+import { mediaUrl } from '@/utils/media-cache'
+import { uiAsset } from '@/utils/ui-assets'
+import type { MineEntry } from '@/types/home'
+
+const props = defineProps<{ visible: boolean; entries: MineEntry[]; statusBarHeight: number; bottomInset: number; viewportWidth: number }>()
+const emit = defineEmits<{ close: []; favorites: [] }>()
+const { prefix, attrs: a11yAttrs } = useNativeSemantics()
+const rendered = ref(false)
+const entered = ref(false)
+const loggedIn = computed(() => { void authRevision.value; return isLoggedIn() })
+const balance = computed(() => { void authRevision.value; return getUserInfo()?.coinBalance == null ? '—' : String(getUserInfo()?.coinBalance) })
+let timer: ReturnType<typeof setTimeout> | undefined
+let revision = 0
+let pendingAction: (() => void) | null = null
+
+// Keep the layer above the tab bar until the entire exit transition finishes.
+watch(() => props.visible, async visible => {
+  const token = ++revision
+  clearTimeout(timer)
+  if (visible) {
+    pendingAction = null
+    if (rendered.value) { entered.value = true; return }
+    entered.value = false
+    rendered.value = true
+    await nextTick()
+    if (token !== revision) return
+    timer = setTimeout(() => { entered.value = true }, 32)
+    return
+  }
+  entered.value = false
+  if (!rendered.value) return
+  timer = setTimeout(() => {
+    rendered.value = false
+    const action = pendingAction
+    pendingAction = null
+    if (action != null) action()
+  }, 360)
+}, { immediate: true })
+
+function dismiss(): boolean {
+  if (!rendered.value) return false
+  emit('close')
+  return true
+}
+function select(action: () => void) {
+  if (!props.visible || pendingAction != null) return
+  pendingAction = action
+  emit('close')
+}
+function selectFavorites() { select(() => emit('favorites')) }
+function selectDecoration() {
+  select(() => { if (ensureInteractionLogin()) openConfiguredEntry('app', '/pages/settings/avatar-frame', '个性装扮', 'inapp') })
+}
+function selectSettings() { select(() => openDestination({ kind: 'settings', title: '设置' })) }
+function selectEntry(entry: MineEntry) { select(() => openConfiguredEntry(entry.targetType, entry.linkUrl, entry.title, entry.openMode, entry.showTopbar)) }
+function isCoinEntry(entry: MineEntry): boolean { return entry.targetType === 'app' && entry.linkUrl.split('?')[0] === '/pages/coin/index' }
+// #ifdef WEB
+function onKeydown(event: KeyboardEvent) { if (event.key === 'Escape' && dismiss()) event.preventDefault() }
+document.addEventListener('keydown', onKeydown)
+// #endif
+onBeforeUnmount(() => {
+  revision++
+  clearTimeout(timer)
+  pendingAction = null
+  // #ifdef WEB
+  document.removeEventListener('keydown', onKeydown)
+  // #endif
+})
+defineExpose({ dismiss })
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+/* Reference 1080px: drawer x=315, card x=339, radius=36, row pitch=156. */
+.mine-menu-layer { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 800; }
+.mine-menu-shade { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background-color: rgba(0,0,0,0.78); opacity: 0; transition: opacity 360ms cubic-bezier(0.16, 1, 0.3, 1); }
+.mine-menu-shade.is-open { opacity: 1; }
+.mine-menu-drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 70.833333%; display: flex; flex-direction: column; background-color: #f6f7fb; transform: translateX(100%); transition: transform 360ms cubic-bezier(0.16, 1, 0.3, 1); overflow: hidden; }
+.mine-menu-drawer.is-open { transform: translateX(0); }
+.mine-menu-scroll { flex: 1; height: 0; min-height: 0; width: 100%; }
+.mine-menu-content { display: flex; flex-direction: column; padding-left: 16.667rpx; padding-right: 16.667rpx; padding-bottom: 16.667rpx; }
+.mine-menu-card { display: flex; flex-direction: column; flex-shrink: 0; border-radius: 25rpx; background-color: #ffffff; overflow: hidden; }
+.mine-menu-configured { margin-top: 16.667rpx; }
+.mine-menu-row { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; flex-shrink: 0; width: 100%; height: 108.333rpx; padding: 0 33.333rpx; margin: 0; border-width: 0; border-radius: 0; background-color: #ffffff; }
+.mine-menu-icon { flex-shrink: 0; width: 41.667rpx; height: 41.667rpx; margin-right: 30.556rpx; }
+.mine-menu-title { flex-shrink: 1; min-width: 0; color: #2d3445; font-size: 26.389rpx; line-height: 36rpx; text-align: left; }
+.mine-menu-balance { flex: 1; min-width: 0; margin-left: 12rpx; text-align: right; color: #c3c5cb; font-size: 17rpx; }
+.mine-menu-footer { display: flex; flex-direction: row; flex-shrink: 0; padding-top: 25rpx; background-color: #ffffff; }
+.mine-menu-tool { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; width: 33.333333%; padding: 0; margin: 0; border-width: 0; border-radius: 0; background-color: transparent; }
+.mine-menu-tool-circle { display: flex; align-items: center; justify-content: center; width: 75rpx; height: 75rpx; border-radius: 50%; background-color: #f6f7fb; }
+.mine-menu-tool-icon { width: 41.667rpx; height: 41.667rpx; }
+.mine-menu-tool-title { margin-top: 9.722rpx; color: #999ca6; font-size: 20.833rpx; line-height: 30rpx; }
+/* #ifdef WEB */
+/* Match the app's native button layout despite its global Web reset. */
+.app-shell .mine-menu-row { margin: 0; padding: 0 33.333rpx; border-radius: 0; background: #fff; }
+.app-shell .mine-menu-tool { margin: 0; padding: 0; background: transparent; }
+@media (prefers-reduced-motion: reduce) {
+  .mine-menu-shade, .mine-menu-drawer { transition-duration: 0ms; }
+}
+/* #endif */
+</style>

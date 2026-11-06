@@ -1,0 +1,46 @@
+export interface ColumnAnchor { key: string; top: number }
+export interface AnchorProvider {
+  visible: (scrollTop: number) => ColumnAnchor | null
+  position: (key: string) => number | null
+}
+interface SavedAnchor { provider: AnchorProvider; anchor: ColumnAnchor; scrollTop: number }
+/** Both waterfall columns share one anchor, so their height corrections never add twice. */
+export class ScrollAnchors {
+  private providers = new Set<AnchorProvider>()
+  private pending = false
+  private disposed = false
+  private epoch = 0
+  private saved: SavedAnchor | null = null
+  private scrollTop: () => number
+  private move: (delta: number) => void
+  private schedule: (commit: () => void) => void
+  constructor(scrollTop: () => number, move: (delta: number) => void, schedule: (commit: () => void) => void) { this.scrollTop = scrollTop; this.move = move; this.schedule = schedule }
+  register(provider: AnchorProvider): () => void {
+    this.providers.add(provider)
+    return () => { this.providers.delete(provider) }
+  }
+  mutate(update: () => void): void {
+    if (this.disposed) return
+    if (!this.pending) {
+      const scrollTop = this.scrollTop()
+      this.saved = null
+      for (const provider of this.providers) {
+        const anchor = provider.visible(scrollTop)
+        if (!anchor) continue
+        if (!this.saved || Math.abs(anchor.top - scrollTop) < Math.abs(this.saved.anchor.top - scrollTop)) this.saved = { provider, anchor, scrollTop }
+      }
+      this.pending = true
+      const epoch = this.epoch
+      this.schedule(() => { if (epoch === this.epoch) this.commit() })
+    }
+    update()
+  }
+  private commit(): void {
+    const saved = this.saved
+    this.saved = null; this.pending = false
+    if (this.disposed || !saved || !this.providers.has(saved.provider) || Math.abs(this.scrollTop() - saved.scrollTop) > .75) return
+    const top = saved.provider.position(saved.anchor.key)
+    if (top != null && Math.abs(top - saved.anchor.top) > .75) this.move(top - saved.anchor.top)
+  }
+  dispose(): void { this.disposed = true; this.epoch++; this.providers.clear(); this.saved = null; this.pending = false }
+}

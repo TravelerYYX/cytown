@@ -1,0 +1,80 @@
+<template>
+  <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(a11yPrefix+'-0',{&quot;aria-hidden&quot;:&quot;true&quot;})" class="profile-native-backdrop" >
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :aria-hidden="&quot;true&quot;" class="profile-native-backdrop" >
+<!-- #endif -->
+    <image v-if="!ready" class="profile-native-image" :style="fallbackStyle" src="/static/images/assets/my_background.jpg" mode="aspectFill" />
+    <image v-if="composedSource" class="profile-native-composed" :src="composedSource" mode="scaleToFill" @load="ready = true" />
+    <canvas :id="canvasId" class="profile-native-canvas" />
+  </view>
+</template>
+<script setup lang="uts">
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+const props = defineProps<{ width: number; height: number }>()
+const fallbackStyle = computed(() => {
+  const width = props.width * 1.125, height = width * 1740 / 1125
+  return { width: width + 'px', height: height + 'px', top: (props.height - height) * .202 + 'px' }
+})
+const instance = getCurrentInstance()!.proxy
+const canvasId = 'ct-profile-backdrop-' + getCurrentInstance()!.uid
+const ready = ref(false)
+const composedSource = ref('')
+let context: CanvasContext | null = null
+let revision = 0, disposed = false, attempts = 0
+let retry: ReturnType<typeof setTimeout> | undefined
+function image(source: string): Promise<Image> {
+  return new Promise((resolve,reject) => {
+    const value = context!.createImage()
+    value.onload = () => resolve(value)
+    value.onerror = () => reject(new Error('原生背景图片加载失败'))
+    value.src = source
+  })
+}
+function cover(ctx: CanvasRenderingContext2D, value: Image, width: number, height: number) {
+  const scale = width * 1.125 / value.width
+  const imageWidth = value.width * scale, imageHeight = value.height * scale
+  ctx.drawImage(value, 0, (height-imageHeight)*.202, imageWidth, imageHeight)
+}
+async function draw(): Promise<void> {
+  if (!context || disposed || props.width <= 0 || props.height <= 0) return
+  const token = ++revision, width = props.width, height = props.height
+  try {
+    const values = await Promise.all([image('/static/images/assets/my_background.jpg'),image('/static/images/performance/profile-blurred.jpg')])
+    if (disposed || token !== revision) return
+    const ctx = context.getContext('2d')!
+    const ratio = uni.getWindowInfo().pixelRatio
+    ctx.canvas.width = Math.round(width * ratio); ctx.canvas.height = Math.round(height * ratio)
+    ctx.scale(ratio,ratio)
+    // Compose on resize, then display an image. A live Android canvas texture
+    // can repaint above sibling profile controls after native list attachment.
+    cover(ctx,values[1]!,width,height)
+    ctx.globalCompositeOperation = 'destination-in'
+    const mask = ctx.createLinearGradient(0,0,0,height)
+    mask.addColorStop(0,'rgba(0,0,0,0)'); mask.addColorStop(.44,'rgba(0,0,0,0)'); mask.addColorStop(.70,'#000000'); mask.addColorStop(1,'#000000')
+    ctx.fillStyle = mask; ctx.fillRect(0,0,width,height)
+    ctx.globalCompositeOperation = 'destination-over'
+    cover(ctx,values[0]!,width,height)
+    ctx.globalCompositeOperation = 'source-over'
+    const source = context.toDataURL('image/png')
+    if (source.length > 0) composedSource.value = source
+  } catch(error) { if (!disposed && token === revision) console.error('[native-profile-backdrop]',String(error)) }
+}
+async function initialize(): Promise<void> {
+  await nextTick()
+  if (disposed) return
+  uni.createCanvasContextAsync({id:canvasId,component:instance,success(value){if(disposed)return;context=value;void draw()},fail(error){if(disposed)return;if(++attempts<3)retry=setTimeout(()=>{void initialize()},100);else console.error('[native-profile-canvas]',String(error))}})
+}
+watch(() => [props.width,props.height],() => { void draw() })
+onMounted(() => { void initialize() })
+onBeforeUnmount(() => { disposed=true;revision++;clearTimeout(retry);context=null })
+</script>
+<style>
+.profile-native-backdrop{position:absolute;z-index:-1;top:0;right:0;bottom:0;left:0;overflow:hidden;pointer-events:none;}
+.profile-native-image{position:absolute;top:0;left:0;width:100%;height:100%;}
+.profile-native-composed{position:absolute;top:0;left:0;width:100%;height:100%;}
+.profile-native-canvas{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;pointer-events:none;}
+</style>

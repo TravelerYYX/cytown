@@ -1,0 +1,39 @@
+import type { MediaSkeletonSpec } from '@/types/home'
+const decodedRatios = new WeakMap<MediaSkeletonSpec, { ratio: number; version?: string; source?: string }>()
+// Video URLs cannot load as images. Readiness and rendering must use the same source.
+export const mediaPreviewSource = (media?: MediaSkeletonSpec): string => !media ? '' : media.type === 'video' ? media.coverUrl || '' : media.previewUrl || media.coverUrl || media.url || ''
+const ratioSource = mediaPreviewSource
+export function rememberMediaRatio(media: MediaSkeletonSpec, ratio: number) {
+  if (Number.isFinite(ratio) && ratio > 0) decodedRatios.set(media, { ratio, version: media.resourceVersion, source: ratioSource(media) })
+}
+export function mediaAspectRatio(media?: MediaSkeletonSpec, fallback = 1): number {
+  if (!media) return fallback
+  if (Number.isFinite(media.aspectRatio) && media.aspectRatio > 0) return media.aspectRatio
+  const decoded = decodedRatios.get(media)
+  return decoded && decoded.version === media.resourceVersion && decoded.source === ratioSource(media) ? decoded.ratio : fallback
+}
+
+export function mediaDirection(media: MediaSkeletonSpec): MediaSkeletonSpec['layout'] {
+  return media.aspectRatio > 1 ? 'wide' : media.aspectRatio < 1 ? 'portrait' : 'square'
+}
+
+// Show up to three columns; multiple landscape images use square thumbnails.
+// A single landscape image keeps its original ratio; portraits use a 3:4 frame.
+// Only the display copies change. Detail pages retain every original media ratio.
+export function getFeedMedia(media: MediaSkeletonSpec[]) {
+  if (!media.length) return { items: [], total: 0 }
+  const first = media[0]
+  const squareLandscape = media.length > 1 && first.type === 'image' && mediaDirection(first) === 'wide'
+  const direction = squareLandscape ? 'square' : mediaDirection(first)
+  const aspectRatio = squareLandscape ? 1 : direction === 'portrait' ? 3 / 4 : first.aspectRatio
+  const items = media.slice(0, 3).map(item => ({
+    ...item, layout: direction, aspectRatio
+  }))
+  return { items, total: media.length }
+}
+
+/** Mine uses two square previews as one gallery; originals remain available in detail. */
+export function getMineFeedMedia(media: MediaSkeletonSpec[]) {
+  if (media.length <= 1 || media[0].type === 'video') return { items: media.slice(0, 1), total: media.length }
+  return { items: media.slice(0, 2).map(item => ({ ...item, layout: 'square' as const, aspectRatio: 1 })), total: media.length }
+}

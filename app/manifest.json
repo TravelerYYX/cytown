@@ -1,0 +1,150 @@
+{
+	"name": "次元町",
+	"appid": "__UNI__D5FF2AF",
+	"description": "",
+	"versionName": "1.0.1",
+	"versionCode": "101",
+	"transformPx": false,
+	"quickapp": {},
+	"mp-weixin": {
+		"appid": "",
+		"setting": {
+			"urlCheck": false
+		},
+		"usingComponents": true
+	},
+	"mp-alipay": {
+		"usingComponents": true
+	},
+	"mp-baidu": {
+		"usingComponents": true
+	},
+	"mp-toutiao": {
+		"usingComponents": true
+	},
+	"uniStatistics": {
+		"enable": false
+	},
+	"vueVersion": "3",
+	"uni-app-x": {
+		"styleIsolationVersion": "2",
+		"vapor": true,
+		"vapor-render-target": "bytecode"
+	},
+	"app": {
+		"distribute": {
+			"icons": {
+				"android": {
+					"hdpi": "static/app-package/android/icon-72.png",
+					"xhdpi": "static/app-package/android/icon-96.png",
+					"xxhdpi": "static/app-package/android/icon-144.png",
+					"xxxhdpi": "static/app-package/android/icon-192.png"
+				},
+				"ios": {
+					"appstore": "static/app-package/icons/1024x1024.png",
+					"ipad": {
+						"app": "static/app-package/icons/76x76.png",
+						"app@2x": "static/app-package/icons/152x152.png",
+						"notification": "static/app-package/icons/20x20.png",
+						"notification@2x": "static/app-package/icons/40x40.png",
+						"proapp@2x": "static/app-package/icons/167x167.png",
+						"settings": "static/app-package/icons/29x29.png",
+						"settings@2x": "static/app-package/icons/58x58.png",
+						"spotlight": "static/app-package/icons/40x40.png",
+						"spotlight@2x": "static/app-package/icons/80x80.png"
+					},
+					"iphone": {
+						"app@2x": "static/app-package/icons/120x120.png",
+						"app@3x": "static/app-package/icons/180x180.png",
+						"notification@2x": "static/app-package/icons/40x40.png",
+						"notification@3x": "static/app-package/icons/60x60.png",
+						"settings@2x": "static/app-package/icons/58x58.png",
+						"settings@3x": "static/app-package/icons/87x87.png",
+						"spotlight@2x": "static/app-package/icons/80x80.png",
+						"spotlight@3x": "static/app-package/icons/120x120.png"
+					}
+				}
+			}
+		}
+	},
+	"app-android": {
+		"distribute": {
+			"abiFilters": [
+				"arm64-v8a",
+				"x86_64"
+			],
+			"permissions": [
+				"<uses-permission android:name=\"android.permission.CHANGE_NETWORK_STATE\"/>",
+				"<uses-permission android:name=\"android.permission.MOUNT_UNMOUNT_FILESYSTEMS\"/>",
+				"<uses-permission android:name=\"android.permission.VIBRATE\"/>",
+				"<uses-permission android:name=\"android.permission.READ_LOGS\"/>",
+				"<uses-permission android:name=\"android.permission.ACCESS_WIFI_STATE\"/>",
+				"<uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\"/>",
+				"<uses-permission android:name=\"android.permission.CAMERA\"/>",
+				"<uses-permission android:name=\"android.permission.GET_ACCOUNTS\"/>",
+				"<uses-permission android:name=\"android.permission.READ_PHONE_STATE\"/>",
+				"<uses-permission android:name=\"android.permission.CHANGE_WIFI_STATE\"/>",
+				"<uses-permission android:name=\"android.permission.WAKE_LOCK\"/>",
+				"<uses-permission android:name=\"android.permission.FLASHLIGHT\"/>",
+				"<uses-permission android:name=\"android.permission.WRITE_SETTINGS\"/>"
+			],
+			"splashScreens": {
+				"default": {
+					"hdpi": "static/app-package/splash.png",
+					"xhdpi": "static/app-package/splash.png",
+					"xxhdpi": "static/app-package/splash.png",
+					"xxxhdpi": "static/app-package/splash.png"
+				},
+				"icon": {
+					"xhdpi": "static/app-package/android/splash-logo-576.png",
+					"xxhdpi": "static/app-package/android/splash-logo-864.png",
+					"xxxhdpi": "static/app-package/android/splash-logo-1152.png"
+				},
+				"brand": {
+					"xhdpi": "static/app-package/android/splash-brand-400x160.png",
+					"xxhdpi": "static/app-package/android/splash-brand-600x240.png",
+					"xxxhdpi": "static/app-package/android/splash-brand-800x320.png"
+				}
+			},
+			"icons": {
+				"hdpi": "static/app-package/android/icon-72.png",
+				"xhdpi": "static/app-package/android/icon-96.png",
+				"xxhdpi": "static/app-package/android/icon-144.png",
+				"xxxhdpi": "static/app-package/android/icon-192.png"
+			},
+			"modules": {
+				"uni-camera": {},
+				"uni-barcode-scanning": {},
+				"uni-push": {},
+				"uni-location": {
+					"system": {}
+				},
+				"uni-payment": {
+					"alipay": {}
+				}
+			},
+			"minSdkVersion": "24",
+			"targetSdkVersion": "36"
+		}
+	},
+	"app-ios": {
+		"distribute": {
+			"dSYMs": false,
+			"icons": {
+				"appstore": "static/app-package/icons/1024x1024.png"
+			}
+		}
+	},
+	"web": {
+		"devServer": {
+			"port": 15273
+		},
+		"title": "次元町",
+		"router": {
+			"mode": ""
+		},
+		"unipush": {
+			"enable": true
+		}
+	}
+}

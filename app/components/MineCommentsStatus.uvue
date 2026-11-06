@@ -1,0 +1,21 @@
+<template>
+  <view class="mine-comments-status">
+    <PaginationLoading v-if="loading" :active="active" label="评论加载中" />
+    <template v-else-if="error"><text class="mine-comments-status-text">{{ error }}</text><ActionButton class="mine-comments-retry" aria-label="重试加载我的评论" @tap="$emit('retry')"><text class="mine-comments-retry-text">重试</text></ActionButton></template>
+    <EmptyState v-else-if="count===0" />
+    <text v-else class="mine-comments-status-text">{{ hasMore ? '上拉加载更多' : '已经到底了' }}</text>
+  </view>
+</template>
+<script setup lang="uts">
+import EmptyState from './EmptyState.uvue'
+import PaginationLoading from './PaginationLoading.uvue'
+import ActionButton from './ActionButton.uvue'
+defineProps<{ loading: boolean; error: string; count: number; hasMore: boolean; active: boolean }>()
+defineEmits<{ retry: [] }>()
+</script>
+<style scoped>
+.mine-comments-status{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24rpx 20rpx 40rpx;background-color:#fff;}
+.mine-comments-status-text{color:#a4a8ab;font-size:22rpx;line-height:34rpx;text-align:center;}
+.mine-comments-retry{margin:12rpx 0 0;padding:12rpx 30rpx;background-color:transparent;border-width:0;}
+.mine-comments-retry-text{color:#686f73;font-size:23rpx;}
+</style>

@@ -1,0 +1,56 @@
+<template>
+  <ActionButton v-if="visible" class="follow-button" :class="[uxNative?'ct-native-button':'',{selected:state.following},uxNative?'ux0':'',uxNative?'ux7':'',uxNative&amp;&amp;!!state.following?'ux8':'']" :disabled="busy" :aria-label="label" @tap.stop="follow"><text :class="[uxNative?'ux9':'',uxNative?'ux11':'',uxNative&amp;&amp;!!state.following?'ux12':'',uxNative?'ux13':'']">{{ label }}</text></ActionButton>
+</template>
+<script setup lang="uts">
+import ActionButton from '@/components/ActionButton.uvue'
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, watch } from 'vue'
+import { authRevision, getUserInfo } from '@/utils/auth'
+import { interactionBusy, performFollow, relationshipStates, setRelationship } from '@/utils/interactions'
+import type { InteractionResult } from '@/types/auth'
+const props = defineProps<{ userId: string; following?: boolean; followedBy?: boolean }>()
+const emit = defineEmits<{ (e: 'follow', result: InteractionResult): void }>()
+watch(() => [props.userId, props.following, props.followedBy] as const, ([id, following, followedBy]) => {
+  if (id && !relationshipStates[id]) setRelationship(id, !!following, !!followedBy)
+}, { immediate: true })
+const visible = computed(() => { void authRevision.value; return /^[1-9]\d*$/.test(props.userId) && props.userId !== getUserInfo()?.userId })
+const state = computed(() => relationshipStates[props.userId] || { following: !!props.following, followedBy: !!props.followedBy })
+const label = computed(() => state.value.following ? (state.value.followedBy ? '互相关注' : '已关注') : (state.value.followedBy ? '回关' : '关注'))
+const busy = computed(() => interactionBusy.has('follow:' + props.userId))
+async function follow() { const result = await performFollow(props.userId); if (result) emit('follow', result) }
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.follow-button { margin: 0; padding: 12rpx 22rpx; border: 2rpx solid #37b9df; border-radius: 14rpx; background: transparent; color: #37b9df; font-size: 24rpx; font-weight: 600; flex-shrink: 0; line-height: 1.4; }
+.follow-button::after { border: 0; }
+.follow-button.selected { color: #8c969c; border-color: #c7cdd0; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux9{color:var(--text-main);font-size:26rpx;}
+
+.ux11{color:#37b9df;font-size:24rpx;font-weight:600;line-height:33.599999999999994rpx;}
+.ux12{color:#8c969c;}
+.ux13{}
+.ux0{}
+
+
+
+
+
+
+.ux7{margin:0;padding:12rpx 22rpx;border:2rpx solid #37b9df;border-radius:14rpx;background-color:transparent;color:#37b9df;font-size:24rpx;font-weight:600;flex-shrink:0;line-height:33.599999999999994rpx;}
+.ux8{color:#8c969c;border-color:#c7cdd0;}
+/* #endif */
+</style>

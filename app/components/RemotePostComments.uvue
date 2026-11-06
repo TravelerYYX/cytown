@@ -1,0 +1,272 @@
+<template>
+  <view id="post-comments" class="post-comments" :class="[uxNative?'ux2':'',uxNative?'ux3':'']">
+    <view class="comment-heading" :class="[uxNative?'ux2':'',uxNative?'ux4':'']">
+      <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(a11yPrefix+'-0',{&quot;role&quot;:&quot;button&quot;,&quot;aria-label&quot;:scope === 'all' ? '全部' + count + '条评论' : '只看作者',&quot;tabindex&quot;:&quot;0&quot;})" class="comment-sort"   @tap="chooseScope" :class="[uxNative?'ux2':'',uxNative?'ux5':'']">
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :role="&quot;button&quot;" :tabindex="&quot;0&quot;" class="comment-sort"   @tap="chooseScope" :class="[uxNative?'ux2':'',uxNative?'ux5':'']">
+<!-- #endif --><text :class="[uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux8':'']" :style="uxLayout(uxNodePrefix+'-g1000',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;6rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'">{{ scope === 'all' ? '全部' + count + '条评论' : '只看作者' }}</text><AppIcon name="chevron-round" tone="muted" :size="25"  :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;6rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1001'"/></view>
+      <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(a11yPrefix+'-1',{&quot;role&quot;:&quot;button&quot;,&quot;aria-label&quot;:sort === 'hot' ? '热门' : '最新',&quot;tabindex&quot;:&quot;0&quot;})" class="comment-sort"   @tap="chooseSort" :class="[uxNative?'ux2':'',uxNative?'ux5':'']">
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :role="&quot;button&quot;" :tabindex="&quot;0&quot;" class="comment-sort"   @tap="chooseSort" :class="[uxNative?'ux2':'',uxNative?'ux5':'']">
+<!-- #endif --><text :class="[uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux8':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;6rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1002'">{{ sort === 'hot' ? '热门' : '最新' }}</text><AppIcon name="chevron-round" tone="muted" :size="25"  :style="uxLayout(uxNodePrefix+'-g1003',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;6rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1003'"/></view>
+    </view>
+    <ActionButton v-if="previousPage>0" class="comment-previous" aria-label="加载前面的评论" :disabled="loading" @tap="loadPrevious"><text class="comment-pagination-text">加载前面的评论</text></ActionButton>
+    <view v-for="(comment, __uxIndex0) in comments" :key="comment.id" :id="commentDomId(comment.id)" class="comment-item" :class="[uxNative?'ux2':'',uxNative?'ux9':'',{'comment-locate-highlight':highlightId===comment.id,'comment-locate-fade':highlightId===comment.id&&highlightFading}]">
+      <CommentEntry :comment="comment" :active="visible" :post-id="postId" @reply="$emit('reply', $event)" @deleted="onDeleted" />
+      <ActionButton v-if="thread(comment.id).expanded&&thread(comment.id).previous>0" class="comment-previous" aria-label="加载前面的回复" @tap="loadPreviousReplies(comment)"><text class="comment-pagination-text">加载前面的回复</text></ActionButton>
+      <view v-for="(reply, __uxIndex1) in visibleReplies(comment)" :key="reply.id" :id="commentDomId(reply.id)" class="nested-reply" :class="[uxNative?'ux2':'',uxNative?'ux10':'',{'comment-locate-highlight':highlightId===reply.id,'comment-locate-fade':highlightId===reply.id&&highlightFading}]">
+        <CommentEntry :comment="reply" :active="visible" :post-id="postId" nested @reply="$emit('reply', $event)" @deleted="onDeleted" />
+      </view>
+      <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(a11yPrefix+'-reply-'+comment.id,{&quot;role&quot;:&quot;button&quot;,&quot;aria-label&quot;:replyControlText(comment),&quot;aria-disabled&quot;:thread(comment.id).loading})" v-if="showReplyControl(comment)" class="reply-preview"   @tap="!thread(comment.id).loading && toggleReplies(comment)" :class="[uxNative?'ux2':'',uxNative?'ux11':'']">
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :role="&quot;button&quot;" :aria-disabled="thread(comment.id).loading" v-if="showReplyControl(comment)" class="reply-preview"   @tap="!thread(comment.id).loading && toggleReplies(comment)" :class="[uxNative?'ux2':'',uxNative?'ux11':'']">
+<!-- #endif -->
+        <view class="reply-line"  :class="[uxNative?'ux2':'',uxNative?'ux12':'']" :style="uxLayout(uxNodePrefix+'-g1004'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;10rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1004'+'-'+[__uxIndex0].join('-')"/>
+        <text :class="[uxNative?'ux6':'',uxNative?'ux13':'',uxNative?'ux8':'']" :style="uxLayout(uxNodePrefix+'-g1005'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;10rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1005'+'-'+[__uxIndex0].join('-')">{{ replyControlText(comment) }}</text>
+        <view v-if="thread(comment.id).loading" class="reply-loading"><PaginationLoading :active="active" label="回复加载中" /></view>
+        <AppIcon v-else-if="!thread(comment.id).expanded" name="chevron-round" tone="muted" :size="27"  :style="uxLayout(uxNodePrefix+'-g1006'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;10rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1006'+'-'+[__uxIndex0].join('-')"/>
+      </view>
+      <ActionButton :aria-label="thread(comment.id).error ? '重试加载回复' : '加载更多回复'" v-if="thread(comment.id).expanded && thread(comment.id).hasMore && !thread(comment.id).loading" class="more-replies" @tap="loadReplies(comment)" :class="[uxNative?'ct-native-button':'',uxNative?'ux14':'',uxNative?'ux15':'']"><text :class="[uxNative?'ux6':'',uxNative?'ux16':'',uxNative?'ux8':'']">{{ thread(comment.id).error ? '加载失败，点击重试' : '加载更多回复' }}</text></ActionButton>
+    </view>
+    <view v-if="loading" class="comment-pagination"><PaginationLoading :active="active" label="评论加载中" /></view>
+    <view v-else-if="error" class="comment-pagination comment-pagination-error"><text class="comment-pagination-text">{{ error }}</text><ActionButton aria-label="重试加载评论" @tap="loadMore"><text class="comment-pagination-text">重试</text></ActionButton></view>
+    <EmptyState v-else-if="!comments.length" />
+    <view v-else-if="hasMore" class="comment-pagination"><ActionButton aria-label="加载更多评论" class="load-more comment-load-more" @tap="loadMore"><text class="comment-pagination-text">加载更多评论</text></ActionButton></view>
+    <view v-else class="comment-pagination comment-end"><text class="comment-pagination-text">已经到底了</text></view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import EmptyState from '@/components/EmptyState.uvue'
+import PaginationLoading from '@/components/PaginationLoading.uvue'
+import { usePaneVisibility } from '@/composables/usePaneVisibility'
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import ActionButton from '@/components/ActionButton.uvue'
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { nextTick,onBeforeUnmount, reactive, ref, watch } from 'vue'
+import AppIcon from './AppIcon.uvue'
+import CommentEntry from './CommentEntry.uvue'
+import { fetchCommentReplies, fetchComments,locatePostComment } from '@/utils/post-api'
+import { onPreviewRefresh,postPreviewMode,capturePreviewScroll,restorePreviewScroll } from '@/utils/post-preview'
+import type { CommentDeleteResult, CommentResponse } from '@/types/post-api'
+
+interface ThreadState { expanded: boolean; rows: CommentResponse[]; page: number; previous:number; hasMore: boolean; loading: boolean; error: string }
+const props = withDefaults(defineProps<{ postId: string; count: number; refreshRevision?: number; active?: boolean }>(), { active: true })
+const visible = usePaneVisibility(() => props.active)
+const emit = defineEmits<{
+  (e: 'reply', comment: CommentResponse): void
+  (e: 'count-change', delta: number): void
+}>()
+const comments = ref<CommentResponse[]>([])
+const loading = ref(false)
+const error = ref('')
+const hasMore = ref(true)
+const scope = ref<'all' | 'author'>('all')
+const sort = ref<'hot' | 'latest'>('hot')
+const threads = reactive<Record<string, ThreadState>>({})
+const previousPage=ref(0),highlightId=ref(''),highlightFading=ref(false)
+const loadedPages=new Map<number,CommentResponse[]>()
+const replyPages=new Map<string,Set<number>>()
+let highlightTimer:ReturnType<typeof setTimeout>|undefined,fadeTimer:ReturnType<typeof setTimeout>|undefined
+function commentDomId(id:string){return 'post-comment-'+props.postId+'-'+id}
+function clearHighlight(){clearTimeout(highlightTimer);clearTimeout(fadeTimer);highlightId.value='';highlightFading.value=false}
+function highlight(id:string){clearHighlight();highlightId.value=id;highlightTimer=setTimeout(()=>{highlightFading.value=true;fadeTimer=setTimeout(clearHighlight,600)},2000)}
+let pageNum = 1
+let generation = 0
+
+function thread(id: string): ThreadState {
+  return threads[id] ||= { expanded: false, rows: [], page: 1, previous:0, hasMore: true, loading: false, error: '' }
+}
+function reset() {
+  generation++
+  loadedPages.clear();replyPages.clear();previousPage.value=0;clearHighlight()
+  comments.value = []; pageNum = 1; hasMore.value = true; loading.value = false; error.value = ''
+  for (const key of Object.keys(threads)) delete threads[key]
+  void loadMore()
+}
+async function loadMore() {
+  if (!visible.value || loading.value || !hasMore.value) return
+  const current = generation
+  loading.value = true; error.value = ''
+  try {
+    const page = await fetchComments(props.postId, pageNum, 20, scope.value, sort.value)
+    if (current !== generation) return
+    loadedPages.set(pageNum,page.records)
+    const ids = new Set(comments.value.map(c => c.id))
+    comments.value.push(...page.records.filter(c => !ids.has(c.id)))
+    hasMore.value = pageNum < page.pages && page.records.length > 0
+    pageNum++
+  } catch (e) {
+    if (current === generation) error.value = e instanceof Error ? e.message : '评论加载失败'
+  } finally { if (current === generation) loading.value = false }
+}
+function loadMoreOnReachBottom() { if (!error.value) void loadMore() }
+async function loadPrevious(){
+ if(loading.value||previousPage.value<1)return
+ const current=generation,page=previousPage.value;loading.value=true
+ try{const result=await fetchComments(props.postId,page,20,scope.value,sort.value);if(current!==generation)return;loadedPages.set(page,result.records);const ids=new Set(comments.value.map(row=>row.id));comments.value.unshift(...result.records.filter(row=>!ids.has(row.id)));previousPage.value=page-1}catch(e){if(current===generation)error.value=e instanceof Error?e.message:'加载失败'}finally{if(current===generation)loading.value=false}
+}
+async function loadPreviousReplies(comment:CommentResponse){
+ const state=thread(comment.id);if(state.loading||state.previous<1)return
+ const current=generation,page=state.previous;state.loading=true
+ try{const result=await fetchCommentReplies(props.postId,comment.id,page,20,scope.value);if(current!==generation)return;const ids=new Set(state.rows.map(row=>row.id));state.rows.unshift(...result.records.filter(row=>!ids.has(row.id)));state.previous=page-1;(replyPages.get(comment.id)||new Set<number>()).add(page)}catch(e){if(current===generation)state.error=e instanceof Error?e.message:'加载失败'}finally{if(current===generation)state.loading=false}
+}
+async function locate(id:string):Promise<string>{
+ const current=++generation;loading.value=true;error.value='';clearHighlight()
+ try{
+  const result=await locatePostComment(props.postId,id,scope.value,sort.value)
+  if(current!==generation)return ''
+  loadedPages.clear();replyPages.clear();for(const key of Object.keys(threads))delete threads[key]
+  comments.value=result.roots.records;loadedPages.set(result.rootPage,result.roots.records)
+  pageNum=result.rootPage+1;previousPage.value=result.rootPage-1;hasMore.value=result.rootPage<result.roots.pages
+  if(result.replies){const state=thread(result.rootId);state.expanded=true;state.rows=result.replies.records;state.previous=result.replyPage-1;state.page=result.replyPage+1;state.hasMore=result.replyPage<result.replies.pages;replyPages.set(result.rootId,new Set([result.replyPage]))}
+  await nextTick();return commentDomId(result.commentId)
+ }catch(e){if(current===generation){uni.showToast({title:e instanceof Error?e.message:'评论不存在或已删除',icon:'none'});comments.value=[];pageNum=1;hasMore.value=true;previousPage.value=0;void nextTick(loadMore)}return ''}finally{if(current===generation)loading.value=false}
+}
+let previewRefreshing=false
+async function refreshLoaded(){
+ if(!postPreviewMode.value||previewRefreshing||!visible.value)return
+ previewRefreshing=true;const current=generation
+ try{
+  for(const page of [...loadedPages.keys()]){const result=await fetchComments(props.postId,page,20,scope.value,sort.value);if(current!==generation)return;loadedPages.set(page,result.records);if(page===pageNum-1)hasMore.value=page<result.pages}
+  const position=capturePreviewScroll()
+  comments.value=[...loadedPages.entries()].sort((a,b)=>a[0]-b[0]).flatMap(entry=>entry[1]).filter((row,index,all)=>all.findIndex(value=>value.id===row.id)===index)
+  await nextTick();restorePreviewScroll(position)
+  for(const [id,pages] of replyPages){const state=thread(id);if(!state.expanded)continue;const result:CommentResponse[]=[];for(const page of [...pages].sort((a,b)=>a-b)){const data=await fetchCommentReplies(props.postId,id,page,20,scope.value);if(current!==generation)return;result.push(...data.records);state.hasMore=page<data.pages}const position=capturePreviewScroll();state.rows=result;await nextTick();restorePreviewScroll(position)}
+ }catch{}finally{previewRefreshing=false}
+}
+const stopPreview=onPreviewRefresh(()=>void refreshLoaded())
+defineExpose({ loadMoreOnReachBottom,locate,highlight,refreshLoaded })
+function visibleReplies(comment: CommentResponse) { const state = thread(comment.id); return state.expanded ? state.rows : (comment.replies || []) }
+function showReplyControl(comment: CommentResponse) {
+  const state = thread(comment.id)
+  return state.expanded || comment.replyCount > (comment.replies?.length || 0)
+}
+function replyControlText(comment: CommentResponse) {
+  const state = thread(comment.id)
+  if (state.loading) return '回复加载中'
+  return state.expanded ? '收起回复' : '查看' + comment.replyCount + '条回复'
+}
+async function toggleReplies(comment: CommentResponse) {
+  const state = thread(comment.id)
+  if (state.expanded) { state.expanded = false; return }
+  state.expanded = true
+  if (!state.rows.length) await loadReplies(comment)
+}
+async function loadReplies(comment: CommentResponse) {
+  const state = thread(comment.id)
+  if (!visible.value || state.loading || !state.hasMore) return
+  const current = generation
+  state.loading = true; state.error = ''
+  try {
+    const page = await fetchCommentReplies(props.postId, comment.id, state.page, 20, scope.value)
+    if (current !== generation) return
+    const ids = new Set(state.rows.map(row => row.id))
+    let pages=replyPages.get(comment.id);if(!pages){pages=new Set<number>();replyPages.set(comment.id,pages)}pages.add(state.page)
+    state.rows.push(...page.records.filter(row => !ids.has(row.id)))
+    state.hasMore = state.page < page.pages && page.records.length > 0
+    state.page++
+  } catch (e) {
+    if (current === generation) state.error = e instanceof Error ? e.message : '回复加载失败'
+  } finally { if (current === generation) state.loading = false }
+}
+function chooseScope() {
+  uni.showActionSheet({ itemList: ['全部评论', '只看作者'], success: result => {
+    const value = result.tapIndex === 1 ? 'author' : 'all'
+    if (scope.value !== value) { scope.value = value; reset() }
+  } })
+}
+function chooseSort() {
+  uni.showActionSheet({ itemList: ['热门', '最新'], success: result => {
+    const value = result.tapIndex === 1 ? 'latest' : 'hot'
+    if (sort.value !== value) { sort.value = value; reset() }
+  } })
+}
+function onDeleted(_comment: CommentResponse, result: CommentDeleteResult) {
+  emit('count-change', -result.deletedCount)
+  reset()
+  uni.showToast({ title: '评论已删除', icon: 'none' })
+}
+
+watch(() => props.postId, reset, { immediate: true })
+watch(() => props.refreshRevision, (value, old) => { if (old !== undefined && value !== old) reset() })
+watch(visible, value => { if (value && !comments.value.length && !error.value) void loadMore() })
+onBeforeUnmount(() => { generation++;clearHighlight();stopPreview() })
+</script>
+
+<style scoped>
+.comment-locate-highlight{background-color:#fffbe9;transition-property:background-color;transition-duration:600ms;}
+.comment-locate-fade{background-color:#fff;}
+.comment-previous{display:flex;flex-direction:row;justify-content:center;padding:22rpx 34rpx;margin:0;border-width:0;background-color:transparent;}
+</style>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.post-comments { border-top: 2rpx solid #f5f5f5; background: #fff; }
+.comment-heading { min-height: 96rpx; display: flex; align-items: center; justify-content: space-between; padding: 0 34rpx; flex-direction: row; }
+.comment-sort { display: flex; align-items: center; gap: 6rpx; margin: 0; padding: 0; border: 0; background: transparent; color: #272b2d; font-size: 25rpx; line-height: 1; flex-direction: row; }
+.comment-item { padding: 28rpx 34rpx 32rpx; border-bottom: 1rpx solid #f1f1f1; }
+.nested-reply { margin: 28rpx 0 0 92rpx; }
+.reply-preview { min-height: 48rpx; display: flex; align-items: center; gap: 10rpx; margin: 20rpx 0 0 92rpx; padding: 0; border: 0; background: transparent; color: #696e70; font-size: 23rpx; line-height: 1; flex-direction: row; }
+.reply-line { width: 48rpx; height: 2rpx; background: #ededed; }
+.more-replies { display: block; margin: 8rpx 0 0 150rpx; padding: 8rpx 0; background: transparent; color: #727779; font-size: 21rpx; line-height: 1.4; }
+.comment-empty { padding: 54rpx 30rpx; text-align: center; color: #aaa; font-size: 23rpx; }
+.comment-empty text { display: block; }
+.comment-empty button, button.comment-empty { margin: 16rpx auto 0; padding: 0; background: transparent; color: #5f686c; font-size: 23rpx; }
+.load-more { width: 100%; margin: 0 !important; }
+
+/* #endif */
+</style>
+
+<style scoped>
+.comment-pagination { display: flex; flex-direction: row; align-items: center; justify-content: center; min-height: 108rpx; width: 100%; }
+.comment-pagination-error { flex-direction: column; padding: 24rpx 0; }
+.comment-pagination-text { color: #999999; font-size: 23rpx; line-height: 40rpx; }
+.comment-load-more { background-color: transparent; padding: 0; margin: 0; border-width: 0; }
+.reply-loading { width: 36rpx; height: 36rpx; margin-left: 10rpx; flex-shrink: 0; }
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux6{color:var(--text-main);font-size:26rpx;}
+.ux7{color:#272b2d;font-size:25rpx;line-height:25rpx;}
+.ux13{color:#696e70;font-size:23rpx;line-height:23rpx;}
+.ux16{color:#727779;font-size:21rpx;line-height:29.4rpx;}
+.ux18{text-align:center;color:#aaa;font-size:23rpx;}
+.ux21{color:#5f686c;font-size:23rpx;}
+.ux24{color:#5f686c;font-size:23rpx;}
+.ux2{}
+.ux8{}
+.ux14{}
+.ux3{border-top:2rpx solid #f5f5f5;background-color:#fff;}
+.ux4{min-height:96rpx;display:flex;flex-direction:row;align-items:center;justify-content:space-between;padding:0 34rpx;}
+.ux5{display:flex;flex-direction:row;align-items:center;margin:0;padding:0;border:0px;background-color:transparent;color:#272b2d;font-size:25rpx;line-height:25rpx;}
+.ux9{padding:28rpx 34rpx 32rpx;border-bottom:1rpx solid #f1f1f1;}
+.ux10{margin:28rpx 0 0 92rpx;}
+.ux11{min-height:48rpx;display:flex;flex-direction:row;align-items:center;margin:20rpx 0 0 92rpx;padding:0;border:0px;background-color:transparent;color:#696e70;font-size:23rpx;line-height:23rpx;}
+.ux12{width:48rpx;height:2rpx;background-color:#ededed;}
+.ux15{display:flex;flex-direction:column;margin:8rpx 0 0 150rpx;padding:8rpx 0;background-color:transparent;color:#727779;font-size:21rpx;line-height:29.4rpx;}
+.ux17{padding:54rpx 30rpx;text-align:center;color:#aaa;font-size:23rpx;}
+.ux22{width:100%;margin:0!important;}
+.ux19{display:flex;flex-direction:column;}
+.ux20{margin:16rpx auto 0;padding:0;background-color:transparent;color:#5f686c;font-size:23rpx;}
+.ux23{margin:16rpx auto 0;padding:0;background-color:transparent;color:#5f686c;font-size:23rpx;}
+/* #endif */
+</style>

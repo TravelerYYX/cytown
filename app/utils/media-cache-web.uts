@@ -1,0 +1,28 @@
+// This module is imported only by WEB conditional compilation.
+import { IMAGE_DOWNLOAD_TIMEOUT } from './image-loading'
+export type WebCacheEntry = { key: string; blob?: Blob; size: number; used: number }
+let database: Promise<IDBDatabase> | undefined
+export function db(): Promise<IDBDatabase> {
+  return database ||= new Promise((resolve, reject) => { const request = indexedDB.open('ciyuantown-images', 1); request.onupgradeneeded = () => { const table = request.result.createObjectStore('images', { keyPath: 'key' }); table.createIndex('used', 'used') }; request.onsuccess = () => resolve(request.result); request.onerror = () => { database = undefined; reject(request.error) } })
+}
+type CacheRequest<T> = IDBRequest & { result: T }
+export async function transact<T>(mode: 'readonly' | 'readwrite', work: (store: IDBObjectStore) => CacheRequest<T>): Promise<T> {
+  const database = await db(); return new Promise((resolve, reject) => { const transaction = database.transaction('images', mode); const request = work(transaction.objectStore('images')); let value: T; request.onsuccess = () => { value = request.result }; transaction.oncomplete = () => resolve(value); transaction.onerror = () => reject(transaction.error); transaction.onabort = () => reject(transaction.error) })
+}
+export async function webRows(): Promise<WebCacheEntry[]> {
+  const database = await db()
+  return new Promise((resolve,reject) => { const transaction=database.transaction('images','readonly'), entries:WebCacheEntry[]=[];const request=transaction.objectStore('images').openCursor();request.onsuccess=()=>{const cursor=request.result;if(cursor){const {key,size,used}=cursor.value as WebCacheEntry;entries.push({key,size,used});cursor.continue()}};transaction.oncomplete=()=>resolve(entries);transaction.onerror=()=>reject(transaction.error);transaction.onabort=()=>reject(transaction.error) })
+}
+export async function webBudget(limit: number, total: number): Promise<number> { try { const estimate=await navigator.storage?.estimate?.(); if(estimate?.quota!==undefined&&estimate.usage!==undefined)return Math.min(limit,total+Math.max(0,estimate.quota*.9-estimate.usage)) } catch {} return limit }
+export async function webDownload(key: string, url: string, limit: number): Promise<WebCacheEntry | undefined> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), IMAGE_DOWNLOAD_TIMEOUT)
+  try {
+    const response = await fetch(url, { credentials: 'omit', signal: controller.signal })
+    if (!response || !response.ok) return undefined
+    const blob = await response.blob()
+    if (!blob.type.startsWith('image/') || blob.size > limit) return undefined
+    return { key, blob, size: blob.size, used: Date.now() }
+  } finally { clearTimeout(timer) }
+}
+export function webImageURL(blob: Blob) { const url=URL.createObjectURL(blob);return {url,release:()=>URL.revokeObjectURL(url)} }

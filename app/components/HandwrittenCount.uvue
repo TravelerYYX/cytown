@@ -1,0 +1,62 @@
+<template>
+  <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(a11yPrefix+'-0',{&quot;aria-label&quot;:uxNative ? value : undefined})" class="handwritten-count" :data-count="value"  :class="[uxNative?'ux0':'',uxNative?'ux1':'']">
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :aria-label="uxNative ? value : undefined" class="handwritten-count" :data-count="value"  :class="[uxNative?'ux0':'',uxNative?'ux1':'']">
+<!-- #endif -->
+    <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(a11yPrefix+'-1',{&quot;aria-hidden&quot;:&quot;true&quot;})" class="count-glyphs"  :class="[uxNative?'ux0':'',uxNative?'ux2':'']">
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :aria-hidden="&quot;true&quot;" class="count-glyphs"  :class="[uxNative?'ux0':'',uxNative?'ux2':'']">
+<!-- #endif -->
+      <image v-for="(digit, index) in digits" :key="index" class="count-glyph" :src="uiAsset('/static/icons/post-actions/digits/' + digit + '.svg')" :style="glyphStyle" mode="aspectFit"  :class="[uxNative?'ux3':'']"/>
+    </view>
+    <text class="count-accessible" :class="[uxNative?'ux4':'',uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'']">{{ value }}</text>
+  </view>
+</template>
+<script setup lang="uts">
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import { uiAsset } from '@/utils/ui-assets'
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed } from 'vue'
+const props = defineProps<{ count: number }>()
+const value = computed(() => String(props.count))
+const digits = computed(() => value.value.split(''))
+// Preserve the reference's digit proportions, scaling the entire number for long counts.
+const glyphStyle = computed(() => {
+  const scale = Math.min(1, 64 / (digits.value.length * 10.2))
+  return { width: 10.2 * scale + 'rpx', height: 18.7 * scale + 'rpx' }
+})
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.handwritten-count { position: relative; width: 64rpx; height: 19rpx; flex-shrink: 0; color: #484a4c; }
+.count-glyphs { height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: row; }
+.count-glyph { display: block; flex-shrink: 0; }
+.count-accessible { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux4{color:var(--text-main);font-size:26rpx;}
+.ux5{color:#484a4c;}
+.ux0{}
+.ux6{}
+.ux1{position:relative;width:64rpx;height:19rpx;flex-shrink:0;color:#484a4c;}
+.ux2{height:100%;display:flex;flex-direction:row;align-items:center;justify-content:center;}
+.ux3{display:flex;flex-direction:column;flex-shrink:0;}
+.ux7{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;opacity:0;white-space:nowrap;}
+/* #endif */
+</style>

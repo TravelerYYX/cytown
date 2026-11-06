@@ -1,0 +1,146 @@
+import { getCurrentInstance, nextTick, onBeforeUnmount, onMounted, onUpdated, reactive } from 'vue'
+// #ifdef APP
+import { onReuse } from 'vue'
+// #endif
+import { nativeLength, nativeStyleLength } from '@/utils/native-length'
+import { observeWindowResize } from '@/utils/window-events'
+type Rule = { on: boolean; declarations: Record<string, string> }
+type Style = Record<string, string | number>
+type LayoutJob = { rules: Rule[]; inline: unknown; signature: string; measuredKey: string; misses: number }
+export function useNativeLayout() {
+  const prefix = 'ct-layout-' + getCurrentInstance()!.uid
+  const styles = reactive<Record<string, Style>>({})
+  const jobs = new Map<string, LayoutJob>()
+  let windowInfo=uni.getWindowInfo()
+  let pending = false, disposed = false, measureFrame = 0
+  function schedule() { if (!pending && !disposed) { pending = true; void nextTick().then(() => {
+    if (disposed) return
+    measureFrame = requestAnimationFrame(() => { pending = false; measure() })
+  }) } }
+  // H5 ignores native layout rules. Exposing the native Rule alias here makes
+  // the UTS template compiler emit `new Rule(...)` without a runtime import.
+  // #ifdef APP
+  function style(id: string, rules: Rule[], inline?: unknown): unknown {
+  // #endif
+  // #ifndef APP
+  function style(id: string, rules: unknown[], inline?: unknown): unknown {
+  // #endif
+    // #ifndef APP
+    return inline || {}
+    // #endif
+    // #ifdef APP
+    const signature = JSON.stringify([rules,inline])
+    if (jobs.get(id)?.signature !== signature) {
+      jobs.set(id, { rules, inline, signature, measuredKey: '', misses: 0 })
+      // Vapor can update a recycled row's render effect without calling the
+      // owning component's onUpdated hook. Measure new/changed rules after
+      // that effect commits, including covers restored from another channel.
+      schedule()
+    }
+    const info=windowInfo
+    const context={width:info.windowWidth,height:info.windowHeight,viewportWidth:info.windowWidth,viewportHeight:info.windowHeight,safeBottom:info.safeAreaInsets?.bottom||0}
+    const immediate:Style={}
+    // Non-wrapping gaps depend only on the index and viewport units. Apply
+    // them on the first render instead of moving controls after measurement.
+    const declarations: Record<string,string> = {}
+    for (const rule of rules) if (rule.on) Object.assign(declarations, rule.declarations)
+    if (declarations.__gap && declarations.__wrap !== 'wrap' && !declarations.__columns && !declarations.__gap.includes('%')) {
+      const values = declarations.__gap.split(/\s+/)
+      const row = declarations.__direction !== 'column'
+      const index = Number(declarations.__index || 0)
+      if (index > 0) {
+        const value = row ? values[1] || values[0]! : values[0]!
+        immediate[row ? 'marginLeft' : 'marginTop'] = nativeLength(value, row ? 'width' : 'height', context) + 'px'
+      }
+    }
+    // Invalid CSS must never reach the renderer, even on the first frame before Element measurement.
+    if(inline && typeof inline==='object' && !Array.isArray(inline))for(const [key,value] of Object.entries(inline as Style)){
+      if(key==='aspectRatio')continue
+      if(typeof value==='string' && /calc\(|max\(|min\(|\b\d+(?:vw|vh)/.test(value)){
+        try{immediate[key]=nativeStyleLength(key,value,context)}catch(error){console.error('[native-layout:inline]',id,key,String(error))}
+      }else immediate[key]=value
+    }
+    return [immediate, styles[id] || {}]
+    // #endif
+  }
+  function measure() {
+    // #ifdef APP
+    if (disposed) return
+    const info = windowInfo
+    let retry = false
+    for (const [id, job] of jobs) {
+      const element = uni.getElementById(id)
+      // Native recycled cells may appear after the Vue mount/update callback.
+      // Retain their rules and retry a few frames instead of losing the job.
+      if (!element) { if (job.misses++ < 4) retry = true; continue }
+      const declarations: Record<string,string> = {}
+      for (const rule of job.rules) if (rule.on) Object.assign(declarations, rule.declarations)
+      // Vapor list/fragment children may have no parentElement. Callers can
+      // identify their actual content track instead of using viewport width.
+      const container = declarations.__container ? uni.getElementById(declarations.__container) : null
+      const bounds = element.getBoundingClientRect(), parent = (container || element.parentElement)?.getBoundingClientRect()
+      // A portrait cover has no intrinsic size: its image is absolute and the
+      // slot width comes from these rules. A measured track can size that slot
+      // even while its own bounds are 0x0; skipping it leaves it collapsed.
+      if (!bounds.width && !bounds.height && !parent?.width) { if (job.misses++ < 4) retry = true; continue }
+      job.misses = 0
+      const context = { width: parent?.width || info.windowWidth, height: parent?.height || info.windowHeight, viewportWidth: info.windowWidth, viewportHeight: info.windowHeight, safeBottom: info.safeAreaInsets?.bottom || 0 }
+      const measuredKey = [context.width,context.height,context.viewportWidth,context.viewportHeight,context.safeBottom,bounds.width,bounds.height].join(':')
+      if (job.measuredKey === measuredKey) continue
+      job.measuredKey = measuredKey
+      const inline = job.inline && typeof job.inline === 'object' && !Array.isArray(job.inline) ? job.inline as Style : {}
+      for (const [key,value] of Object.entries(inline)) if (key === 'aspectRatio' || typeof value === 'string' && /calc\(|max\(|min\(|\b\d+(?:vw|vh)/.test(value)) declarations[key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase())] = String(value)
+      const next: Style = {}
+      for (const [property,value] of Object.entries(declarations)) {
+        if (property === 'aspect-ratio' || property.startsWith('__')) continue
+        try { next[property.replace(/-([a-z])/g,(_,c)=>c.toUpperCase())] = nativeStyleLength(property,value,context) }
+        catch (error) { console.error('[native-layout]', id, property, String(error)) }
+      }
+      if (declarations['aspect-ratio'] && !('height' in inline)) {
+        try { const ratio = nativeLength(declarations['aspect-ratio'],'width',{...context,width:1}); const width = next.width ? parseFloat(String(next.width)) : bounds.width; if (ratio > 0) next.height = width / ratio + 'px' } catch (error) { console.error('[native-layout:ratio]',String(error)) }
+      }
+      if (declarations.__gap) {
+        const values = declarations.__gap.split(/\s+/), row = declarations.__direction !== 'column', wrap = declarations.__wrap === 'wrap'
+        const horizontal = nativeLength(values[1] || values[0]!, 'width', context), vertical = nativeLength(values[0]!, 'height', context)
+        const index = Number(declarations.__index || 0)
+        let columns = Number(declarations.__columns || 0)
+        if (columns > 0) {
+          const padding = nativeLength(declarations.__padding || '0px','width',context)
+          next.width = (declarations.__trackWidth ? Math.min(context.width-padding,nativeLength(declarations.__trackWidth,'width',context)) : Math.max(0,(context.width-padding-horizontal*(columns-1))/columns)) + 'px'
+        }
+        if (wrap && !columns) { const padding = nativeLength(declarations.__padding || '0px','width',context); columns = Math.max(1, Math.floor((context.width - padding + horizontal) / (bounds.width + horizontal))) }
+        const left = row && (wrap ? index % Math.max(1,columns) > 0 : index > 0) ? horizontal : 0
+        const top = !row && index > 0 || wrap && index >= Math.max(1,columns) ? vertical : 0
+        if (left) next.marginLeft = left + 'px'
+        if (top) next.marginTop = top + 'px'
+      }
+      const previous = styles[id]
+      if (JSON.stringify(previous) !== JSON.stringify(next)) styles[id] = next
+      else {
+        // Recycling can reset native inline styles although the calculated
+        // result is unchanged. Vue then has no reactive change to commit.
+        // Restore missing values on the actual node after its render effect.
+        for (const [key,value] of Object.entries(next)) {
+          const property = key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase())
+          if (element.style.getPropertyValue(property) !== String(value)) element.style.setProperty(property,String(value))
+        }
+      }
+    }
+    if (retry) schedule()
+    // #endif
+  }
+  const unobserve = observeWindowResize(() => { windowInfo=uni.getWindowInfo(); schedule() })
+  // #ifdef APP
+  onReuse(() => {
+    // list-view reattaches native nodes independently of Vue mount/update.
+    // The renderer can restore class widths (e.g. wide media's 100%) while
+    // both our rule signature and measured geometry remain unchanged.
+    for (const job of jobs.values()) { job.measuredKey = ''; job.misses = 0 }
+    schedule()
+  })
+  // #endif
+  onMounted(schedule)
+  onUpdated(schedule)
+  onBeforeUnmount(() => { disposed = true; cancelAnimationFrame(measureFrame); jobs.clear(); unobserve() })
+  return { prefix, style }
+}

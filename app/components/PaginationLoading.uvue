@@ -1,0 +1,59 @@
+<template>
+  <!-- #ifdef APP -->
+  <view v-if="visible" v-bind="a11yAttrs(a11yPrefix+'-status', {role:'status','aria-label':label})" class="pagination-loading">
+  <!-- #endif -->
+  <!-- #ifndef APP -->
+  <view v-if="visible" class="pagination-loading" role="status" :aria-label="label">
+  <!-- #endif -->
+    <view :id="a11yPrefix+'-ring'" class="pagination-loading-ring" />
+  </view>
+</template>
+<script setup lang="uts">
+import { nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+import { usePaneVisibility } from '@/composables/usePaneVisibility'
+// #ifdef APP
+import { uxMedia } from '@/utils/native-styles'
+// #endif
+
+const props = withDefaults(defineProps<{ active?: boolean; label?: string }>(), { active: true, label: '加载中' })
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+const visible = usePaneVisibility(() => props.active)
+// #ifdef APP
+let motion: UniAnimation | null = null
+let revision = 0
+let disposed = false
+function stop() { revision++; motion?.cancel(); motion = null }
+async function start() {
+  stop()
+  if (disposed || !visible.value || uxMedia('(prefers-reduced-motion: reduce)')) return
+  const current = revision
+  await nextTick()
+  if (disposed || current !== revision || !visible.value) return
+  function turn() {
+    if (disposed || current !== revision || !visible.value) return
+    motion = uni.getElementById(a11yPrefix+'-ring')?.animate([
+      { transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }
+    ], { duration: 800, easing: 'linear' }) ?? null
+    if (motion != null) motion.onfinish = () => {
+      if (current !== revision) return
+      motion?.cancel(); motion = null
+      turn()
+    }
+  }
+  turn()
+}
+watch(visible, () => { void start() }, { flush: 'post' })
+onMounted(() => { void start() })
+onBeforeUnmount(() => { disposed = true; stop() })
+// #endif
+</script>
+<style scoped>
+.pagination-loading { width: 36rpx; height: 36rpx; flex-shrink: 0; }
+.pagination-loading-ring { width: 36rpx; height: 36rpx; border-width: 4rpx; border-style: solid; border-color: #d6f5ff; border-top-color: #00c3ff; border-right-color: #00c3ff; border-radius: 18rpx; box-sizing: border-box; }
+/* #ifndef APP */
+.pagination-loading-ring { animation: pagination-spin 800ms linear infinite; }
+@keyframes pagination-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pagination-loading-ring { animation: none; } }
+/* #endif */
+</style>

@@ -1,0 +1,27 @@
+import { API_BASE_URL } from '@/config/env'
+import { getToken, isLoggedIn } from '@/utils/auth'
+// #ifndef WEB
+import { fileSize } from './file-storage'
+// #endif
+export async function savePostMedia(postId:string,mediaId:number,type:'image'|'video',version:'preview'|'original'='preview') {
+ if(!isLoggedIn()){uni.navigateTo({url:'/pages/login/index'});return}
+ const url=`${API_BASE_URL}/app/post/${encodeURIComponent(postId)}/media/${mediaId}/download?version=${version}`
+ uni.showLoading({title:'准备保存'})
+ try {
+  // #ifdef H5
+  const response=await fetch(url,{headers:{Authorization:'Bearer '+getToken()}})
+  if(!response)throw new Error('保存失败')
+  if(!response.ok||response.headers.get('content-type')?.includes('json')){let message='保存失败';try{message=(await response.json()).msg||message}catch{}throw new Error(message)}
+  const blob=await response.blob(),source=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=source;anchor.download=response.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1]||`${type}-${mediaId}.${type==='video'?'mp4':blob.type.split('/')[1]||'jpg'}`;document.body.appendChild(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(source),10000)
+  // #endif
+  // #ifndef H5
+  let contentType=''
+  const result=await new Promise<DownloadFileSuccess>((resolve,reject)=>{const task=uni.downloadFile({url,header:{Authorization:'Bearer '+getToken()},success:resolve,fail:reject});task.onHeadersReceived?.(event=>{contentType=String(event.header['Content-Type']||event.header['content-type']||'')})})
+  if(contentType.includes('json'))throw new Error('保存被拒绝，请检查下载权限或媒体状态')
+  if(result.statusCode!==200)throw new Error('保存失败或文件仍在生成')
+  const info=await fileSize(result.tempFilePath);if(!info)throw new Error('下载文件为空')
+  await new Promise<void>((resolve,reject)=>{const save=type==='video'?uni.saveVideoToPhotosAlbum:uni.saveImageToPhotosAlbum;save({filePath:result.tempFilePath,success:()=>resolve(),fail:reject} as never)})
+  // #endif
+  uni.showToast({title:'已保存',icon:'success'})
+ } catch(error){uni.showToast({title:error instanceof Error?error.message:'保存失败，请检查相册权限',icon:'none'})} finally{uni.hideLoading()}
+}

@@ -1,0 +1,121 @@
+<template>
+  <cover-view class="mp-fullscreen-controls" :style="{display:active?'block':'none'}" @tap="$emit('reveal')">
+    <cover-view v-if="processing" class="mp-buffering"><cover-view>{{processing}}</cover-view><cover-view v-if="canRetry" class="mp-retry" @tap.stop="$emit('retryProcessing')">重新处理</cover-view></cover-view>
+    <cover-view v-if="waiting && !error" class="mp-buffering">缓冲中…</cover-view>
+    <cover-view v-if="error" class="mp-buffering"><cover-view>{{error}}</cover-view><cover-view class="mp-retry" @tap.stop="$emit('retry')">重试播放</cover-view></cover-view>
+    <cover-view v-if="controls" class="mp-top">
+      <cover-image class="mp-back" aria-role="button" aria-label="返回" src="/static/icons/native/back-white.png" @tap.stop="$emit('back')" />
+      <cover-view class="mp-title">{{title}}</cover-view>
+      <cover-view class="mp-more" @tap.stop="$emit('menu','quality')">⋮</cover-view>
+    </cover-view>
+    <cover-view v-if="controls" class="mp-bottom">
+      <cover-view :id="trackId" class="mp-seek" @touchstart.stop="startSeek" @touchmove.stop.prevent="moveSeek" @touchend.stop="endSeek" @touchcancel.stop="cancelSeek">
+        <cover-view class="mp-track"><cover-view class="mp-progress" :style="{width:displayPercent/10+'%'}" /></cover-view>
+        <cover-view class="mp-thumb" :style="{left:displayPercent/10+'%'}" />
+      </cover-view>
+      <cover-view class="mp-row">
+        <cover-image class="mp-play" aria-role="button" :aria-label="playing?'暂停':'播放'" :src="playing?'/static/icons/native/pause-white.png':'/static/icons/native/play-white.png'" @tap.stop="$emit('toggle')" />
+        <cover-view class="mp-time">{{clock(time)}}/{{clock(duration)}}</cover-view>
+        <cover-view class="mp-spacer" />
+        <cover-view class="mp-speed" @tap.stop="$emit('menu','speed')">{{speed===1?'倍速':speed+'×'}}</cover-view>
+        <cover-view class="mp-quality" @tap.stop="$emit('menu','quality')">{{quality==='auto'?'自动'+(actualLevel?' · '+actualLevel+'P':''):quality+'P'}}</cover-view>
+        <cover-image class="mp-exit" aria-role="button" aria-label="全屏" src="/static/icons/native/fullscreen-white.png" @tap.stop="$emit('back')" />
+      </cover-view>
+    </cover-view>
+    <cover-view v-if="!controls" class="mp-minimal"><cover-view class="mp-progress" :style="{width:percent/10+'%'}" /></cover-view>
+    <cover-view v-if="menu" class="mp-menu" :style="{height:menuHeight+'px'}" @tap.stop>
+      <cover-view class="mp-menu-title">{{menu==='quality'?'清晰度':'播放速度'}}</cover-view>
+      <cover-view v-if="menu==='quality'">
+        <cover-view class="mp-menu-item" :class="{selected:quality==='auto'}" @tap="$emit('quality','auto')">自动</cover-view>
+        <cover-view v-for="level in levels" :key="level" class="mp-menu-item" :class="{selected:quality===level,disabled:!available(level)}" @tap="pickLevel(level)">{{level}}P{{!available(level)?'（不可用）':''}}</cover-view>
+        <cover-view v-for="level in sourceLevels" :key="level" class="mp-menu-item" @tap="$emit('quality',level)">源画质 {{level}}P</cover-view>
+      </cover-view>
+      <cover-view v-else>
+        <cover-view v-for="value in speeds" :key="value" class="mp-menu-item" :class="{selected:speed===value}" @tap="$emit('speed',value)">{{value}}×</cover-view>
+      </cover-view>
+      <cover-view class="mp-menu-item" @tap="$emit('menu',menu==='quality'?'speed':'quality')">{{menu==='quality'?'倍速':'清晰度'}}</cover-view>
+      <cover-view class="mp-menu-item" @tap="$emit('save')">保存视频</cover-view>
+      <cover-view class="mp-menu-separator" />
+      <cover-view class="mp-menu-item" @tap="$emit('menu','')">关闭</cover-view>
+    </cover-view>
+  </cover-view>
+</template>
+<script setup lang="uts">
+import { computed, getCurrentInstance, onBeforeUnmount, ref, watch } from 'vue'
+const props=defineProps<{active:boolean;title:string;controls:boolean;playing:boolean;waiting:boolean;error:string;time:number;duration:number;quality:string|number;actualLevel:number;speed:number;menu:string;availableLevels:number[];processing:string;canRetry:boolean}>()
+const emit=defineEmits<{reveal:[];back:[];toggle:[];retry:[];retryProcessing:[];save:[];menu:[value:string];quality:[value:string|number];speed:[value:number];seek:[value:number];dragging:[value:boolean]}>()
+const instance=getCurrentInstance()!.proxy,trackId='ct-mp-seek-'+getCurrentInstance()!.uid
+const levels=[1080,720,480,360],speeds=[.5,.75,1,1.25,1.5,2]
+const sourceLevels=computed(()=>props.availableLevels.filter(value=>value<360))
+const percent=computed(()=>props.duration>0?Math.max(0,Math.min(1000,props.time/props.duration*1000)):0)
+const dragged=ref<number|null>(null),displayPercent=computed(()=>dragged.value??percent.value)
+const menuHeight=computed(()=>{
+  const info=uni.getWindowInfo(),width=Math.max(info.windowWidth,info.windowHeight),height=Math.min(info.windowWidth,info.windowHeight)
+  const rows=props.menu==='quality'?8+sourceLevels.value.length:9
+  return Math.min(height*.9,(rows*48+44+32)*width/750)
+})
+let trackLeft=0,trackWidth=0,seeking=false,gesture=0,latestX=0,finishRequested=false
+let measurementTimer:ReturnType<typeof setTimeout>|undefined
+type SeekTouch={touches:{clientX:number}[];changedTouches?:{clientX:number}[]}
+function clock(value:number):string{if(!Number.isFinite(value))return'00:00';return String(Math.floor(value/60)).padStart(2,'0')+':'+String(Math.floor(value%60)).padStart(2,'0')}
+function available(level:number):boolean{return props.availableLevels.includes(level)}
+function pickLevel(level:number){if(available(level))emit('quality',level)}
+function position(x:number){if(trackWidth>0)dragged.value=Math.max(0,Math.min(1000,(x-trackLeft)/trackWidth*1000))}
+function startSeek(event:SeekTouch){
+  if(!event.touches.length)return
+  clearTimeout(measurementTimer)
+  const token=++gesture
+  latestX=event.touches[0]!.clientX;trackWidth=0;finishRequested=false;dragged.value=null
+  seeking=true;emit('dragging',true)
+  measurementTimer=setTimeout(cancelSeek,500)
+  // The video owns this cover-view, including in native fullscreen. Measure there, not in the page's old portrait coordinates.
+  uni.createSelectorQuery().in(instance).select('#'+trackId).boundingClientRect(value=>{
+    if(!seeking||token!==gesture)return
+    if(!value){cancelSeek();return}
+    const rect=value as {left:number;width:number};trackLeft=rect.left;trackWidth=rect.width;position(latestX)
+    clearTimeout(measurementTimer)
+    if(finishRequested)commitSeek()
+  }).exec()
+}
+function moveSeek(event:SeekTouch){if(seeking&&event.touches.length){latestX=event.touches[0]!.clientX;position(latestX)}}
+function endSeek(event:SeekTouch){
+  if(!seeking)return
+  if(event.changedTouches?.length)latestX=event.changedTouches[0]!.clientX
+  finishRequested=true
+  if(trackWidth>0){position(latestX);commitSeek()}
+}
+function commitSeek(){
+  clearTimeout(measurementTimer)
+  const value=dragged.value;seeking=false;gesture++;dragged.value=null;emit('dragging',false)
+  if(value!=null)emit('seek',value)
+}
+function cancelSeek(){clearTimeout(measurementTimer);const wasSeeking=seeking;seeking=false;gesture++;dragged.value=null;if(wasSeeking)emit('dragging',false)}
+watch(()=>props.active,active=>{if(!active)cancelSeek()})
+onBeforeUnmount(cancelSeek)
+</script>
+<style scoped>
+.mp-fullscreen-controls{position:absolute;top:0;right:0;bottom:0;left:0;color:#ffffff;}
+.mp-top{position:absolute;top:0;left:0;right:0;height:180px;padding:40px 7.5%;display:flex;flex-direction:row;align-items:flex-start;background-color:#0006;}
+.mp-back,.mp-more,.mp-play,.mp-exit{width:32px;height:32px;line-height:32px;font-size:32px;text-align:center;flex-shrink:0;}
+.mp-more{margin-left:auto;}
+.mp-title{flex:1;font-size:18px;margin:0 24rpx;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mp-bottom{position:absolute;bottom:0;left:0;right:0;padding:80px 7.5% 30px;background-color:#0006;}
+.mp-row{display:flex;flex-direction:row;align-items:center;}
+.mp-time,.mp-spacer,.mp-speed,.mp-quality,.mp-exit{margin-left:24px;}
+.mp-time,.mp-speed,.mp-quality{font-size:16px;flex-shrink:0;}
+.mp-spacer{flex:1;}
+.mp-quality{border:2rpx solid #fff;border-radius:7rpx;padding:4rpx 18rpx;}
+.mp-seek{position:relative;height:24px;margin-bottom:18px;}
+.mp-track{position:absolute;top:10px;left:0;right:0;height:4px;background:#bfc0c5;}
+.mp-progress{height:100%;background:#24b9fb;}
+.mp-thumb{position:absolute;top:6px;width:12px;height:12px;margin-left:-6px;border-radius:6px;background:#24b9fb;}
+.mp-minimal{position:absolute;bottom:0;left:0;right:0;height:5rpx;background:#ccd1d6;}
+.mp-buffering{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:18rpx;border-radius:12rpx;font-size:23rpx;text-align:center;background:#0009;}
+.mp-retry{margin-top:12rpx;color:#15b9ff;}
+.mp-menu{position:absolute;right:18rpx;bottom:18rpx;width:180px;overflow-y:scroll;background:#202124ed;border-radius:16rpx;padding:16rpx 0;}
+.mp-menu-title{font-size:20rpx;text-align:center;color:#aaa;padding:8rpx;}
+.mp-menu-item{font-size:23rpx;text-align:center;padding:8rpx;line-height:32rpx;}
+.mp-menu-separator{height:1rpx;background-color:#ffffff26;}
+.selected{color:#20baff;}
+.disabled{color:#777;}
+</style>

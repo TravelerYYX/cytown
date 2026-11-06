@@ -1,0 +1,10 @@
+import { computed, ref } from 'vue'
+
+
+/** Tab visibility AND its containing native page's visibility. */
+export function usePaneVisibility(active: () => boolean) {
+  const shown = ref(true)
+  onShow(() => { shown.value = true })
+  onHide(() => { shown.value = false })
+  return computed(() => active() && shown.value)
+}

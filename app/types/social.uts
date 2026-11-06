@@ -1,0 +1,8 @@
+export type SocialKind = 'reply' | 'repost' | 'mention' | 'like' | 'follow'
+export interface SocialSummary { reply:number; repost:number; mention:number; like:number; follow:number; unreadCount:number }
+export interface SocialNotification {
+  id:string; actorId:string; type:string; postId:string|null; commentId:string|null
+  nickname:string; avatar:string; createTime:string; isRead:boolean
+  postLabel:string; coverUrl:string; content:string; contentType:string; stickerUrl:string
+  following:boolean; followedBy:boolean
+}

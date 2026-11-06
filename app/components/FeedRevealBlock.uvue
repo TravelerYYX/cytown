@@ -1,0 +1,116 @@
+<template>
+  <view v-if="enabled &amp;&amp; feed != null" class="feed-reveal-block" :class="{'feed-reveal-covered': covered, 'feed-reveal-running': running}" :style="{ pointerEvents: covered ? 'none' : 'auto' }">
+    <view :id="prefix+'-content'" class="feed-reveal-content" :class="['feed-reveal-'+kind]" :style="contentStyle"><slot /></view>
+    <view v-if="masked" :id="prefix+'-mask'" class="feed-reveal-mask" :class="['feed-reveal-mask-'+kind]" :style="maskStyle">
+      <template v-if="kind === 'author'">
+        <view class="feed-reveal-avatar" />
+        <view class="feed-reveal-name" />
+      </template>
+      <template v-else-if="kind === 'text'">
+        <view class="feed-reveal-title" /><view class="feed-reveal-line" />
+      </template>
+      <template v-else-if="kind === 'footer'">
+        <view class="feed-reveal-small-avatar" /><view class="feed-reveal-small-name" />
+      </template>
+      <template v-else-if="kind === 'actions'"><view class="feed-reveal-action" /><view class="feed-reveal-action" /></template>
+    </view>
+  </view>
+  <slot v-else />
+</template>
+<script setup lang="uts">
+import { computed, getCurrentInstance, inject, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { feedRevealKey } from '@/composables/useFeedReveal'
+import { uxMedia, uxNative } from '@/utils/native-styles'
+const props = withDefaults(defineProps<{ kind?: string; order?: number; enabled?: boolean; ready?: boolean }>(), { kind: 'media', order: 0, enabled: true, ready: true })
+const feed = inject(feedRevealKey, null)
+const prefix = 'feed-reveal-' + getCurrentInstance()!.uid
+const covered = computed(() => props.enabled && feed != null && !feed.restoring.value && (!props.ready || feed.phase.value === 'loading' || feed.phase.value === 'preparing'))
+const lateReveal = ref(false)
+let timer: ReturnType<typeof setTimeout> | undefined
+let counted = false
+watch(() => props.enabled && feed != null && !feed.restoring.value && !props.ready, waiting => {
+  if (waiting === counted || !feed) return
+  counted = waiting; feed.waitingMedia.value += waiting ? 1 : -1
+}, { immediate: true, flush: 'sync' })
+watch(covered, (value, previous) => {
+  clearTimeout(timer)
+  lateReveal.value = !feed?.restoring.value && !value && previous
+  if (lateReveal.value) timer = setTimeout(() => { lateReveal.value = false }, 440)
+}, { flush: 'sync' })
+onBeforeUnmount(() => { clearTimeout(timer); if (counted && feed) feed.waitingMedia.value-- })
+const running = computed(() => props.enabled && !feed?.restoring.value && !covered.value && (feed?.phase.value === 'revealing' || lateReveal.value))
+const masked = computed(() => covered.value || running.value)
+const nativeDone = ref(false)
+const hold = computed(() => covered.value || (uxNative && running.value && !nativeDone.value && !uxMedia('(prefers-reduced-motion: reduce)')))
+const contentStyle = computed(() => ({ opacity: hold.value ? 0 : 1, transform: hold.value ? 'translateY(8px)' : 'translateY(0px)', ...(!uxNative ? { transitionDelay: props.order * 60 + 'ms' } : {}) }))
+const maskStyle = computed(() => ({ opacity: hold.value ? 1 : 0, ...(!uxNative ? { transitionDelay: props.order * 60 + 'ms' } : {}) }))
+// Native animations run in the renderer; never drive the Vue tree every frame.
+// #ifdef APP
+let animations: UniAnimation[] = []
+let visibilityFrame = 0, visibilityRevision = 0
+function syncNativeVisibility() {
+  const revision = ++visibilityRevision
+  cancelAnimationFrame(visibilityFrame)
+  void nextTick().then(() => {
+    if (revision !== visibilityRevision) return
+    visibilityFrame = requestAnimationFrame(() => {
+      if (revision !== visibilityRevision || (running.value && !nativeDone.value)) return
+      const content = uni.getElementById(prefix+'-content')
+      content?.style.setProperty('opacity', hold.value ? '0' : '1')
+      content?.style.setProperty('transform', hold.value ? 'translateY(8px)' : 'translateY(0px)')
+      uni.getElementById(prefix+'-mask')?.style.setProperty('opacity', hold.value ? '1' : '0')
+    })
+  })
+}
+function stop() { animations.forEach(animation => animation.cancel()); animations = [] }
+watch(running, value => {
+  stop()
+  nativeDone.value = false
+  if (!value || !props.enabled || !feed?.active() || uxMedia('(prefers-reduced-motion: reduce)')) return
+  const delay = props.order * 60
+  const content = uni.getElementById(prefix+'-content')?.animate([
+    { opacity: 0, transform: 'translateY(8px)', offset: 0 },
+    { opacity: 0, transform: 'translateY(8px)', offset: delay / (240 + delay) },
+    { opacity: 1, transform: 'translateY(0px)', offset: 1 }
+  ], { duration: 240 + delay, easing: 'linear', fill: 'forwards' })
+  const mask = uni.getElementById(prefix+'-mask')?.animate([{ opacity: 1, offset: 0 }, { opacity: 1, offset: delay / (240 + delay) }, { opacity: 0, offset: 1 }], { duration: 240 + delay, easing: 'linear', fill: 'forwards' })
+  for (const animation of [content, mask]) if (animation) {
+    animations.push(animation)
+    animation.onfinish = () => {
+      // cancel() restores the pre-animation native styles. Do it before Vue
+      // commits the visible state, otherwise it restores opacity:0 afterwards.
+      stop()
+      nativeDone.value = true
+    }
+  }
+}, { flush: 'post' })
+watch(() => [hold.value, running.value], syncNativeVisibility, { flush: 'post' })
+onBeforeUnmount(() => { visibilityRevision++; cancelAnimationFrame(visibilityFrame); stop() })
+watch(() => feed?.active(), active => { if (!active) { nativeDone.value = true; stop() } })
+// #endif
+</script>
+<style scoped>
+.feed-reveal-block { position: relative; width: 100%; }
+.feed-reveal-content { width: 100%; min-width: 0; display: flex; flex-direction: column; }
+.feed-reveal-author { flex-direction: row; align-items: center; }
+.feed-reveal-footer { flex-direction: row; align-items: center; justify-content: space-between; }
+.feed-reveal-actions { flex-direction: row; align-items: center; justify-content: flex-end; }
+.feed-reveal-mask { position: absolute; left: 0; right: 0; top: 0; bottom: 0; overflow: hidden; background-color: #ffffff; pointer-events: none; }
+.feed-reveal-mask-media { background-color: #e9ecef; border-radius: 16rpx; }
+.feed-reveal-avatar { position: absolute; top: 10rpx; left: 10rpx; width: 56rpx; height: 56rpx; border-radius: 28rpx; background-color: #e9ecef; }
+.feed-reveal-name { position: absolute; top: 26rpx; left: 92rpx; width: 160rpx; height: 24rpx; border-radius: 6rpx; background-color: #e9ecef; }
+.feed-reveal-title { position: absolute; top: 4rpx; left: 0; width: 76%; height: 24rpx; border-radius: 6rpx; background-color: #e9ecef; }
+.feed-reveal-line { position: absolute; top: 42rpx; left: 0; width: 54%; height: 22rpx; border-radius: 6rpx; background-color: #e9ecef; }
+.feed-reveal-small-avatar { position: absolute; top: 7rpx; left: 7rpx; width: 40rpx; height: 40rpx; border-radius: 20rpx; background-color: #e9ecef; }
+.feed-reveal-small-name { position: absolute; top: 17rpx; left: 60rpx; width: 120rpx; height: 20rpx; border-radius: 5rpx; background-color: #e9ecef; }
+.feed-reveal-mask-actions { display: flex; flex-direction: row; justify-content: flex-end; align-items: center; }
+.feed-reveal-action { width: 70rpx; height: 22rpx; border-radius: 6rpx; margin-left: 44rpx; background-color: #e9ecef; }
+/* #ifndef APP */
+.feed-reveal-running > .feed-reveal-content { transition-property: opacity, transform; transition-duration: 240ms; transition-timing-function: ease-out; }
+.feed-reveal-running > .feed-reveal-mask { transition-property: opacity; transition-duration: 240ms; transition-timing-function: ease-out; }
+.feed-reveal-actions { gap: 44rpx; }
+@media (prefers-reduced-motion: reduce) {
+  .feed-reveal-content, .feed-reveal-mask { transition: none !important; transform: none !important; }
+}
+/* #endif */
+</style>

@@ -1,0 +1,256 @@
+<template>
+  <!-- #ifdef APP -->
+  <list-view v-if="postItems != null || commentItems != null" :id="hostId" :style="[$attrs.style ?? {}, postVariant === 'mine' ? {backgroundColor:'#ffffff'} : {}]" class="native-pane" :class="$attrs.class" direction="vertical" :scroll-top="requestedTop" :show-scrollbar="showScrollbar" :lower-threshold="lowerThreshold" :bounces="refresherEnabled && !nativeInlineRefresh" :android-overscroll="refresherEnabled && !nativeInlineRefresh" :scroll-anchoring="!nativeInlineRefresh" :refresher-enabled="refresherEnabled && !nativeInlineRefresh" :refresher-triggered="refresherTriggered" :refresher-threshold="refreshThreshold" refresher-default-style="none" refresher-background="#f7f7f7" @scroll="scroll" @scrollend="settle" @scrolltolower="$emit('scrolltolower')" @touchstart="startInlineRefresh" @touchmove="moveContentTouch" @touchend="endContentTouch" @touchcancel="cancelContentTouch" @refresherpulling="pullRefresh" @refresherrestore="resetRefresh" @refresherabort="resetRefresh" @refresherrefresh="$emit('refresherrefresh')">
+    <list-item :type="1"><view :id="hostId+'-before'"><slot name="before" /></view></list-item>
+    <list-item v-for="post in (postItems ?? [])" :key="post.id" :item-key="post.id" :type="2">
+      <view @touchstart="contentSwipe.start" :id="hostId+'-post-'+post.id" :style="postVariant === 'mine' ? {backgroundColor:'#ffffff'} : {}"><FollowPostCard v-if="postVariant === 'follow'" :post="post" :visible="active" :load-priority="10" /><PostCard v-else :manage-post="managePosts" @post-menu="emit('postMenu', $event)" :post="post" :variant="postVariant" :visible="active" :load-priority="10" /></view>
+    </list-item>
+    <list-item v-for="comment in (commentItems ?? [])" :key="'comment-'+comment.id" :type="5">
+      <view @touchstart="contentSwipe.start" :id="hostId+'-comment-'+comment.id"><MineCommentCard :comment="comment" :active="active" /></view>
+    </list-item>
+    <list-item :type="3"><view @touchstart="contentSwipe.start" :id="hostId+'-footer'" :style="postVariant === 'mine' ? {backgroundColor:'#ffffff'} : {}"><view :id="hostId+'-footer-content'"><slot /></view><view v-if="nativeMinimumFill > 0" :style="{height:nativeMinimumFill+'px'}" /></view></list-item>
+    <!-- A disabled native refresher slot still intercepts header taps; omit it entirely. -->
+    <list-item v-if="refresherEnabled && !refreshInline" slot="refresher" :type="4" :style="{width:'100%',height:refreshInline?'0px':refreshThreshold+'px'}"><RefreshIndicator v-if="refresherEnabled && !refreshInline" :height="refreshThreshold" :active="refresherTriggered" /></list-item>
+  </list-view>
+  <!-- #endif -->
+  <scroll-view v-if="!uxNative || (postItems == null && commentItems == null)" :id="hostId" :style="$attrs.style ?? {}" class="native-pane" direction="vertical"  :scroll-top="requestedTop" :show-scrollbar="showScrollbar" :lower-threshold="lowerThreshold" :bounces="refresherEnabled && !nativeInlineRefresh" :android-overscroll="refresherEnabled && !nativeInlineRefresh" :refresher-enabled="refresherEnabled && !nativeInlineRefresh" :refresher-triggered="refresherTriggered" :refresher-threshold="refreshThreshold" refresher-default-style="none" refresher-background="#f7f7f7" @scroll="scroll" @scrollend="settle" @scrolltolower="$emit('scrolltolower')" @touchstart="startInlineRefresh" @touchmove="moveContentTouch" @touchend="endContentTouch" @touchcancel="cancelContentTouch" @refresherpulling="pullRefresh" @refresherrestore="resetRefresh" @refresherabort="resetRefresh" @refresherrefresh="$emit('refresherrefresh')"   :class="[$attrs.class,{'inline-refresher':refreshInline},uxNative?'ux0':'',uxNative?'ux1':'']">
+    <view :style="{ minHeight: minimumContentHeight > 0 ? minimumContentHeight+'px' : '0px' }">
+    <slot name="before" />
+    <!-- #ifndef APP -->
+    <view v-if="postItems != null" class="pane-post-content" :class="transitionDirection" @touchstart="contentSwipe.start">
+      <VirtualPostColumn :posts="postItems" :active="active" :viewport-width="viewportWidth" :variant="postVariant" />
+    </view>
+    <!-- #endif -->
+    <slot />
+    </view>
+    <view v-if="refresherEnabled && !refreshInline" slot="refresher" :style="{width:'100%',height:refreshInline?'0px':refreshThreshold+'px'}"><RefreshIndicator v-if="refresherEnabled && !refreshInline" :height="refreshThreshold" :active="refresherTriggered" /></view>
+  </scroll-view>
+</template>
+<script setup lang="uts">
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, onUpdated, provide, ref, watch } from 'vue'
+import { useFeedAutoplay } from '@/composables/useFeedAutoplay'
+import { useHorizontalSwipe } from '@/composables/useHorizontalSwipe'
+import { useChannelTransition } from '@/composables/useChannelTransition'
+import RefreshIndicator from './RefreshIndicator.uvue'
+import PostCard from './PostCard.uvue'
+import MineCommentCard from './MineCommentCard.uvue'
+import type { MineCommentResponse } from '@/types/post-api'
+import FollowPostCard from './FollowPostCard.uvue'
+// #ifndef APP
+import VirtualPostColumn from './VirtualPostColumn.uvue'
+// #endif
+import type { Post } from '@/types/home.uts'
+import { paneScrollKey, postLayoutKey } from '@/utils/scroll-context'
+import { rectById, setElementStyle } from '@/utils/element-geometry'
+import { observeWindowResize } from '@/utils/window-events'
+import { ScrollAnchors } from '@/utils/scroll-anchors'
+import { InlinePullRefresh } from '@/utils/inline-pull-refresh'
+defineOptions({ inheritAttrs: false })
+const props = withDefaults(defineProps<{ keepScrollSynced?: boolean; videoTopInset?: number; videoBottomInset?: number; managePosts?: boolean; active?: boolean; visualScroll?: (top: number) => void; collapseThreshold?: number; fadeDistance?: number; fadeTarget?: string; scrollTop?: number; showScrollbar?: boolean; lowerThreshold?: number; refresherEnabled?: boolean; refresherTriggered?: boolean; refreshInline?: boolean; postItems?: Post[]; commentItems?: MineCommentResponse[]; postVariant?: 'home' | 'follow' | 'mine'; viewportWidth?: number; minimumContentHeight?: number; swipeEnabled?: boolean; transitionKey?: string; transitionDirection?: string }>(), { keepScrollSynced: false, videoTopInset: 0, videoBottomInset: 0, active: true, collapseThreshold: -1, fadeDistance: 0, fadeTarget: '', scrollTop: 0, showScrollbar: false, lowerThreshold: 120, refresherEnabled: false, refresherTriggered: false, refreshInline: false, postVariant: 'home', viewportWidth: 375, minimumContentHeight: 0, swipeEnabled: false, transitionKey: '', transitionDirection: '' })
+const emit = defineEmits<{ postMenu: [post: Post]; swipe: [direction: number]; scroll: [event: { detail: { scrollTop: number; preserve?: boolean } }]; idle: []; busy: []; scrolltolower: []; refresherrefresh: []; refreshstate: [state: { height: number; dragging: boolean }] }>()
+const contentSwipe = useHorizontalSwipe(() => props.active && props.swipeEnabled && !props.refresherTriggered, () => props.transitionKey, direction => emit('swipe', direction))
+function moveContentTouch(event: UniTouchEvent) { contentSwipe.move(event); moveInlineRefresh(event) }
+function endContentTouch(event: UniTouchEvent) { contentSwipe.end(event); endInlineRefresh() }
+function cancelContentTouch() { contentSwipe.cancel(); cancelInlineRefresh() }
+const instance = getCurrentInstance()!.proxy
+const hostId = 'pane-scroll-' + getCurrentInstance()!.uid
+const requestedTop = ref(props.scrollTop)
+const minimumFill = ref(0)
+const measuredBeforeHeight = ref(0), measuredFooterHeight = ref(0)
+// Empty/loading channels need their space in the same render as the row swap.
+// Waiting for geometry in the next frame lets the native scroller clamp its offset.
+const nativeMinimumFill = computed(() => props.postVariant === 'mine' && !(props.postItems?.length || props.commentItems?.length)
+  ? Math.max(minimumFill.value, props.minimumContentHeight - measuredBeforeHeight.value - measuredFooterHeight.value)
+  : minimumFill.value)
+let minimumFrame = 0, minimumScheduled = false
+const rowHeights = new Map<string,number>()
+const listTransition = useChannelTransition(() => hostId+'-footer', () => props.active, () => [...(props.postItems ?? []).map(post => hostId+'-post-'+post.id), ...(props.commentItems ?? []).map(comment => hostId+'-comment-'+comment.id)])
+let pendingTransition = ''
+watch(() => props.transitionKey, (value, previous) => {
+  rowHeights.clear()
+  pendingTransition = previous && value !== previous ? props.transitionDirection : ''
+  if (pendingTransition) void listTransition.play(pendingTransition)
+  scheduleMinimum()
+})
+// Channel requests clear the list first. Animate the first returned rows as well.
+watch(() => (props.postItems?.length ?? 0) + (props.commentItems?.length ?? 0) > 0, ready => {
+  if (!ready || !pendingTransition) return
+  if (uxNative) void listTransition.play(pendingTransition)
+  pendingTransition = ''
+})
+watch(() => props.active, active => { if (!active) pendingTransition = '' })
+watch(() => props.viewportWidth, () => { rowHeights.clear(); scheduleMinimum() })
+async function measureMinimum(): Promise<void> {
+  // #ifdef APP
+  if (disposed || !props.active || (props.postItems == null && props.commentItems == null) || props.minimumContentHeight <= 0) { minimumFill.value=0; return }
+  await nextTick()
+  const channel = props.transitionKey
+  const before = await rectById(hostId+'-before'), footer = await rectById(hostId+'-footer-content')
+  if (disposed || channel !== props.transitionKey || !before || !footer) return
+  measuredBeforeHeight.value = before.height
+  measuredFooterHeight.value = footer.height
+  let total = before.height + footer.height, unknown = false
+  const rowIds = [...(props.postItems ?? []).map(post => hostId+'-post-'+post.id), ...(props.commentItems ?? []).map(comment => hostId+'-comment-'+comment.id)]
+  for (const rowId of rowIds) {
+    const row = await rectById(rowId)
+    if (row && row.height > 0) rowHeights.set(rowId,row.height)
+    const rowHeight = rowHeights.get(rowId)
+    if (rowHeight == null) unknown=true
+    else total += rowHeight
+    if (total >= props.minimumContentHeight) break
+  }
+  // Never invent heights for unreached cells. A filler is needed only for short, measured lists.
+  const next = unknown ? 0 : Math.max(0,props.minimumContentHeight-total)
+  if (!disposed && channel === props.transitionKey && Math.abs(next-minimumFill.value)>.25) minimumFill.value=next
+  // #endif
+}
+function scheduleMinimum() {
+  if (minimumScheduled || props.minimumContentHeight <= 0 || disposed) return
+  minimumScheduled=true
+  minimumFrame=requestAnimationFrame(() => { minimumScheduled=false; void measureMinimum() })
+}
+const refreshThreshold = uni.rpx2px(210)
+const nativeInlineRefresh = computed(() => uxNative && props.refreshInline)
+const inlinePull = new InlinePullRefresh(refreshThreshold)
+const pulledHeight = ref(0), refreshDragging = ref(false)
+const refreshHeight = computed(() => !props.refresherEnabled || !props.active ? 0 : props.refresherTriggered ? refreshThreshold : pulledHeight.value)
+let top = 0, height = 0, viewportTop = 0, moving = false, zone = -1, disposed = false, restoreRevision = 0
+let visualFrame = 0, visualScheduled = false
+function scheduleVisual(immediate: boolean = false) {
+  if (!props.visualScroll || disposed || !props.active) return
+  // The scroller has already moved. Hand over fixed/flowing headers in this
+  // event, before a fast fling can expose a frame with the old rounded edge.
+  if (immediate) {
+    cancelAnimationFrame(visualFrame)
+    visualScheduled = false
+    props.visualScroll(top)
+    return
+  }
+  if (visualScheduled) return
+  visualScheduled = true
+  visualFrame = requestAnimationFrame(() => {
+    visualScheduled = false
+    if (!disposed && props.active) props.visualScroll?.(top)
+  })
+}
+let idle: ReturnType<typeof setTimeout> | undefined
+const listeners = new Set<() => void>()
+const notify = () => listeners.forEach(listener => listener())
+async function measure() { const rect = await rectById(hostId, instance); if (rect && rect.height > 0 && !disposed) { height = rect.height; viewportTop = rect.top; notify(); scheduleMinimum() } }
+function paint() {
+  if (!props.active) return
+  const nextZone = props.collapseThreshold < 0 ? 0 : top >= props.collapseThreshold ? 2 : props.fadeDistance > 0 && top > props.collapseThreshold - props.fadeDistance ? 1 : 0
+  scheduleVisual(zone >= 0 && nextZone !== zone)
+  if (props.fadeTarget && props.fadeDistance > 0) setElementStyle(props.fadeTarget, 'opacity', String(Math.max(0, Math.min(1, (top - props.collapseThreshold + props.fadeDistance) / props.fadeDistance))))
+  if (nextZone !== zone) { zone = nextZone; emit('scroll', { detail: { scrollTop: top } }) }
+}
+function settle() { clearTimeout(idle); if (!moving) return; moving = false; emit('scroll', { detail: { scrollTop: top } }); emit('idle'); scheduleMinimum() }
+function scroll(event: { detail: { scrollTop: number } }) {
+  if (!props.active || disposed) return
+  top = Math.max(0, event.detail.scrollTop || 0)
+  if (!moving) { moving = true; emit('busy') }
+  paint(); notify(); clearTimeout(idle); idle = setTimeout(settle, 140)
+}
+async function restore(value: number) {
+  const revision = ++restoreRevision
+  if (props.keepScrollSynced) {
+    if (disposed) return
+    // Retained lists already own their layout. Commit the exact offset without
+    // the legacy .1px nudge, which Android can round into a visible pixel jump.
+    requestedTop.value = value
+    top = value
+    paint(); notify()
+    return
+  }
+  await nextTick(); await measure()
+  if (revision !== restoreRevision || disposed || (!props.active && !props.keepScrollSynced)) return
+  requestedTop.value = value + .1
+  await nextTick()
+  if (revision !== restoreRevision || disposed || (!props.active && !props.keepScrollSynced)) return
+  requestedTop.value = value; top = value; paint(); notify()
+}
+const anchors = new ScrollAnchors(() => top, delta => { void restore(Math.max(0, top + delta)) }, commit => { void nextTick().then(() => { if (!disposed) requestAnimationFrame(() => { if (!disposed) commit() }) }) })
+provide(paneScrollKey, { snapshot: () => ({ top, height, viewportTop }), subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) }, moveBy(delta) { void restore(Math.max(0, top + delta)) }, invalidate() { void measure() }, registerAnchor(provider) { return anchors.register(provider) }, preserveLayout(update) { anchors.mutate(update) } })
+const feedAutoplay = useFeedAutoplay(() => props.active && !props.refresherTriggered, async () => {
+  const rect = await rectById(hostId, instance)
+  if (!rect) return null
+  const info = uni.getWindowInfo()
+  const visibleTop = Math.max(rect.top, props.videoTopInset)
+  const bottom = Math.min(rect.bottom, info.windowHeight - props.videoBottomInset)
+  return { top: visibleTop, left: Math.max(0, rect.left), width: Math.max(0, Math.min(rect.left + rect.width, info.windowWidth) - Math.max(0, rect.left)), height: Math.max(0, bottom - visibleTop) }
+}, () => props.transitionKey + ':' + props.refresherTriggered + ':' + (props.postItems ?? []).map(post => post.id).join(','), listener => { listeners.add(listener); return () => listeners.delete(listener) })
+watch(() => [props.videoTopInset, props.videoBottomInset, props.viewportWidth], feedAutoplay.schedule, { flush: 'post' })
+provide(postLayoutKey, () => { scheduleMinimum(); feedAutoplay.schedule() })
+function pullRefresh(event: { detail: { dy?: number; deltaY?: number } }) { if (props.refresherEnabled && props.active && !props.refresherTriggered) { refreshDragging.value = true; pulledHeight.value = Math.max(0, Math.min(refreshThreshold * 1.5, event.detail.dy ?? event.detail.deltaY ?? 0)) } }
+function startInlineRefresh(event: UniTouchEvent) {
+  if (!nativeInlineRefresh.value || !event.touches.length) return
+  const point = event.touches[0]!
+  inlinePull.begin(point.clientX, point.clientY, props.refresherEnabled && props.active && !props.refresherTriggered && top <= .5)
+}
+function moveInlineRefresh(event: UniTouchEvent) {
+  if (!nativeInlineRefresh.value || !event.touches.length || !props.active || props.refresherTriggered) return
+  const point = event.touches[0]!
+  const distance = inlinePull.move(point.clientX, point.clientY)
+  if (distance > 0 || refreshDragging.value) {
+    event.preventDefault()
+    refreshDragging.value = true
+    pulledHeight.value = distance
+  }
+}
+function endInlineRefresh() {
+  if (!nativeInlineRefresh.value) return
+  const refresh = inlinePull.release()
+  refreshDragging.value = false
+  pulledHeight.value = 0
+  if (refresh && props.refresherEnabled && props.active && !props.refresherTriggered) emit('refresherrefresh')
+}
+function cancelInlineRefresh() { if (nativeInlineRefresh.value) resetRefresh() }
+function resetRefresh() { inlinePull.cancel(); pulledHeight.value = 0; refreshDragging.value = false }
+watch(() => [props.refresherTriggered, props.refresherEnabled, props.active], resetRefresh)
+// 5.26 Vapor scoped-slot values do not reliably update nested component props.
+// Forward only the small refresh state; feed data and list cells are untouched.
+watch(() => [refreshHeight.value, refreshDragging.value], () => emit('refreshstate', { height: refreshHeight.value, dragging: refreshDragging.value }), { flush: 'sync' })
+watch(() => props.scrollTop, value => { if (props.active || props.keepScrollSynced) void restore(value) })
+watch(() => props.active, (active, previous) => { if (!active && previous) { emit('scroll', { detail: { scrollTop: top, preserve: true } }); clearTimeout(idle); cancelAnimationFrame(visualFrame); visualScheduled = false; moving = false; restoreRevision++ } else if (active) void restore(props.keepScrollSynced ? props.scrollTop : top) })
+watch(() => props.collapseThreshold, paint)
+const unobserve = observeWindowResize(() => { void measure() })
+onMounted(() => { void measure() })
+onUpdated(scheduleMinimum)
+onBeforeUnmount(() => { disposed = true; restoreRevision++; cancelAnimationFrame(visualFrame); cancelAnimationFrame(minimumFrame); rowHeights.clear(); clearTimeout(idle); listeners.clear(); anchors.dispose(); unobserve() })
+</script>
+<style>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+
+
+.native-pane { width: 100%; height: 100%; }
+.inline-refresher :deep(.uni-scroll-view-refresher) { position: absolute; width: 100%; visibility: hidden; pointer-events: none; }
+.pane-post-content.from-right { animation: pane-channel-from-right 220ms ease-out; }
+.pane-post-content.from-left { animation: pane-channel-from-left 220ms ease-out; }
+@keyframes pane-channel-from-right { from { opacity: .35; transform: translateX(28rpx); } to { opacity: 1; transform: translateX(0); } }
+@keyframes pane-channel-from-left { from { opacity: .35; transform: translateX(-28rpx); } to { opacity: 1; transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .pane-post-content.from-right, .pane-post-content.from-left { animation: none; }
+}
+
+
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+
+.ux2{}
+.ux0{}
+.ux1{width:100%;height:100%;}
+.native-pane{width:100%;height:100%;}
+/* #endif */
+</style>

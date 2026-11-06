@@ -1,0 +1,26 @@
+import { GET } from './request'
+import { openWebLink } from './navigation'
+
+export interface LegalLink { linkUrl: string; openMode: 'browser' | 'inapp' }
+export interface LegalLinks {
+  userAgreement: LegalLink
+  privacyPolicy: LegalLink
+  personalInfoCollection: LegalLink
+}
+
+export function fetchLegalLinks(): Promise<LegalLinks> {
+  return GET<LegalLinks>('/app/legal-links', undefined, true)
+}
+
+export function openLegalLink(link: LegalLink | undefined, title: string): void {
+  const url = link?.linkUrl?.trim() || ''
+  if (!url) {
+    uni.showToast({ title: '暂未配置链接', icon: 'none' })
+    return
+  }
+  if (!/^https?:\/\/[^\s/]+(?:[/?#][^\s]*)?$/i.test(url) || (link?.openMode !== 'browser' && link?.openMode !== 'inapp')) {
+    uni.showToast({ title: '链接配置无效，请稍后重试', icon: 'none' })
+    return
+  }
+  openWebLink(url, title, link.openMode)
+}

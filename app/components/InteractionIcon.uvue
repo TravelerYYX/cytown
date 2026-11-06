@@ -1,0 +1,87 @@
+<template>
+  <view class="interaction-icon" :class="[{playing},uxNative?'ux0':'',uxNative?'ux7':'']" :data-play-signal="playSignal" :data-active="active" :data-enabled="enabled" :data-page-visible="pageVisible" :style="{ width: size + 'rpx', height: size + 'rpx', transform: 'scale(' + artworkScale + ')' }">
+    <image v-if="playing" :key="'frames-' + kind + '-' + playbackId" class="interaction-frames" :class="[kind,uxNative?'ux9':'',uxNative&amp;&amp;uxClass(kind,&quot;like&quot;)?'ux10':'',uxNative&amp;&amp;uxClass(kind,&quot;favorite&quot;)?'ux11':'']" :style="sprite.style.value" :src="uiAsset(base + kind + '-frames.png')" mode="scaleToFill" @load="start" @error="stop" />
+    <image v-else :key="'static-' + kind + '-' + variant + '-' + active" class="interaction-static" :src="uiAsset(staticSource)" mode="aspectFit"  :class="[uxNative?'ux8':'']"/>
+  </view>
+</template>
+<script setup lang="uts">
+import { uiAsset } from '@/utils/ui-assets'
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { useSpriteFrames } from '@/composables/useSpriteFrames'
+// #ifdef APP
+import { probeImageInfo } from '@/utils/image-info'
+// #endif
+
+const props = withDefaults(defineProps<{ kind: 'like' | 'favorite'; active: boolean; playSignal?: number; size?: number; variant?: 'feed' | 'detail' | 'white'; enabled?: boolean; idleSrc?: string; activeSrc?: string }>(), { size: 42, variant: 'detail', enabled: true, playSignal: 0 })
+const base = '/static/images/interactions/'
+const sprite = useSpriteFrames(() => props.kind === 'like' ? 26 : 33, 1440, 40)
+const playing = ref(false), playbackId = ref(0)
+const loaded = ref(false)
+// The feed outline occupies 69% of its canvas height; the orange artwork occupies 83%.
+// Scale both the animation and selected artwork together without changing the layout slot.
+const artworkScale = computed(() => props.kind === 'like' && props.variant === 'feed' && props.active && (!props.activeSrc || playing.value) ? 0.84 : 1)
+let pageVisible = true, disposed = false
+let timer: ReturnType<typeof setTimeout> | undefined
+const staticSource = computed(() => props.active ? props.activeSrc || base + props.kind + '-active.png' : props.idleSrc || (props.kind === 'like' && props.variant === 'feed' ? base + 'feed-like.png' : props.kind === 'like' && props.variant === 'white' ? '/static/icons/like-white.svg' : base + props.kind + '-idle.png'))
+function stop() { sprite.stop(); clearTimeout(timer); timer = undefined; playing.value = false }
+function play() {
+  stop()
+  if (disposed || !props.active || !props.enabled || !pageVisible) return
+  loaded.value = false; sprite.frame.value = 0; playbackId.value++; playing.value = true
+  timer = setTimeout(stop, 5000)
+  // A decoded local atlas can hit the native image cache without a load event.
+  // Confirm decoding independently; start() is idempotent for this playback.
+  // #ifdef APP
+  const current = playbackId.value
+  void nextTick(() => probeImageInfo(uiAsset(base + props.kind + '-frames.png'), () => {
+    if (current === playbackId.value) start()
+  }, () => {}))
+  // #endif
+}
+function start() { if (loaded.value || !playing.value || !pageVisible || !props.active || !props.enabled) return; clearTimeout(timer); loaded.value = true; sprite.start(); timer = setTimeout(stop, 1440) }
+watch(() => [props.active, props.enabled], ([active, enabled]) => { if (!active || !enabled) stop() })
+watch(() => props.playSignal, (value, previous) => {
+  // Recycled cells reset their signal; restoring a selected row must stay still.
+  if (value <= previous) { stop(); return }
+  void nextTick().then(() => { if (props.playSignal === value) play() })
+}, { flush: 'post' })
+onShow(() => { pageVisible = true })
+onHide(() => { pageVisible = false; stop() })
+onBeforeUnmount(() => { disposed = true; stop() })
+defineExpose({ play, stop })
+</script>
+<style>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+@import '@/styles/interaction-frames.css';
+.interaction-icon { position: relative; display: block; overflow: hidden; flex-shrink: 0; }
+.interaction-static { display: block; width: 100%; height: 100%; }
+.interaction-frames { display: block; max-width: none; height: 100%; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+
+.ux0{}
+
+
+
+
+
+
+.ux7{position:relative;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;}
+.ux8{display:flex;flex-direction:column;width:100%;height:100%;}
+.ux9{display:flex;flex-direction:column;height:100%;}
+.ux10{width:2600%;}
+.ux11{width:3300%;}
+/* #endif */
+</style>

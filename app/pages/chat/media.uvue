@@ -1,0 +1,41 @@
+<template><view class="chat-media-page" :style="{paddingTop:statusBarHeight+'px',paddingBottom:bottomInset+'px'}"><view class="chat-media-header"><ActionButton class="chat-media-button" aria-label="返回" @tap="back"><text class="chat-media-icon">‹</text></ActionButton><text class="chat-media-title">{{message?.kind==='video'?'视频':'图片'}}</text><ActionButton v-if="message?.kind!=='video'&&message?.asset" class="chat-media-button" aria-label="图片详情" @tap="details=!details"><text class="chat-info-icon">!</text></ActionButton><view v-else class="chat-media-button" /></view><view class="chat-media-content"><image v-if="message?.kind!=='video'&&source" class="chat-full-image" :src="source" mode="aspectFit" />
+<!-- #ifdef WEB -->
+<ChatWebVideo v-if="message?.kind==='video'&&source" :source="source" :active="visible" @error="playError" />
+<!-- #endif -->
+<!-- #ifndef WEB -->
+<video v-if="message?.kind==='video'&&source" id="chat-full-video" class="chat-full-image" :src="source" :poster="poster" :autoplay="true" :controls="true" object-fit="contain" @error="playError" />
+<!-- #endif -->
+<text v-if="error||!source" class="chat-media-hint">{{error||'正在加载…'}}</text></view><ActionButton v-if="message?.kind!=='video'&&source" class="chat-save" :disabled="saving" @tap="save"><text class="chat-save-text">{{saving?'保存中…':'保存到本地'}}</text></ActionButton><view v-if="details&&message?.asset" class="chat-details-mask" @tap="details=false"><view class="chat-details" @tap.stop="noop"><text class="chat-details-title">图片详情</text><text class="chat-details-text">大小：{{formatSize(message!.asset!.sizeBytes)}}</text><text class="chat-details-text">分辨率：{{message!.asset!.width}} × {{message!.asset!.height}}</text><text class="chat-details-text">格式：{{message!.asset!.extension.toUpperCase()}}</text></view></view></view></template>
+<script setup lang="uts">
+import {ref,watch} from 'vue'
+// #ifdef WEB
+import ChatWebVideo from '@/components/ChatWebVideo.uvue'
+// #endif
+import {useWindowInsets} from '@/composables/useWindowInsets'
+import ActionButton from '@/components/ActionButton.uvue'
+import {cloudChatHidden,chatOwner} from '@/utils/chat-local'
+import {authRevision} from '@/utils/auth'
+import {chatMessage} from '@/utils/chat-api'
+import {chatRows,chatRevision,chatCover,mergeChatMessage} from '@/utils/chat-state'
+import {chatCachedImage,chatVideoSource,saveChatImage} from '@/utils/chat-cache'
+import type {ChatMessage} from '@/types/chat'
+const {statusBarHeight,bottomInset}=useWindowInsets(),message=ref<ChatMessage|null>(null),source=ref(''),poster=ref(''),error=ref(''),details=ref(false),saving=ref(false)
+let id='',conversation='',owner=chatOwner(),generation=0
+const visible=ref(true)
+onShow(()=>{visible.value=true})
+const noop=()=>{}
+onLoad(q=>{id=String(q?.id||'');conversation=String(q?.conversation||'');void load()})
+async function load(){const token=++generation;error.value='';try{message.value=chatRows(conversation).find(x=>x.id===id)||await chatMessage(id);if(message.value.revoked||!message.value.asset)throw new Error('消息已撤销');const current=message.value;await mergeChatMessage(current);if(token!==generation||cloudChatHidden(current))return;let nextSource='';if(current.kind==='video'){const nextPoster=await chatCover(current.asset!);if(token!==generation||cloudChatHidden(current))return;poster.value=nextPoster;nextSource=await chatVideoSource(current)}else nextSource=await chatCachedImage(current.asset!);if(token!==generation||cloudChatHidden(current))return;source.value=nextSource;void chatMessage(id).then(latest=>{if(latest.revoked||latest.deleted)stopRevoked()}).catch(()=>{})}catch(e){error.value=e instanceof Error?e.message:'媒体加载失败'}}
+function stopRevoked(){generation++;source.value='';error.value='消息已撤销或删除';uni.createVideoContext('chat-full-video')?.stop()}
+watch(chatRevision,()=>{const current=chatRows(conversation).find(x=>x.id===id);if(current?.revoked||message.value&&cloudChatHidden(message.value))stopRevoked()})
+watch(authRevision,()=>{if(owner!==chatOwner()){stopRevoked();back()}})
+onHide(()=>{visible.value=false;uni.createVideoContext('chat-full-video')?.pause()})
+onUnload(()=>{generation++;uni.createVideoContext('chat-full-video')?.stop()})
+function back(){getCurrentPages().length>1?uni.navigateBack():uni.reLaunch({url:'/pages/index/index?tab=message'})}
+async function save(){if(!message.value||saving.value)return;saving.value=true;try{await saveChatImage(message.value)}catch(e){uni.showToast({title:e instanceof Error?e.message:'保存失败，请检查相册权限',icon:'none'})}finally{saving.value=false}}
+function playError(){error.value='视频播放失败，请返回后重试'}
+const formatSize=(bytes:number)=>bytes>=1024*1024?(bytes/1024/1024).toFixed(2)+' MB':(bytes/1024).toFixed(1)+' KB'
+</script>
+<style scoped>
+.chat-media-page{position:fixed;top:0;right:0;bottom:0;left:0;background-color:#101416;display:flex;flex-direction:column}.chat-media-header{height:52px;display:flex;flex-direction:row;align-items:center;flex-shrink:0}.chat-media-button{width:54px;height:50px;padding:0;margin:0;background-color:transparent;border-width:0;display:flex;align-items:center;justify-content:center}.chat-media-icon{font-size:36px;color:#fff}.chat-info-icon{font-size:16px;color:#e1e7eb;border:1px solid #e1e7eb;border-radius:12px;width:23px;height:23px;line-height:22px;text-align:center}.chat-media-title{flex:1;color:#fff;font-size:16px;text-align:center}.chat-media-content{flex:1;position:relative;display:flex;align-items:center;justify-content:center}.chat-full-image{width:100%;height:100%}.chat-media-hint{position:absolute;color:#bac3c9;font-size:14px;padding:20px}.chat-save{height:44px;margin:14px 60px 24px;padding:0;border-radius:22px;background-color:#ffffff22;display:flex;align-items:center;justify-content:center;border-width:0;flex-shrink:0}.chat-save-text{color:#fff;font-size:14px}.chat-details-mask{position:fixed;top:0;right:0;bottom:0;left:0;background-color:#00000066;display:flex;align-items:center;justify-content:center}.chat-details{width:260px;border-radius:16px;background-color:#fff;padding:24px;display:flex;flex-direction:column}.chat-details-title{font-size:17px;color:#29353d;margin-bottom:18px}.chat-details-text{font-size:14px;color:#66757f;margin-bottom:12px}
+</style>

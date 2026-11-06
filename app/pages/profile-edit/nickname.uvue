@@ -1,0 +1,118 @@
+<template>
+  <view class="nickname-page" :style="{ paddingTop: statusBarHeight + 'px' }" :class="[uxNative?'ux0':'',uxNative?'ux1':'']">
+    <view class="edit-nav" :class="[uxNative?'ux0':'',uxNative?'ux2':'']">
+      <ActionButton class="back-button" aria-label="返回" @tap="back" :class="[uxNative?'ux3':'',uxNative?'ux4':'']"><AppIcon name="back" :size="42" /></ActionButton>
+      <text class="nav-title" :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux8':'']">昵称</text>
+      <ActionButton :aria-label="String(saving ? '保存中' : '保存')" class="nav-save" :disabled="saving" @tap="save" :class="[uxNative?'ux3':'',uxNative?'ux9':'',uxNative&amp;&amp;!!saving?'ux10':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux11':'',uxNative&amp;&amp;!!saving?'ux12':'',uxNative?'ux7':'']">{{ saving ? '保存中' : '保存' }}</text></ActionButton>
+    </view>
+
+    <view class="nickname-content" :class="[uxNative?'ux0':'',uxNative?'ux13':'']">
+      <view class="input-wrap" :class="[uxNative?'ux0':'',uxNative?'ux14':'']">
+        <input v-model="nickname" maxlength="20" :disabled="saving" placeholder="请输入昵称"  :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux15':'',uxNative?'ux16':'']" :style="uxLayout(uxNodePrefix+'-g1000',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;56rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'"/>
+        <ActionButton v-if="nickname" class="clear-button" aria-label="清空" @tap="nickname = ''" :class="[uxNative?'ux3':'',uxNative?'ux17':'']" :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;56rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1001'"><text :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux18':'',uxNative?'ux7':'']">×</text></ActionButton>
+        <text class="counter" :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux19':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;56rpx&quot;}},{on:true,declarations:{__index:String(0+1+(nickname?1:0))}}],{})" :id="uxNodePrefix+'-g1002'">{{ count }}/20</text>
+      </view>
+    </view>
+    <EyeCareOverlay />
+  </view>
+</template>
+
+<script setup lang="uts">
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, ref } from 'vue'
+
+import AppIcon from '@/components/AppIcon.uvue'
+import EyeCareOverlay from '@/components/EyeCareOverlay.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { getUserInfo, isLoggedIn, saveUserInfo } from '@/utils/auth'
+import { updateNickname } from '@/utils/auth-api'
+
+const { statusBarHeight } = useWindowInsets()
+const user = ref(getUserInfo())
+const nickname = ref(user.value?.nickname || '')
+const saving = ref(false)
+let disposed = false
+const count = computed(() => [...nickname.value].length)
+
+function back() { getCurrentPages().length > 1 ? uni.navigateBack() : uni.reLaunch({ url: '/pages/index/index' }) }
+async function save() {
+  if (saving.value) return
+  const value = nickname.value.trim()
+  const length = [...value].length
+  if (length < 2 || length > 20) { uni.showToast({ title: '昵称支持2-20个字符', icon: 'none' }); return }
+  saving.value = true
+  try {
+    const updated = await updateNickname(value)
+    if (disposed) return
+    user.value = updated
+    saveUserInfo(updated)
+    nickname.value = updated.nickname
+    uni.showToast({ title: '已保存', icon: 'success' })
+    setTimeout(() => { if (!disposed) uni.navigateBack() }, 600)
+  } catch { /* 请求层统一提示。 */ } finally { saving.value = false }
+}
+onShow(() => {
+  if (!isLoggedIn()) { uni.reLaunch({ url: '/pages/login/index' }); return }
+  user.value = getUserInfo()
+  nickname.value = user.value?.nickname || ''
+})
+onUnload(() => { disposed = true })
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.nickname-page { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; background: #fff; color: #202426; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.edit-nav { position: relative; display: flex; align-items: center; justify-content: center; height: 118rpx; flex-shrink: 0; flex-direction: row; }
+.nav-title { color: #202426; font-size: 31rpx; font-weight: 600; }
+.back-button { position: absolute; left: 28rpx; top: 50%; display: flex; align-items: center; justify-content: center; width: 58rpx; height: 68rpx; margin: 0; padding: 0; transform: translateY(-50%); border: 0; border-radius: 0; background: transparent; flex-direction: row; }
+.nav-save { position: absolute; right: 34rpx; top: 50%; width: 128rpx; height: 58rpx; margin: 0; padding: 0; transform: translateY(-50%); border: 0; border-radius: 10rpx; background: #20a5f5; color: #fff; font-size: 25rpx; line-height: 58rpx; }
+.back-button::after,.nav-save::after,.clear-button::after { border: 0; }
+.nav-save[disabled] { background: #20a5f5; color: #fff; opacity: .65; }
+.nickname-content { padding: 25rpx 18rpx 0; }
+.input-wrap { display: flex; align-items: center; gap: 18rpx; height: 86rpx; padding: 0 28rpx 0 34rpx; border: 0; border-radius: 25rpx; background: #f4f6f7; flex-direction: row; }
+.input-wrap input { min-width: 0; height: 86rpx; flex: 1; color: #202426; font-size: 27rpx; }
+.clear-button { display: flex; align-items: center; justify-content: center; width: 32rpx; height: 32rpx; flex-shrink: 0; margin: 0; padding: 0 0 3rpx; border: 0; border-radius: 50%; background: #c6ccd0; color: #fff; font-size: 29rpx; font-weight: 600; line-height: 1; flex-direction: row; }
+.counter { flex-shrink: 0; color: #999fa3; font-size: 22rpx; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux5{color:var(--text-main);font-size:26rpx;}
+.ux6{color:#202426;}
+.ux11{color:#fff;font-size:25rpx;line-height:58rpx;}
+.ux12{color:#fff;}
+.ux18{color:#fff;font-size:29rpx;font-weight:600;line-height:29rpx;}
+.ux0{}
+.ux7{}
+.ux15{}
+.ux3{}
+.ux1{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;overflow:hidden;background-color:#fff;color:#202426;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);}
+.ux2{position:relative;display:flex;flex-direction:row;align-items:center;justify-content:center;height:118rpx;flex-shrink:0;}
+.ux8{color:#202426;font-size:31rpx;font-weight:600;}
+.ux4{position:absolute;left:28rpx;top:50%;display:flex;flex-direction:row;align-items:center;justify-content:center;width:58rpx;height:68rpx;margin:0;padding:0;transform:translateY(-50%);border:0px;border-radius:0;background-color:transparent;}
+.ux9{position:absolute;right:34rpx;top:50%;width:128rpx;height:58rpx;margin:0;padding:0;transform:translateY(-50%);border:0px;border-radius:10rpx;background-color:#20a5f5;color:#fff;font-size:25rpx;line-height:58rpx;}
+.ux13{padding:25rpx 18rpx 0;}
+.ux14{display:flex;flex-direction:row;align-items:center;height:86rpx;padding:0 28rpx 0 34rpx;border:0px;border-radius:25rpx;background-color:#f4f6f7;}
+.ux17{display:flex;flex-direction:row;align-items:center;justify-content:center;width:32rpx;height:32rpx;flex-shrink:0;margin:0;padding:0 0 3rpx;border:0px;border-radius:50%;background-color:#c6ccd0;color:#fff;font-size:29rpx;font-weight:600;line-height:29rpx;}
+.ux19{flex-shrink:0;color:#999fa3;font-size:22rpx;}
+.ux16{min-width:0;height:86rpx;flex:1;color:#202426;font-size:27rpx;}
+.ux10{background-color:#20a5f5;color:#fff;opacity:.65;}
+/* #endif */
+</style>

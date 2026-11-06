@@ -1,0 +1,16 @@
+import type { Post } from '@/types/home'
+export const followPosts: Post[] = [
+  {
+    id: 'follow-1', author: { id: 'f1', nickname: '我、是七七吖', verify: 'creator', time: '1小时前·在原神发布了帖子' },
+    title: '他的我的心里，永远停留在了那一年！',
+    media: [{ type: 'video', layout: 'wide', aspectRatio: 16 / 9, duration: '00:39' }],
+    commentCount: 0, likeCount: 9
+  },
+  {
+    id: 'follow-2', author: { id: 'f2', nickname: '笑竹君GM', verify: 'creator', time: '11小时前·在崩坏：星穹铁道发布了帖子' },
+    title: '《周天哥霸气护妹！大禽输后哭泣超滑稽，还赚回一条命？》',
+    content: '看似输了一千亿，实则赚大了！',
+    media: [{ type: 'video', layout: 'wide', aspectRatio: 16 / 9, duration: '03:26' }],
+    tags: ['崩坏：星穹铁道'], commentCount: 18, likeCount: 125
+  }
+]

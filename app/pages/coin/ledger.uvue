@@ -1,0 +1,155 @@
+<template>
+  <view class="page">
+    <view :style="{paddingTop: statusBarHeight + 'px'}">
+      <view class="nav">
+        <ActionButton class="nav-side" aria-label="返回" @tap="back"><image class="nav-icon" src="/static/images/coin/back.svg" /></ActionButton>
+        <text class="title">明细查询</text>
+        <view class="nav-side" />
+      </view>
+      <view class="tabs">
+        <view class="tab" @tap="select('earned')">
+          <text :class="direction == 'earned' ? 'selected' : 'muted'">获取记录</text>
+          <view v-if="direction == 'earned'" class="indicator" />
+        </view>
+        <view class="tab" @tap="select('spent')">
+          <text :class="direction == 'spent' ? 'selected' : 'muted'">消耗记录</text>
+          <view v-if="direction == 'spent'" class="indicator" />
+        </view>
+      </view>
+    </view>
+    <scroll-view :scroll-into-view="scrollTarget" class="scroll" direction="vertical" :show-scrollbar="false" :lower-threshold="80" @scrolltolower="loadMore">
+      <view id="coin-ledger-top" class="rows" :style="{paddingBottom: bottomInset + 'px'}">
+        <view v-for="row in rows" :key="row.id" class="row">
+          <view class="left">
+            <text class="row-title">{{ row.title }}</text>
+            <text class="row-detail">{{ row.category }}</text>
+          </view>
+          <view class="right">
+            <view class="amount-line">
+              <text :class="row.amount > 0 ? 'credit' : 'row-amount'">{{ row.amount > 0 ? '+' + row.amount : String(row.amount) }}</text>
+              <text class="currency">次元币</text>
+            </view>
+            <text class="row-detail">{{ row.time }}</text>
+          </view>
+        </view>
+        <text v-if="failed" class="hint" @tap="loadMore">明细加载失败，点击重试</text>
+        <text v-else-if="loading" class="hint">加载中…</text>
+        <text v-else-if="rows.length == 0" class="hint">暂无{{ direction == 'earned' ? '获取' : '消耗' }}记录</text>
+        <text v-else class="hint">{{ nextCursor.length > 0 ? '展示最近8个月的明细记录，上拉获取更多记录' : '展示最近8个月的明细记录' }}</text>
+      </view>
+    </scroll-view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import ActionButton from '@/components/ActionButton.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { isLoggedIn, getSessionGeneration } from '@/utils/auth'
+import { setStatusBar } from '@/utils/platform'
+import { fetchCoinLedger } from '@/utils/coin-api'
+import type { CoinLedgerRow } from '@/utils/coin-api'
+
+const { statusBarHeight, bottomInset } = useWindowInsets()
+const direction = ref('earned')
+interface LedgerTab {
+  rows: CoinLedgerRow[]
+  nextCursor: string
+  loaded: boolean
+  loading: boolean
+  failed: boolean
+}
+
+function emptyTab(): LedgerTab {
+  return { rows: [], nextCursor: '', loaded: false, loading: false, failed: false }
+}
+
+const earned = ref<LedgerTab>(emptyTab())
+const spent = ref<LedgerTab>(emptyTab())
+const current = computed(() => direction.value == 'earned' ? earned.value : spent.value)
+const rows = computed(() => current.value.rows)
+const nextCursor = computed(() => current.value.nextCursor)
+const loading = computed(() => current.value.loading)
+const failed = computed(() => current.value.failed)
+const scrollTarget = ref('')
+let revision = 0
+let session = -1
+
+function reset() {
+  revision++
+  earned.value = emptyTab()
+  spent.value = emptyTab()
+}
+
+function select(tab: string) {
+  if (tab == direction.value) return
+  direction.value = tab
+  scrollTarget.value = ''
+  nextTick(() => { scrollTarget.value = 'coin-ledger-top' })
+  if (!current.value.loaded && !current.value.failed) void loadMore()
+}
+
+async function loadMore() {
+  const tab = current.value
+  if (tab.loading || (tab.loaded && tab.nextCursor.length == 0)) return
+  if (!isLoggedIn()) {
+    uni.redirectTo({ url: '/pages/login/index' })
+    return
+  }
+  const requestRevision = revision
+  const requestSession = getSessionGeneration()
+  tab.loading = true
+  tab.failed = false
+  try {
+    const page = await fetchCoinLedger(direction.value, tab.nextCursor)
+    if (requestRevision == revision && requestSession == getSessionGeneration()) {
+      tab.rows = tab.rows.concat(page.records)
+      tab.nextCursor = page.nextCursor
+      tab.loaded = true
+    }
+  } catch {
+    if (requestRevision == revision && requestSession == getSessionGeneration()) tab.failed = true
+  } finally {
+    if (requestRevision == revision) tab.loading = false
+  }
+}
+
+function back() { uni.navigateBack({ fail: () => { uni.redirectTo({ url: '/pages/coin/index' }) } }) }
+onShow(() => {
+  setStatusBar('dark')
+  const currentSession = getSessionGeneration()
+  if (session != currentSession) {
+    session = currentSession
+    reset()
+    void loadMore()
+  }
+})
+onUnload(() => { revision++ })
+</script>
+
+<style scoped>
+.page { display: flex; flex-direction: column; position: fixed; top: 0; bottom: 0; left: 0; right: 0; background-color: #fff; }
+.nav { height: 64rpx; padding: 0 30rpx; display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+.nav-side { margin: 0; padding: 0; border-width: 0; background-color: transparent; width: 42rpx; height: 48rpx; display: flex; align-items: center; justify-content: center; }
+/* #ifndef APP */
+.nav-side::after { border-width: 0; }
+/* #endif */
+.nav-icon { width: 39rpx; height: 39rpx; }
+.title { color: #232d40; font-size: 34rpx; }
+.tabs { height: 84rpx; display: flex; flex-direction: row; justify-content: center; border-bottom: 2rpx solid #f0f0f0; }
+.tab { width: 202rpx; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 20rpx; position: relative; }
+.selected, .muted { font-size: 31rpx; color: #232d40; }
+.muted { color: #858b97; }
+.indicator { width: 32rpx; height: 10rpx; border-radius: 6rpx; background-color: #009cfe; position: absolute; bottom: 0; }
+.scroll { flex: 1; height: 0; }
+.rows { padding: 0 30rpx; }
+.row { height: 126rpx; border-bottom: 2rpx solid #f0f0f0; display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+.left, .right { display: flex; flex-direction: column; }
+.right { align-items: flex-end; }
+.row-title { color: #232d40; font-size: 27rpx; }
+.row-detail { color: #858b97; font-size: 22rpx; margin-top: 10rpx; }
+.amount-line { display: flex; flex-direction: row; align-items: center; }
+.credit, .row-amount, .currency { color: #858b97; font-size: 22rpx; }
+.credit { color: #f4923e; }
+.currency { margin-left: 10rpx; }
+.hint { display: flex; justify-content: center; text-align: center; font-size: 21rpx; color: #858b97; margin: 58rpx 0; }
+</style>

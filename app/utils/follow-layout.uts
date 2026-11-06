@@ -1,0 +1,47 @@
+import type { MediaSkeletonSpec, Post } from '@/types/home'
+import { mediaAspectRatio } from './media-layout'
+
+// Reference screenshots are 1080 px wide; measurements use the 750 rpx canvas.
+export const FOLLOW_GUTTER = 31.944
+export const FOLLOW_CONTENT_WIDTH = 750 - FOLLOW_GUTTER * 2
+export const FOLLOW_MEDIA_GAP = 6.944
+export const FOLLOW_PORTRAIT_VIDEO_MAX_HEIGHT = 560
+export interface FollowMediaCell { media: MediaSkeletonSpec; index: number; left: number; top: number; width: number; height: number }
+export function getFollowMediaLayout(media: MediaSkeletonSpec[]): { width: number; height: number; cells: FollowMediaCell[]; remaining: number } {
+  if (!media.length) return { width: 0, height: 0, cells: [], remaining: 0 }
+  const width = FOLLOW_CONTENT_WIDTH, gap = FOLLOW_MEDIA_GAP
+  const first = media[0]
+  if (media.length === 1 || first.type === 'video') {
+    const ratio = mediaAspectRatio(first)
+    const height = first.type === 'video' && ratio < 1 ? Math.min(width / ratio, FOLLOW_PORTRAIT_VIDEO_MAX_HEIGHT) : width / ratio
+    const displayWidth = first.type === 'video' && ratio < 1 ? height * ratio : width
+    return { width: displayWidth, height, cells: [{ media: first, index: 0, left: 0, top: 0, width: displayWidth, height }], remaining: 0 }
+  }
+  if (media.length === 2) {
+    const size = (width - gap) / 2
+    return { width, height: size, cells: media.map((item, index) => ({ media: item, index, left: index * (size + gap), top: 0, width: size, height: size })), remaining: 0 }
+  }
+  const small = (width - gap * 2) / 3, large = small * 2 + gap
+  return { width, height: large, cells: media.slice(0, 3).map((item, index) => ({ media: item, index, left: index === 0 ? 0 : large + gap, top: index === 2 ? small + gap : 0, width: index === 0 ? large : small, height: index === 0 ? large : small })), remaining: media.length - 3 }
+}
+
+export function followPublishContext(post: Post, now = Date.now()): string {
+  let time = post.author.time || post.date || ''
+  if (post.createTime) {
+    // The API's local datetime is in Asia/Shanghai; parse it consistently on iOS and Web.
+    const raw = post.createTime.trim().replace(' ', 'T')
+    const timestamp = Date.parse(/^\d{4}-\d{2}-\d{2}T[\d:.]+$/.test(raw) ? raw + '+08:00' : raw)
+    if (Number.isFinite(timestamp)) {
+      const elapsed = Math.max(0, now - timestamp)
+      time = elapsed < 60000 ? '刚刚' : elapsed < 3600000 ? Math.floor(elapsed / 60000) + '分钟前' : elapsed < 86400000 ? Math.floor(elapsed / 3600000) + '小时前' : elapsed < 604800000 ? Math.floor(elapsed / 86400000) + '天前' : post.date || raw.slice(0, 10)
+    }
+  }
+  return (time ? time + '·' : '') + (post.channelName ? '在' + post.channelName : '') + '发布了帖子'
+}
+
+export function followPostHeight(post: Post): number {
+  const title = post.title?.trim() ? Math.ceil(Array.from(post.title).length / 24) * 42 : 0
+  const body = post.content?.trim() ? Math.min(2, Math.ceil(Array.from(post.content).length / 27)) * 38 : 0
+  const media = getFollowMediaLayout(post.media)
+  return 22 + 92 + (title || body ? 22 + title + (body ? (title ? 10 : 0) + body : 0) : 0) + (media.cells.length ? 24 + media.height : 0) + (post.tags?.length ? 22 + 35 : 0) + 16 + 64 + 14 + 1.389
+}

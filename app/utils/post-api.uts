@@ -1,0 +1,60 @@
+import type { Post } from '@/types/home'
+import type { CommentConfig, CommentDeleteResult, CommentResponse, MineCommentResponse, Page, PostResponse } from '@/types/post-api'
+import { ref } from 'vue'
+import { GET, POST, postBestEffort, upload } from './request'
+import { interactionRevision, registerPost } from './interactions'
+import { postPreviewMode,previewRead } from './post-preview'
+import { readCommentPage, readCommentFocus, invalidateCommentHistory } from './comment-state'
+import { getSessionGeneration } from './auth'
+const requestRevisions = new WeakMap<PostResponse, number>()
+async function feed(url: string, data: Record<string, unknown>, silent = false) {
+  const revision = interactionRevision.value
+  const page = await GET<Page<PostResponse>>(url, data, silent)
+  for (const post of page.records) requestRevisions.set(post, revision)
+  return page
+}
+export function toPost(p: PostResponse, revision: number | null = null): Post {
+  const resolvedRevision = revision ?? requestRevisions.get(p) ?? interactionRevision.value
+  return registerPost({
+    id: p.id, pinned: p.pinned, status: p.status, author: { id: p.authorId || '', nickname: p.authorNickname, level: p.authorLevel, avatar: p.authorAvatar, avatarFrameExpiresAt:p.authorAvatarFrameExpiresAt, avatarFrame: p.authorAvatarFrame },
+    title: p.title, content: p.content, date: p.date, createTime: p.createTime, media: p.media, tags: p.tags,
+    mode: p.mode, channelId: p.channelId, channelName: p.channelName, authorPublicUid: p.authorPublicUid, repostOfPostId:p.repostOfPostId,repost:p.repost,
+    contentBlocks: p.contentBlocks, allowDownload: p.allowDownload, downloadWatermark: p.downloadWatermark, original: p.original,
+    likeCount: p.likeCount ?? 0, commentCount: p.commentCount ?? 0,
+    detail: { following: p.following??false, followedBy: p.followedBy??false, bio: p.authorBio, favoriteCount: p.favoriteCount, shareCount: p.shareCount, collection: p.collection, permission: p.permission, liked: p.liked ?? false, favorited: p.favorited ?? false, poll: p.poll }
+  }, resolvedRevision)
+}
+export const fetchPosts = (pageNum: number, pageSize = 10, channelId?: number | string) => feed('/app/post/list', { pageNum, pageSize, ...(channelId ? { channelId } : {}) })
+export const fetchMinePosts = (pageNum: number, pageSize = 10) => feed('/app/post/mine', { pageNum, pageSize })
+export const searchMinePosts = (keyword: string, pageNum: number, pageSize = 10, scope = 'publish') => feed('/app/post/mine-search', { keyword: keyword.trim(), pageNum, pageSize, scope }, true)
+export const fetchFavoritePosts = (pageNum: number, pageSize = 10) => feed('/app/post/favorites', { pageNum, pageSize })
+export const fetchLikedPosts = (pageNum: number, pageSize = 10) => feed('/app/post/likes', { pageNum, pageSize })
+export const fetchPostHistory = (pageNum: number, pageSize = 10) => feed('/app/post/history', { pageNum, pageSize }, true)
+export const postHistoryRevision = ref(0)
+export async function recordPostView(id: string) {
+  if (await postBestEffort(`/app/post/${encodeURIComponent(id)}/view`)) postHistoryRevision.value++
+}
+export const fetchMineComments = (pageNum: number, pageSize = 20, silent = false) => readCommentPage(() => GET<Page<MineCommentResponse>>('/app/comment/mine', { pageNum, pageSize }, silent))
+export const fetchComments = (id: string, pageNum: number, pageSize = 20, scope: 'all' | 'author' = 'all', sort: 'hot' | 'latest' = 'hot') =>
+  readCommentPage(() => postPreviewMode.value?previewRead<Page<CommentResponse>>('comments',id,{pageNum,pageSize,scope,sort}):GET<Page<CommentResponse>>(`/app/post/${encodeURIComponent(id)}/comments`, { pageNum, pageSize, scope, sort }))
+export const fetchCommentReplies = (postId: string, rootId: string, pageNum: number, pageSize = 20, scope: 'all' | 'author' = 'all') =>
+  readCommentPage(() => postPreviewMode.value?previewRead<Page<CommentResponse>>('replies',postId,{rootId,pageNum,pageSize,scope,sort:'latest'}):GET<Page<CommentResponse>>(`/app/post/${encodeURIComponent(postId)}/comments/${encodeURIComponent(rootId)}/replies`, { pageNum, pageSize, scope, sort: 'latest' }))
+export const locatePostComment=(postId:string,commentId:string,scope:'all'|'author'='all',sort:'hot'|'latest'='hot')=>readCommentFocus(() => GET<import('@/types/post-api').CommentFocus>(`/app/post/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/locate`,{pageSize:20,scope,sort}))
+export const fetchCommentConfig = () => GET<CommentConfig>('/app/comment/config')
+export const uploadCommentImage = (path: string, progress?: (value: number) => void) => upload<import('@/types/publish').Asset>('/app/comment/assets/image', path, progress)
+export async function createComment(postId: string, data: { parentId?: string; replyToId?: string; content?: string; assetIds?: number[]; emojiId?: number; region?: string }) {
+  const viewer = getSessionGeneration()
+  const result = await POST<CommentResponse>(`/app/post/${encodeURIComponent(postId)}/comments`, data)
+  if (viewer === getSessionGeneration()) invalidateCommentHistory()
+  return result
+}
+export async function deleteComment(postId: string, commentId: string) {
+  const viewer = getSessionGeneration()
+  const result = await POST<CommentDeleteResult>(`/app/post/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/delete`)
+  if (viewer === getSessionGeneration()) invalidateCommentHistory()
+  return result
+}
+
+export const fetchFollowingPosts = (pageNum:number,pageSize=10) => feed('/app/post/following',{pageNum,pageSize})
+
+export const fetchSearchPosts = (data: Record<string, unknown>) => feed('/app/search/posts', data, true)

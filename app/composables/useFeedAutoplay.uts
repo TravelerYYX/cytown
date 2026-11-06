@@ -1,0 +1,105 @@
+import { nextTick, onBeforeUnmount, onMounted, onUpdated, provide, ref, watch } from 'vue'
+import type { InjectionKey, Ref } from 'vue'
+import { rectById } from '@/utils/element-geometry'
+import { FeedAutoplaySelection } from '@/utils/feed-autoplay-policy'
+import type { AutoplayCandidate, AutoplayRect } from '@/utils/feed-autoplay-policy'
+import { videoAutoplayMode } from '@/utils/app-settings'
+import { feedNetwork, feedNetworkAllowsAutoplay, refreshFeedNetwork, retainFeedNetwork } from '@/utils/feed-network'
+import { usePaneVisibility } from './usePaneVisibility'
+
+interface FeedVideoEntry { id: string; instance: unknown; order: number }
+interface FeedAutoplayContext {
+  selected: Ref<string | null>
+  register: (key: string, id: string, instance: unknown) => () => void
+  invalidate: () => void
+}
+export const feedAutoplayKey: InjectionKey<FeedAutoplayContext> = Symbol('ct-feed-autoplay')
+// One lease across all mounted panes, including pages retained behind navigation.
+const selected = ref<string | null>(null)
+let leaseRevision = 0
+export function useFeedAutoplay(active: () => boolean, viewport: () => Promise<AutoplayRect | null>, identity: () => string, subscribe: (listener: () => void) => () => void) {
+  const documentVisible = ref(true)
+  // #ifdef WEB
+  documentVisible.value = !document.hidden
+  // #endif
+  const shown = usePaneVisibility(() => active() && documentVisible.value)
+  const releaseNetwork = retainFeedNetwork()
+  const entries = new Map<string, FeedVideoEntry>()
+  let order = 0, revision = 0, frame = 0, disposed = false, leased: string | null = null
+  const allowed = () => !disposed && shown.value && feedNetworkAllowsAutoplay()
+  function release() {
+    if (leased && selected.value === leased) { selected.value = null; leaseRevision++ }
+    leased = null
+  }
+  const selection = new FeedAutoplaySelection(key => {
+    revision++
+    release()
+    if (!key || !allowed()) return
+    // Flush the old surface's unmount and release before mounting its replacement.
+    const token = ++leaseRevision
+    selected.value = null
+    void nextTick().then(() => {
+      if (token !== leaseRevision || !allowed() || selection.current !== key || !entries.has(key)) return
+      leased = key; selected.value = key
+    })
+  })
+  async function measure() {
+    const token = ++revision
+    if (!allowed()) { selection.reset(); return }
+    const bounds = await viewport()
+    const snapshot = [...entries.entries()]
+    const measured = await Promise.all(snapshot.map(async ([key, entry]) => {
+      const rect = await rectById(entry.id, entry.instance)
+      return rect ? { key, rect, order: entry.order } as AutoplayCandidate : null
+    }))
+    if (token !== revision || !allowed()) return
+    selection.update(measured.filter(item => item != null) as AutoplayCandidate[], bounds ?? { top: 0, left: 0, width: 0, height: 0 })
+  }
+  function schedule() {
+    revision++
+    if (frame || disposed) return
+    frame = requestAnimationFrame(() => { frame = 0; void measure() })
+  }
+  function reset() { revision++; selection.reset(); schedule() }
+  provide(feedAutoplayKey, {
+    selected,
+    register(key, id, instance) {
+      const entry: FeedVideoEntry = { id, instance, order: order++ }
+      entries.set(key, entry); schedule()
+      return () => {
+        if (entries.get(key) !== entry) return
+        entries.delete(key)
+        if (selection.current === key) selection.reset()
+        schedule()
+      }
+    },
+    invalidate: schedule
+  })
+  const unsubscribe = subscribe(schedule)
+  watch(() => [shown.value, videoAutoplayMode.value, feedNetwork.value, identity()], reset, { flush: 'sync' })
+  let revealTimer: ReturnType<typeof setTimeout> | undefined
+  watch(shown, value => {
+    clearTimeout(revealTimer)
+    if (value) {
+      refreshFeedNetwork()
+      // Main-tab panes slide horizontally for 300ms; measure after that motion.
+      revealTimer = setTimeout(schedule, 350)
+    }
+  }, { immediate: true })
+  // #ifdef WEB
+  function visibilityChanged() { documentVisible.value = !document.hidden }
+  document.addEventListener('visibilitychange', visibilityChanged)
+  // #endif
+  onShow(refreshFeedNetwork)
+  onMounted(schedule)
+  onUpdated(schedule)
+  onBeforeUnmount(() => {
+    // #ifdef WEB
+    document.removeEventListener('visibilitychange', visibilityChanged)
+    // #endif
+    clearTimeout(revealTimer)
+    disposed = true; revision++; selection.reset(); cancelAnimationFrame(frame)
+    entries.clear(); unsubscribe?.(); releaseNetwork()
+  })
+  return { schedule, reset }
+}

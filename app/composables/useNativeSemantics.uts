@@ -1,0 +1,63 @@
+import { getCurrentInstance, nextTick, onBeforeUnmount, onMounted, onUpdated } from 'vue'
+import { observeWindowResize } from '@/utils/window-events'
+// #ifdef APP
+import { applyNativeSemantics, releaseNativeSemantics } from '@/uni_modules/ct-platform'
+import type { NativeSemantics } from '@/uni_modules/ct-platform/utssdk/interface.uts'
+// #endif
+type Attributes=Record<string,unknown>
+type Job={attributes:Attributes;signature:string;applied:string;attempts:number;reported:boolean;revision:number}
+const truth=(value:unknown):boolean=>value===true||value==='true'
+export function useNativeSemantics(){
+  const prefix='ct-semantics-'+getCurrentInstance()!.uid
+  const ownerPage=getCurrentInstance()!.proxy?.$page
+  const jobs=new Map<string,Job>()
+  let disposed=false,pending=false,timer:ReturnType<typeof setTimeout>|undefined
+  function attrs(id:string,attributes:Attributes):Attributes{
+    // #ifndef APP
+    return attributes
+    // #endif
+    // #ifdef APP
+    const signature=JSON.stringify(attributes),previous=jobs.get(id)
+    if(previous?.signature!==signature)jobs.set(id,{attributes,signature,applied:'',attempts:0,reported:false,revision:(previous?.revision??0)+1})
+    return {id}
+    // #endif
+  }
+  function schedule(){if(pending||disposed)return;pending=true;void nextTick().then(()=>{pending=false;void apply()})}
+  async function apply():Promise<void>{
+    // #ifdef APP
+    if(disposed)return
+    if(ownerPage!=null){const pages=getCurrentPages(),top=pages[pages.length-1];if(top!==ownerPage&&!top?.getDialogPages().includes(ownerPage))return}
+    let retry=false
+    for(const [id,job] of jobs){
+      if(disposed)return
+      // A recycled list cell may detach without remounting its Vue owner.
+      // Release the native delegate, but retain metadata for its next attach.
+      if(!(ownerPage?.getElementById(id)??uni.getElementById(id))){if(job.applied){releaseNativeSemantics(id);job.applied=''}job.attempts=0;continue}
+      if(job.applied===job.signature||job.attempts>=4)continue
+      const attributes=job.attributes,role=String(attributes.role??''),label=String(attributes['aria-label']??'')
+      const checked=attributes['aria-checked'],focus=attributes.tabindex
+      const spec:NativeSemantics={label,role,hidden:truth(attributes['aria-hidden']),disabled:truth(attributes['aria-disabled']),selected:truth(attributes['aria-pressed'])||truth(attributes['aria-selected']),checked:checked==null?null:truth(checked),focusable:focus!=null?Number(focus)>=0:role==='button'||role==='link'||role==='checkbox',modal:truth(attributes['aria-modal'])}
+      const revision=job.revision
+      try{
+        const ok=await applyNativeSemantics(id,spec)
+        if(disposed){releaseNativeSemantics(id);return}
+        if(jobs.get(id)!==job||job.revision!==revision)continue
+        if(ok)job.applied=job.signature
+        else if(++job.attempts<4)retry=true
+        else if(!job.reported){job.reported=true;console.error('[native-accessibility] 无法取得原生节点，语义未验收',id)}
+      }catch(error){job.attempts=4;console.error('[native-accessibility]',id,String(error))}
+    }
+    if(retry&&!disposed){clearTimeout(timer);timer=setTimeout(schedule,120)}
+    // #endif
+  }
+  const unobserve=observeWindowResize(()=>{for(const job of jobs.values()){job.applied='';job.attempts=0;job.reported=false}schedule()})
+  onMounted(schedule);onUpdated(schedule)
+  onBeforeUnmount(()=>{disposed=true;clearTimeout(timer);unobserve();
+    // #ifdef APP
+    for(const [id] of jobs)releaseNativeSemantics(id)
+    // #endif
+    jobs.clear()
+  })
+  function refresh(id?:string){if(id){const job=jobs.get(id);if(job){job.applied='';job.attempts=0;job.reported=false}}schedule()}
+  return{prefix,attrs,refresh}
+}

@@ -1,0 +1,75 @@
+<template><view class="rich-content" :class="[uxNative?'ux1':'',uxNative?'ux2':'']"><template v-for="(block,index) in blocks" :key="index"><!-- #ifdef APP -->
+<NativeRichParagraph v-if="block.type==='paragraph'" :runs="block.runs" />
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view v-if="block.type==='paragraph'" class="paragraph" :class="[uxNative?'ux1':'',uxNative?'ux3':'']"><template v-for="(run,i) in block.runs" :key="i"><text v-if="run.type==='text'" :style="{color:run.colorValue||'#555b5e'}" :class="[uxNative?'ux4':'',uxNative?'ux5':'',uxNative?'ux6':'']">{{run.text}}</text><image v-else-if="run.type==='emoji'" class="emoji" :src="uiAsset(resourceUrl(run.imageUrl))" :class="[uxNative?'ux7':'']"/><text v-else-if="run.type==='mention'" class="mention" :class="[uxNative?'ux4':'',uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux8':'']">@{{run.nickname}}</text><ActionButton :aria-label="String(run.text)" v-else class="link" @tap="openLink(run)" :class="[uxNative?'ct-native-button':'',uxNative?'ux9':'',uxNative?'ux10':'',uxNative?'ux11':'']"><text :class="[uxNative?'ux4':'',uxNative?'ux5':'',uxNative?'ux12':'',uxNative?'ux6':'']" :style="uxLayout(uxNodePrefix+'-g1000'+'-'+[index,i].join('-'),[{on:uxNative,declarations:{&quot;__direction&quot;:&quot;column&quot;}},{on:uxNative,declarations:{&quot;__gap&quot;:&quot;3rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'+'-'+[index,i].join('-')">{{run.text}}</text><AppIcon name="chevron-round" tone="cyan" :size="23"  :style="uxLayout(uxNodePrefix+'-g1001'+'-'+[index,i].join('-'),[{on:uxNative,declarations:{&quot;__direction&quot;:&quot;column&quot;}},{on:uxNative,declarations:{&quot;__gap&quot;:&quot;3rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1001'+'-'+[index,i].join('-')"/></ActionButton></template></view>
+<!-- #endif --><CachedImage v-else-if="block.type==='image'" class="media" :src="mediaUrl(block.assetId)" :version="item(block.assetId)?.resourceVersion" mode="widthFix" @tap="$emit('image',block.assetId)" :class="[uxNative?'ux13':'']"/><PostVideoPlayer v-else-if="block.type==='video'&&item(block.assetId)" :ref="instance=>registerPlayer(block.assetId,instance)" class="media video" :can-retry="canRetry" @back="$emit('back')" @retry="$emit('retry',block.assetId)" @more="$emit('save',block.assetId)" :media="item(block.assetId)!" :class="[uxNative?'ux13':'',uxNative?'ux14':'']" :style="uxLayout(uxNodePrefix+'-n0'+'-'+[index].join('-'),[{on:uxNative,declarations:{&quot;aspect-ratio&quot;:&quot;16/9&quot;}}],{})" :id="uxNodePrefix+'-n0'+'-'+[index].join('-')"/><view v-else-if="block.type==='divider'" class="divider" :class="[uxNative?'ux1':'',uxNative?'ux15':'']"><text :class="[uxNative?'ux4':'',uxNative?'ux16':'',uxNative?'ux6':'']">{{block.previewText||'────────'}}</text></view><view v-else-if="block.type==='poll'&&poll" class="poll" :class="[uxNative?'ux1':'',uxNative?'ux17':'']"><text class="poll-title" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux18':'']">{{poll.question||'投票'}}</text><ActionButton :aria-label="String(option.text) + ' ' + String(poll.selectedOptionId||expired?percent(option.voteCount)+'%':'')" v-for="(option, __uxIndex0) in poll.options" :key="option.id" :disabled="!!poll.selectedOptionId||expired" :class="[uxNative?'ct-native-button':'',{selected:poll.selectedOptionId===option.id},uxNative?'ux9':'',uxNative?'ux26':'',uxNative&amp;&amp;!!(poll.selectedOptionId===option.id)?'ux28':'']" @tap="vote(option.id)"><view class="bar" :style="{width:percent(option.voteCount)+'%'}" :class="[uxNative?'ux1':'',uxNative?'ux27':'']"/><text :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux35':'']">{{option.text}}</text><text :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux35':'']">{{poll.selectedOptionId||expired?percent(option.voteCount)+'%':''}}</text></ActionButton><text class="poll-foot" :class="[uxNative?'ux4':'',uxNative?'ux6':'',uxNative?'ux25':'']">{{poll.totalVotes}}人参与{{poll.endsAt?' · '+(expired?'已截止':'截止 '+poll.endsAt.replace('T',' ')):''}}</text></view></template></view></template>
+<script setup lang="uts">
+import { postPreviewMode } from '@/utils/post-preview'
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+// #ifdef APP
+import NativeRichParagraph from './NativeRichParagraph.uvue'
+// #endif
+
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+import {openExternalBrowser} from '@/utils/platform';import{computed}from'vue';import CachedImage from './CachedImage.uvue';import PostVideoPlayer from './PostVideoPlayer.uvue';import{mediaUrl as resourceUrl}from'@/utils/media-cache';import AppIcon from'@/components/AppIcon.uvue';import{API_BASE_URL}from'@/config/env';import{votePoll}from'@/utils/publish-api';import type{MediaSkeletonSpec,PollView}from'@/types/home';import type{RichBlock,RichRun}from'@/types/publish';const props=defineProps<{blocks:RichBlock[];media:MediaSkeletonSpec[];poll?:PollView|null;postId:string;canRetry?:boolean}>(),emit=defineEmits<{(e:'poll',value:PollView):void;(e:'image',assetId:number):void;(e:'back'):void;(e:'retry',assetId:number):void;(e:'save',assetId:number):void}>(),base=API_BASE_URL;const expired=computed(()=>!!props.poll?.endsAt&&new Date(props.poll.endsAt).getTime()<=Date.now());function item(id:number){return props.media.find(m=>m.assetId===id)}function mediaUrl(id:number){const m=item(id);return resourceUrl(m?.previewUrl||m?.url)}function coverUrl(id:number){const m=item(id);return resourceUrl(m?.coverUrl)}function percent(count:number){return props.poll?.totalVotes?Math.round(count/props.poll.totalVotes*100):0}async function vote(id:number){if(postPreviewMode.value)return;try{emit('poll',await votePoll(props.postId,id))}catch{}}function openLink(run:Extract<RichRun,{type:'link'}>){if(run.openMode==='inapp'){uni.navigateTo({url:'/pages/webview/index?url='+encodeURIComponent(run.url)+'&title='+encodeURIComponent(run.text)});return}openExternalBrowser(run.url)}
+type Player={handleBack:()=>boolean;pause:()=>void;resume:()=>void;suspend:()=>Promise<void>}
+const players=new Map<number,Player>()
+function registerPlayer(id:number,instance:unknown){if(instance)players.set(id,instance as Player);else players.delete(id)}
+defineExpose({handleBack:()=>Array.from(players.values()).some(player=>player.handleBack()),pause:()=>players.forEach(player=>player.pause()),resume:()=>players.forEach(player=>player.resume()),suspend:()=>Promise.all(Array.from(players.values(),player=>player.suspend()))})
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+.rich-content{margin-top:12rpx}.paragraph{font-size:26rpx;line-height:1.9;white-space:pre-wrap;overflow-wrap:anywhere}.emoji{width:52rpx;height:52rpx;vertical-align:middle}.mention,.link{display:inline;color:#0aaee5;font-size:inherit;line-height:inherit}.link{align-items:center;gap:3rpx}.media{width:100%;margin-top:18rpx;border-radius:14rpx}.video{aspect-ratio:16/9}.divider{padding:32rpx 0;text-align:center;color:#8e9395;letter-spacing:4rpx}.poll{margin-top:22rpx;padding:24rpx;border-radius:18rpx;background:#f6f8f9}.poll-title{display:block;margin-bottom:18rpx;font-size:25rpx;font-weight:600}.poll button{position:relative;overflow:hidden;width:100%;height:68rpx;margin-top:12rpx;padding:0 18rpx;display:flex;align-items:center;justify-content:space-between;border-radius:12rpx;background:#fff;flex-direction:row}.poll button.selected{outline:2rpx solid #10b9ef}.poll .bar{position:absolute;left:0;top:0;bottom:0;background:#dff6fd}.poll button text{position:relative}.poll-foot{display:block;margin-top:18rpx;color:#999;font-size:19rpx}
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux4{color:var(--text-main);font-size:26rpx;}
+
+
+.ux16{text-align:center;color:#8e9395;letter-spacing:4rpx;}
+
+
+
+
+
+
+.ux1{}
+.ux6{}
+.ux9{}
+
+
+
+
+
+
+.ux2{margin-top:12rpx;}
+
+
+
+
+
+.ux13{width:100%;margin-top:18rpx;border-radius:14rpx;}
+.ux14{}
+.ux15{padding:32rpx 0;text-align:center;color:#8e9395;letter-spacing:4rpx;}
+.ux17{margin-top:22rpx;padding:24rpx;border-radius:18rpx;background-color:#f6f8f9;}
+.ux18{display:flex;flex-direction:column;margin-bottom:18rpx;font-size:25rpx;font-weight:600;}
+.ux25{display:flex;flex-direction:column;margin-top:18rpx;color:#999;font-size:19rpx;}
+.ux26{position:relative;overflow:hidden;width:100%;height:68rpx;margin-top:12rpx;padding:0 18rpx;display:flex;flex-direction:row;align-items:center;justify-content:space-between;border-radius:12rpx;background-color:#fff;}
+.ux35{position:relative;}
+.ux27{position:absolute;left:0;top:0;bottom:0;background-color:#dff6fd;}
+.ux28{box-shadow:0 0 0 2rpx #10b9ef;}
+/* #endif */
+</style>

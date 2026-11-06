@@ -1,0 +1,102 @@
+<template>
+  <view class="post-action-bar" :style="uxLayout(uxNodePrefix+'-n0',[],{ paddingBottom: 'max(env(safe-area-inset-bottom), ' + bottomInset + 'px)' })" :class="[uxNative?'ux0':'',uxNative?'ux1':'']" :id="uxNodePrefix+'-n0'">
+    <view class="detail-actions" :class="[uxNative?'ux0':'',uxNative?'ux2':'',uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;)?'ux3':'']">
+      <ActionButton class="comment-input-preview" aria-label="发表评论" @tap="$emit('compose')" :class="[uxNative?'ct-native-button':'',uxNative?'ux4':'',uxNative?'ux5':'',uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;)?'ux6':'']" :style="uxLayout(uxNodePrefix+'-g1000',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__padding&quot;:&quot;40px&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'"><text :class="[uxNative?'ux7':'',uxNative?'ux8':'',uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;)?'ux9':'',uxNative?'ux10':'']">友好讨论，文明交流</text></ActionButton>
+      <ActionButton class="detail-action" aria-label="查看评论" @tap="$emit('comments')" :class="[uxNative?'ct-native-button':'',uxNative?'ux4':'',uxNative?'ux11':'',uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;)?'ux12':'',uxNative?'ux13':'']" :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__padding&quot;:&quot;40px&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1001'"><!-- #ifdef APP -->
+<image @load="a11yImageLoaded(uxNodePrefix+'-g1002')" class="detail-action-icon" :src="uiAsset(&quot;/static/icons/post-actions/comment.svg&quot;)" mode="aspectFit"   :class="[uxNative?'ux14':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__gap&quot;:&quot;0&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1002'"/>
+<!-- #endif -->
+<!-- #ifndef APP -->
+<image :aria-hidden="&quot;true&quot;" class="detail-action-icon" :src="uiAsset(&quot;/static/icons/post-actions/comment.svg&quot;)" mode="aspectFit"   :class="[uxNative?'ux14':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__gap&quot;:&quot;0&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1002'"/>
+<!-- #endif --><HandwrittenCount :count="post.commentCount"  :style="uxLayout(uxNodePrefix+'-g1003',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__gap&quot;:&quot;0&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1003'"/></ActionButton>
+      <ActionButton class="detail-action" :aria-pressed="!!post.detail?.liked" :aria-label="post.detail?.liked ? '取消点赞' : '点赞'" :disabled="interactionBusy.has(post.id + ':like') || demo" @tap="toggle('like')" :class="[uxNative?'ct-native-button':'',uxNative?'ux4':'',uxNative?'ux11':'',uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;)?'ux12':'',uxNative?'ux13':'']" :style="uxLayout(uxNodePrefix+'-g1004',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__padding&quot;:&quot;40px&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1004'"><InteractionIcon kind="like" variant="feed" :enabled="visible" :active="!!post.detail?.liked" :play-signal="likePlayback" :size="42"  :style="uxLayout(uxNodePrefix+'-g1005',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__gap&quot;:&quot;0&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1005'"/><HandwrittenCount :count="post.likeCount"  :style="uxLayout(uxNodePrefix+'-g1006',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__gap&quot;:&quot;0&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1006'"/></ActionButton>
+      <ActionButton class="detail-action" :aria-pressed="!!post.detail?.favorited" :aria-label="post.detail?.favorited ? '取消收藏' : '收藏'" :disabled="interactionBusy.has(post.id + ':favorite') || demo" @tap="toggle('favorite')" :class="[uxNative?'ct-native-button':'',uxNative?'ux4':'',uxNative?'ux11':'',uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;)?'ux12':'',uxNative?'ux13':'']" :style="uxLayout(uxNodePrefix+'-g1007',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__padding&quot;:&quot;40px&quot;}},{on:true,declarations:{__index:String(0+1+1+1)}}],{})" :id="uxNodePrefix+'-g1007'"><InteractionIcon kind="favorite" :enabled="visible" :active="!!post.detail?.favorited" :play-signal="favoritePlayback" :size="42" idle-src="/static/icons/post-actions/favorite.svg"  :style="uxLayout(uxNodePrefix+'-g1008',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__gap&quot;:&quot;0&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1008'"/><HandwrittenCount :count="post.detail?.favoriteCount ?? 0"  :style="uxLayout(uxNodePrefix+'-g1009',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__gap&quot;:&quot;0&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1009'"/></ActionButton>
+      <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(uxNodePrefix+'-g1010',{&quot;aria-label&quot;:&quot;分享帖子&quot;})" class="detail-action" @tap="share" :class="[uxNative?'ux0':'',uxNative?'ux11':'',uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;)?'ux12':'']" :style="uxLayout(uxNodePrefix+'-g1010',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__padding&quot;:&quot;40px&quot;}},{on:true,declarations:{__index:String(0+1+1+1+1)}}],{})" :id="uxNodePrefix+'-g1010'">
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :aria-label="&quot;分享帖子&quot;" class="detail-action" @tap="share" :class="[uxNative?'ux0':'',uxNative?'ux11':'',uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;)?'ux12':'']" :style="uxLayout(uxNodePrefix+'-g1010',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;68rpx&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__padding&quot;:&quot;40px&quot;}},{on:true,declarations:{__index:String(0+1+1+1+1)}}],{})" :id="uxNodePrefix+'-g1010'">
+<!-- #endif --><!-- #ifdef APP -->
+<image @load="a11yImageLoaded(uxNodePrefix+'-g1011')" class="detail-action-icon" :src="uiAsset(&quot;/static/icons/post-actions/share.svg&quot;)" mode="aspectFit"   :class="[uxNative?'ux14':'']" :style="uxLayout(uxNodePrefix+'-g1011',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__gap&quot;:&quot;0&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1011'"/>
+<!-- #endif -->
+<!-- #ifndef APP -->
+<image :aria-hidden="&quot;true&quot;" class="detail-action-icon" :src="uiAsset(&quot;/static/icons/post-actions/share.svg&quot;)" mode="aspectFit"   :class="[uxNative?'ux14':'']" :style="uxLayout(uxNodePrefix+'-g1011',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__gap&quot;:&quot;0&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1011'"/>
+<!-- #endif --><HandwrittenCount :count="post.detail?.shareCount ?? 0"  :style="uxLayout(uxNodePrefix+'-g1012',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:uxNative&amp;&amp;uxMedia(&quot;(orientation: landscape) and (max-height: 500px)&quot;),declarations:{&quot;__gap&quot;:&quot;0&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1012'"/></view>
+    </view>
+  </view>
+</template>
+<script setup lang="uts">
+import { usePaneVisibility } from '@/composables/usePaneVisibility'
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs, refresh: a11yRefresh } = useNativeSemantics()
+function a11yImageLoaded(id:string){a11yAttrs(id,{'aria-hidden':true});a11yRefresh(id)}
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import HandwrittenCount from './HandwrittenCount.uvue'
+import InteractionIcon from './InteractionIcon.uvue'
+import { ref } from 'vue'
+import { interactionBusy, performPostInteraction, ensureInteractionLogin } from '@/utils/interactions'
+import type { InteractionResult } from '@/types/auth'
+import type { Post } from '@/types/home'
+const props = withDefaults(defineProps<{ post: Post; bottomInset: number; demo?: boolean; active?: boolean }>(), { active: true })
+const visible = usePaneVisibility(() => props.active)
+const emit = defineEmits<{ (e: 'share'): void; (e: 'comments'): void; (e: 'compose'): void; (e: 'interaction', kind: 'like' | 'favorite', result: InteractionResult): void }>()
+function share(){if(!props.demo)emit('share')}
+const likePlayback = ref(0), favoritePlayback = ref(0)
+async function toggle(kind: 'like' | 'favorite') {
+  if (props.demo) return
+  const wasActive = kind === 'like' ? !!props.post.detail?.liked : !!props.post.detail?.favorited
+  const result = await performPostInteraction(props.post, kind)
+  if (!result) return
+  emit('interaction', kind, result)
+  if (visible.value && result.active && !wasActive) {
+    if (kind === 'like') likePlayback.value++
+    else favoritePlayback.value++
+  }
+}
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.post-action-bar { flex-shrink: 0; background: #fff; border-top: 1rpx solid #f4f4f4; }
+.detail-actions { min-height: 112rpx; display: flex; align-items: center; padding: 12rpx 34rpx; gap: 16rpx; flex-direction: row; }
+.comment-input-preview { flex: 1; min-width: 0; height: 72rpx; margin: 0; padding: 0 16rpx; border-radius: 40rpx; background: #f6f7f8; display: flex; align-items: center; justify-content: center; color: #b9bec2; font-size: 20rpx; line-height: 1; white-space: nowrap; flex-direction: row; }
+.comment-input-preview::after { border: 0; }
+.detail-actions .detail-action { flex-shrink: 0; width: 68rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8rpx; min-height: 70rpx; color: #484a4c; }
+.detail-action-icon { display: block; width: 42rpx; height: 42rpx; flex-shrink: 0; }
+.detail-actions button.detail-action { background: transparent; padding: 0; margin: 0; line-height: inherit; }
+.detail-actions button.detail-action::after { border: 0; }
+@media (orientation: landscape) and (max-height: 500px) { .detail-actions { min-height: 62px; padding: 6px 20px; } .comment-input-preview { height: 40px; font-size: 14px; } .detail-actions .detail-action { min-height: 44px; gap: 0; } }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux7{color:var(--text-main);font-size:26rpx;}
+.ux8{color:#b9bec2;font-size:20rpx;line-height:20rpx;white-space:nowrap;}
+.ux9{font-size:14px;}
+.ux0{}
+.ux10{}
+.ux4{}
+.ux1{flex-shrink:0;background-color:#fff;border-top:1rpx solid #f4f4f4;}
+.ux2{min-height:112rpx;display:flex;flex-direction:row;align-items:center;padding:12rpx 34rpx;}
+.ux5{flex:1;min-width:0;height:72rpx;margin:0;padding:0 16rpx;border-radius:40rpx;background-color:#f6f7f8;display:flex;flex-direction:row;align-items:center;justify-content:center;color:#b9bec2;font-size:20rpx;line-height:20rpx;white-space:nowrap;}
+.ux14{display:flex;flex-direction:column;width:42rpx;height:42rpx;flex-shrink:0;}
+.ux3{min-height:62px;padding:6px 20px;}
+.ux6{height:40px;font-size:14px;}
+.ux11{flex-shrink:0;width:68rpx;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70rpx;color:#484a4c;}
+.ux12{min-height:44px;}
+.ux13{background-color:transparent;padding:0;margin:0;}
+/* #endif */
+</style>

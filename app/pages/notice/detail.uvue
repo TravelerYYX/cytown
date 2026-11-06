@@ -1,0 +1,51 @@
+<template><view class="detail-page" :class="[uxNative?'ux0':'',uxNative?'ux1':'']"><view class="page-header" :style="{paddingTop:statusBarHeight+'px'}" :class="[uxNative?'ux0':'',uxNative?'ux2':'']"><ActionButton :aria-label="&quot;返回&quot;" @tap="back" :class="[uxNative?'ux3':'',uxNative?'ux4':'']"><AppIcon name="back" :size="40" /></ActionButton><text :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux7':'']">通知详情</text><view  :class="[uxNative?'ux0':'',uxNative?'ux8':'']"/></view><scroll-view class="detail-scroll" direction="vertical" :show-scrollbar="false" :class="[uxNative?'ux9':'',uxNative?'ux10':'']"><view v-if="loading" class="load-tip" :class="[uxNative?'ux0':'',uxNative?'ux11':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux12':'',uxNative?'ux6':'']">通知加载中…</text></view><view v-else-if="error" class="load-tip" :class="[uxNative?'ux0':'',uxNative?'ux11':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux12':'',uxNative?'ux6':'']">{{error}}</text></view><view v-else-if="notice" class="article" :class="[uxNative?'ux13':'']"><text class="title" :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux14':'']">{{notice!.title}}</text><text class="time" :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux15':'']">{{notice!.publishTime}}</text><view class="blocks" :class="[uxNative?'ux0':'',uxNative?'ux16':'']"><template v-for="(block,index) in notice!.blocks" :key="index"><text v-if="block.type==='text'" class="paragraph" :class="[uxNative?'ux5':'',uxNative?'ux6':'',uxNative?'ux17':'']">{{block.text}}</text><image v-else class="content-image" :src="uiAsset(resourceUrl(block.url))" mode="widthFix"  :class="[uxNative?'ux18':'']"/></template></view><ActionButton :aria-label="&quot;查看相关帖子&quot;" v-if="notice!.postId" class="post-link" @tap="post" :class="[uxNative?'ux3':'',uxNative?'ux19':'']"><text :class="[uxNative?'ux5':'',uxNative?'ux20':'',uxNative?'ux6':'']">查看相关帖子</text></ActionButton></view></scroll-view><EyeCareOverlay /></view></template>
+<script setup lang="uts">
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { mediaUrl as resourceUrl } from '@/utils/media-cache'
+import {authRevision,getUserInfo} from '@/utils/auth';import {readNoticeOne} from '@/utils/notice-state';import {ref,watch} from 'vue';import AppIcon from '@/components/AppIcon.uvue';import {useWindowInsets} from '@/composables/useWindowInsets';import {fetchNoticeDetail} from '@/utils/notice-api';import {API_BASE_URL} from '@/config/env';import type {NoticeDetail} from '@/types/home';const {statusBarHeight}=useWindowInsets();const notice=ref<NoticeDetail>(),loading=ref(true),error=ref('');let id=0,fromPush=false;onLoad(q=>{id=Number(q?.id||0);fromPush=q?.fromPush==='1';void load()});async function load(){loading.value=true;try{notice.value=await fetchNoticeDetail(id);await readNoticeOne(notice.value!).catch(()=>{})}catch(e){error.value=e instanceof Error?e.message:'通知加载失败'}finally{loading.value=false}}const back=()=>{if(fromPush&&notice.value){uni.redirectTo({url:'/pages/notice/list?categoryId='+notice.value!.categoryId+'&name='+encodeURIComponent(notice.value!.categoryName)+'&fromPush=1'});return;}getCurrentPages().length>1?uni.navigateBack():uni.reLaunch({url:'/pages/index/index?tab=message'});};const post=()=>notice.value?.postId&&uni.navigateTo({url:'/pages/post/index?id='+notice.value.postId});let currentUser=getUserInfo()?.userId||'';
+watch(authRevision,()=>{const user=getUserInfo()?.userId||'';if(user!==currentUser){currentUser=user;notice.value=undefined;error.value='';}});
+onShow(()=>{if(!notice.value&&!loading.value)void load()});
+onBackPress(()=>{if(fromPush&&notice.value){back();return true;}return false;});</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+.detail-page{position:fixed;inset:0;display:flex;flex-direction:column;background:#fff}.page-header{flex-shrink:0;display:flex;align-items:flex-end;border-bottom:1rpx solid #eee;flex-direction:row}.page-header button,.page-header view{width:96rpx;height:88rpx;display:flex;align-items:center;justify-content:center;background:transparent;border:0;flex-direction:row}.page-header button::after{border:0}.page-header>text{height:88rpx;line-height:88rpx;flex:1;text-align:center;font-size:30rpx;font-weight:600}.detail-scroll{flex:1;height:0}.article{display:block;padding:42rpx 36rpx 80rpx}.title{display:block;font-size:40rpx;line-height:1.35;font-weight:700}.time{display:block;margin-top:18rpx;color:#999;font-size:22rpx}.blocks{margin-top:38rpx}.paragraph{display:block;margin-bottom:28rpx;white-space:pre-wrap;font-size:29rpx;line-height:1.8;color:#333}.content-image{display:block;width:100%;margin-bottom:28rpx;border-radius:14rpx}.post-link{width:100%;height:86rpx;margin-top:30rpx;border:0;border-radius:43rpx;background:var(--brand);color:#fff;font-size:28rpx}.post-link::after{border:0}
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux5{color:var(--text-main);font-size:26rpx;}
+.ux12{text-align:center;color:var(--text-sub);font-size:22rpx;}
+.ux20{color:#fff;font-size:28rpx;}
+.ux0{}
+.ux9{}
+.ux6{}
+.ux3{}
+.ux11{text-align:center;color:var(--text-sub);font-size:22rpx;padding:30rpx 0 40rpx;}
+.ux1{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;background-color:#fff;}
+.ux2{flex-shrink:0;display:flex;flex-direction:row;align-items:flex-end;border-bottom:1rpx solid #eee;}
+.ux10{flex:1;height:0;}
+.ux13{display:flex;flex-direction:column;padding:42rpx 36rpx 80rpx;}
+.ux14{display:flex;flex-direction:column;font-size:40rpx;line-height:54rpx;font-weight:700;}
+.ux15{display:flex;flex-direction:column;margin-top:18rpx;color:#999;font-size:22rpx;}
+.ux16{margin-top:38rpx;}
+.ux17{display:flex;flex-direction:column;margin-bottom:28rpx;white-space:pre-wrap;font-size:29rpx;line-height:52.2rpx;color:#333;}
+.ux18{display:flex;flex-direction:column;width:100%;margin-bottom:28rpx;border-radius:14rpx;}
+.ux19{width:100%;height:86rpx;margin-top:30rpx;border:0px;border-radius:43rpx;background-color:var(--brand);color:#fff;font-size:28rpx;}
+.ux4{width:96rpx;height:88rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;background-color:transparent;border:0px;}
+.ux8{width:96rpx;height:88rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;background-color:transparent;border:0px;}
+.ux7{height:88rpx;line-height:88rpx;flex:1;text-align:center;font-size:30rpx;font-weight:600;}
+/* #endif */
+</style>

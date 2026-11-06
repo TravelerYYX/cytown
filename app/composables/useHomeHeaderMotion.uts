@@ -1,0 +1,93 @@
+import { getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { rectById, setElementStyle } from '@/utils/element-geometry'
+import { observeWindowResize } from '@/utils/window-events'
+import { uxMedia } from '@/utils/native-styles'
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+
+/** Only phase boundaries are reactive. Scroll frames write to the header nodes. */
+export function useHomeHeaderMotion(active: () => boolean, width: () => number, statusBar: () => number, news: () => boolean) {
+  const prefix = 'home-motion-' + getCurrentInstance()!.uid
+  const semantics = useNativeSemantics()
+  const pinned = ref(false), searchInteractive = ref(false)
+  const collapseOffset = ref((news() ? 312 : 184) * width() / 750)
+  let top = 0, disposed = false, measureRevision = 0, measureFrame = 0, progress = -1
+  // Register hidden groups without binding a dynamic attribute object to nodes
+  // whose visual styles are owned by scroll frames (Vapor normalizes that object).
+  watch(() => [pinned.value, searchInteractive.value], () => {
+    semantics.attrs(prefix + '-compact', { 'aria-hidden': !searchInteractive.value })
+    semantics.attrs(prefix + '-pinned-tabs', { 'aria-hidden': !pinned.value })
+    semantics.refresh()
+  }, { immediate: true })
+  let reduced = false
+  function preferences() {
+    // #ifdef APP
+    reduced = uxMedia('(prefers-reduced-motion: reduce)')
+    // #endif
+    // #ifdef WEB
+    reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // #endif
+  }
+  function style(suffix: string, property: string, value: string) { setElementStyle(prefix + suffix, property, value) }
+  function paint(value: number, force: boolean = false) {
+    top = Math.max(0, value)
+    if (disposed || !active()) return
+    const distance = 108 * width() / 750
+    const next = Math.max(0, Math.min(1, (top - collapseOffset.value + distance) / distance))
+    const isPinned = top >= collapseOffset.value
+    pinned.value = isPinned
+    searchInteractive.value = next > 0
+    if (!force && next === progress) return
+    progress = next
+    const eased = next * next * (3 - 2 * next)
+    // Keep an opaque backing behind the fading controls, so scrolled news never
+    // shows through the search text during the handover.
+    style('-compact', 'opacity', next > 0 ? '1' : '0')
+    style('-avatar', 'opacity', String(eased))
+    style('-search', 'opacity', String(eased))
+    style('-compact', 'visibility', next > 0 ? 'visible' : 'hidden')
+    // #ifdef WEB
+    uni.getElementById(prefix + '-compact')?.setAttribute('aria-hidden', next > 0 ? 'false' : 'true')
+    uni.getElementById(prefix + '-pinned-tabs')?.setAttribute('aria-hidden', isPinned ? 'false' : 'true')
+    // #endif
+    style('-compact', 'pointer-events', next > 0 ? 'auto' : 'none')
+    style('-avatar', 'transform', 'translateY(' + (reduced ? 0 : (1 - eased) * 8 * width() / 750) + 'px)')
+    style('-search', 'transform', 'translateY(' + (reduced ? 0 : (1 - eased) * 12 * width() / 750) + 'px)')
+    style('-expanded', 'opacity', String(1 - eased))
+    // Reveal the incoming tabs before hiding the outgoing rounded surface.
+    if (!isPinned) style('-original-tabs', 'visibility', 'visible')
+    style('-pinned-tabs', 'visibility', isPinned ? 'visible' : 'hidden')
+    style('-pinned-tabs', 'pointer-events', isPinned ? 'auto' : 'none')
+    if (isPinned) style('-original-tabs', 'visibility', 'hidden')
+  }
+  async function measure() {
+    const revision = ++measureRevision
+    await nextTick()
+    if (disposed || !active() || revision !== measureRevision) return
+    // Relative header/seam geometry cancels scrolling, including restoration
+    // frames where the native scroller has not yet applied its saved offset.
+    const header = await rectById(prefix + '-expanded-header'), seam = await rectById(prefix + '-feed')
+    if (disposed || revision !== measureRevision || !active()) return
+    if (header && header.height > 0 && seam && seam.height > 0) collapseOffset.value = Math.max(0, header.height + seam.top - header.bottom - statusBar() - 108 * width() / 750)
+    preferences(); paint(top, true)
+  }
+  function scheduleMeasure() {
+    cancelAnimationFrame(measureFrame)
+    measureFrame = requestAnimationFrame(() => { void measure() })
+  }
+  watch(() => [width(), statusBar(), news()], scheduleMeasure, { flush: 'post' })
+  watch(active, shown => { if (shown) scheduleMeasure(); else { measureRevision++; cancelAnimationFrame(measureFrame) } })
+  const unobserve = observeWindowResize(scheduleMeasure)
+  // #ifdef WEB
+  const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+  const preferenceChanged = () => { preferences(); paint(top, true) }
+  media.addEventListener('change', preferenceChanged)
+  // #endif
+  onMounted(scheduleMeasure)
+  onBeforeUnmount(() => {
+    disposed = true; measureRevision++; cancelAnimationFrame(measureFrame); unobserve()
+    // #ifdef WEB
+    media.removeEventListener('change', preferenceChanged)
+    // #endif
+  })
+  return { prefix, pinned, searchInteractive, collapseOffset, paint, scheduleMeasure }
+}

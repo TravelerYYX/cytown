@@ -1,0 +1,212 @@
+<template>
+  <view :id="uxNodePrefix+'-card'" class="waterfall-post" :data-post-id="post.id" @tap="openPost()" :class="[uxNative?'ux0':'',uxNative?'ux1':'']" style="position:relative">
+    <FeedLoadingSheen :card-id="uxNodePrefix+'-card'" :waiting="!!coverSource &amp;&amp; !coverReady &amp;&amp; !coverFailed" />
+    <FeedRevealBlock v-if="cover" kind="media" :ready="coverReady || coverFailed || !coverSource" :order="0">
+    <view v-if="cover" class="waterfall-cover" :style="coverStyle" @tap.stop="openPost()" :class="[uxNative?'ux0':'',uxNative?'ux2':'']">
+      <CachedImage v-if="coverSource && !coverFailed" class="waterfall-image" :priority="loadPriority" :src="coverSource" :version="cover.resourceVersion" variant="cover" mode="aspectFit" @load="onCoverLoad" @error="coverFailed = true"  :class="[uxNative?'ux3':'']"/>
+      <view v-else class="waterfall-cover-placeholder" :class="[uxNative?'ux0':'',uxNative?'ux4':'',uxNative?'ux5':'']"><AppIcon :name="cover.type === 'video' ? 'video' : 'image'" tone="muted" :size="44" /></view>
+      <template v-if="cover.type === 'video'">
+        <view class="waterfall-play" :class="[uxNative?'ux0':'',uxNative?'ux6':'',uxNative?'ux7':'']"><AppIcon name="play" tone="white" :size="22" /></view>
+        <text v-if="duration" class="waterfall-duration" :class="[uxNative?'ux8':'',uxNative?'ux9':'',uxNative?'ux10':'',uxNative?'ux11':'']">{{ duration }}</text>
+      </template>
+      <!-- #ifdef APP -->
+<view v-bind="a11yAttrs(a11yPrefix+'-0',{&quot;aria-label&quot;:'共' + post.media.length + '张图片'})" v-else-if="post.media.length > 1" class="waterfall-image-count"  :class="[uxNative?'ux0':'',uxNative?'ux12':'',uxNative?'ux13':'']">
+<!-- #endif -->
+<!-- #ifndef APP -->
+<view :aria-label="'共' + post.media.length + '张图片'" v-else-if="post.media.length > 1" class="waterfall-image-count"  :class="[uxNative?'ux0':'',uxNative?'ux12':'',uxNative?'ux13':'']">
+<!-- #endif -->
+        <AppIcon name="stack" tone="white" :size="23"  :style="uxLayout(uxNodePrefix+'-g1000',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;5rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;18rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'"/><text :class="[uxNative?'ux8':'',uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux9':'']" :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;5rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;18rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1001'">{{ post.media.length }}</text>
+      </view>
+    </view>
+    </FeedRevealBlock>
+    <view class="waterfall-copy" :class="[uxNative?'ux0':'',uxNative?'ux16':'']">
+      <FeedRevealBlock v-if="post.title.trim() || (!cover && post.content?.trim())" kind="text" :order="cover ? 1 : 0">
+      <text v-if="post.title.trim()" class="waterfall-title" :class="[uxNative?'ux8':'',uxNative?'ux9':'',uxNative?'ux17':'',uxNative?'ux18':'']" :max-lines="(uxNative) ? 2 : (undefined)">{{ post.title }}</text>
+      <text v-if="!cover && post.content?.trim()" class="waterfall-content" :class="[uxNative?'ux8':'',uxNative?'ux9':'',uxNative?'ux19':'',uxNative?'ux20':'',uxNative?'ux21':'']" :max-lines="(uxNative) ? 2 : (undefined)">{{ post.content }}</text>
+      </FeedRevealBlock>
+      <RepostReference v-if="post.repost" :source="post.repost"/><view class="waterfall-footer" :class="[uxNative?'ux0':'',uxNative?'ux22':'']">
+        <FeedRevealBlock kind="footer" :order="cover ? 2 : 1" style="width:100%">
+        <ActionButton class="waterfall-author" :aria-label="post.author.nickname" @tap.stop="openUserProfile(post.author.id)" :class="[uxNative?'ct-native-button':'',uxNative?'ux23':'',uxNative?'ux24':'',uxNative?'ux25':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;10rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1002'">
+          <UserAvatar navigable :src="post.author.avatar" :user-id="post.author.id" :frame-id="post.author.avatarFrame" :frame-expires-at="post.author.avatarFrameExpiresAt ?? undefined" :size="33" />
+          <view class="waterfall-identity-name"><UserName :user-id="post.author.id" :nickname="post.author.nickname" :level="post.author.level" :size="16" /></view>
+        </ActionButton>
+        <ActionButton class="waterfall-like" :class="[uxNative?'ct-native-button':'',{liked},uxNative?'ux23':'',uxNative?'ux36':'',uxNative?'ux25':'',uxNative&amp;&amp;!!liked?'ux37':'']" :aria-label="liked ? '取消点赞' : '点赞'" :disabled="likeBusy" @tap.stop="like" :style="uxLayout(uxNodePrefix+'-g1005',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;10rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1005'">
+          <InteractionIcon kind="like" variant="feed" :active="liked" :play-signal="likePlayback" :enabled="visible" :size="36"  :style="uxLayout(uxNodePrefix+'-g1006',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;7rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1006'"/>
+          <text :class="[uxNative?'ux8':'',uxNative?'ux44':'',uxNative?'ux28':'',uxNative&amp;&amp;!!liked?'ux50':'',uxNative?'ux9':'']" :style="uxLayout(uxNodePrefix+'-g1007',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;7rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1007'">{{ formatCount(post.likeCount) }}</text>
+        </ActionButton>
+              </FeedRevealBlock>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import RepostReference from './RepostReference.uvue'
+import { openUserProfile } from '@/utils/navigation'
+import FeedLoadingSheen from '@/components/FeedLoadingSheen.uvue'
+import FeedRevealBlock from '@/components/FeedRevealBlock.uvue'
+import UserAvatar from '@/components/UserAvatar.uvue'
+import UserName from '@/components/UserName.uvue'
+
+import LevelBadge from '@/components/LevelBadge.uvue'
+import { useNativeSemantics } from '@/composables/useNativeSemantics'
+const { prefix: a11yPrefix, attrs: a11yAttrs } = useNativeSemantics()
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, ref, watch } from 'vue'
+import AppIcon from './AppIcon.uvue'
+import CachedImage from './CachedImage.uvue'
+import InteractionIcon from './InteractionIcon.uvue'
+import { DEFAULT_AVATAR, avatarSrc } from '@/utils/auth'
+import { mediaUrl } from '@/utils/media-cache'
+import { openDestination } from '@/utils/navigation'
+import { interactionBusy, performPostInteraction } from '@/utils/interactions'
+import { waterfallCoverRatio } from '@/utils/waterfall-layout'
+import { rememberMediaRatio, mediaPreviewSource } from '@/utils/media-layout'
+import type { Post } from '@/types/home'
+
+const props = withDefaults(defineProps<{ post: Post; visible?: boolean; loadPriority?: number }>(), { visible: true, loadPriority: 0 })
+const cover = computed(() => props.post.media[0])
+const loadedCoverRatio = ref<number | null>(null)
+const coverRatio = computed(() => waterfallCoverRatio(cover.value, loadedCoverRatio.value ?? 1))
+// Native layout does not resolve percentage padding against the column width.
+// The feed has 16rpx outer gutters and a 16rpx gap: (750 - 48) / 2 = 351rpx.
+const coverStyle = computed(() => uxNative
+  ? { height: (351 / coverRatio.value) + 'rpx', paddingBottom: '0rpx' }
+  : { paddingBottom: (100 / coverRatio.value) + '%' })
+const coverSource = computed(() => mediaUrl(mediaPreviewSource(cover.value)))
+const coverReady = ref(false)
+const coverFailed = ref(false)
+watch(() => [coverSource.value, cover.value?.resourceVersion], (value, previous) => {
+  // Refresh replaces media objects even when their image identity is unchanged.
+  // The child then keeps its decoded image and will not emit another load event.
+  if (previous && value[0] === previous[0] && value[1] === previous[1]) return
+  coverFailed.value = false
+  coverReady.value = false
+  loadedCoverRatio.value = null
+})
+function onCoverLoad(event: { detail: { width: number; height: number } }) {
+  coverReady.value = true
+  const { width, height } = event.detail
+  const ratio = width / height
+  if (width > 0 && height > 0 && Number.isFinite(ratio)) { loadedCoverRatio.value = ratio; if (cover.value) rememberMediaRatio(cover.value, ratio) }
+}
+const duration = computed(() => {
+  if (cover.value?.duration) return cover.value.duration
+  const seconds = Math.floor((cover.value?.durationMs || 0) / 1000)
+  return seconds > 0 ? String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0') : ''
+})
+const avatar = ref(avatarSrc(props.post.author.avatar))
+watch(() => props.post.author.avatar, value => { avatar.value = avatarSrc(value) })
+const liked = computed(() => !!props.post.detail?.liked)
+const likeBusy = computed(() => interactionBusy.has(props.post.id + ':like'))
+const likePlayback = ref(0)
+async function like() {
+  const wasActive = liked.value
+  const result = await performPostInteraction(props.post, 'like')
+  if (result?.active && !wasActive) likePlayback.value++
+}
+function openPost() {
+  openDestination({ kind: 'post', title: props.post.title, postId: props.post.id })
+}
+const formatCount = (count: number) => count >= 10000 ? (count / 10000).toFixed(count % 10000 === 0 ? 0 : 1) + '万' : count
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.waterfall-post { overflow: hidden; border-radius: 18rpx; background: #fff; margin-bottom: 20rpx; }
+.waterfall-cover { position: relative; height: 0; overflow: hidden; border-radius: 16rpx; background: #e9ecef; }
+.waterfall-image, .waterfall-cover-placeholder { position: absolute; inset: 0; width: 100%; height: 100%; }
+.waterfall-cover-placeholder { display: flex; align-items: center; justify-content: center; flex-direction: row; }
+.waterfall-copy { padding: 14rpx 18rpx 11rpx; }
+.waterfall-title, .waterfall-content { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-size: 21rpx; line-height: 30rpx; color: #272a2b; }
+.waterfall-title { font-weight: 600; }
+.waterfall-content { color: #929799; }
+.waterfall-title + .waterfall-content { margin-top: 8rpx; }
+.waterfall-footer { display: flex; align-items: center; justify-content: space-between; gap: 10rpx; margin-top: 0; min-height: 34rpx; flex-direction: row; }
+.waterfall-post button { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; line-height: normal; font-size: inherit; }
+.waterfall-post button::after { border: 0; }
+.waterfall-author { display: flex; align-items: center; flex: 1; min-width: 0; gap: 0; text-align: left; flex-direction: row; }
+.waterfall-avatar { width: 34rpx; height: 34rpx; border-radius: 50%; flex-shrink: 0; background: #e9ecef; }
+.waterfall-nickname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #a1a5a8; font-size: 18rpx; }
+.waterfall-like { display: flex; align-items: center; gap: 7rpx; flex-shrink: 0; min-height: 34rpx; color: #93989b; font-size: 18rpx !important; flex-direction: row; }
+.waterfall-like.liked { color: #fa9421; }
+.waterfall-image-count, .waterfall-duration, .waterfall-play { position: absolute; background: rgba(0,0,0,.65); color: #fff; border-radius: 22rpx; }
+.waterfall-image-count { right: 8rpx; bottom: 8rpx; display: flex; align-items: center; gap: 5rpx; padding: 4rpx 9rpx; font-size: 18rpx; flex-direction: row; }
+.waterfall-duration { right: 8rpx; bottom: 8rpx; padding: 3rpx 8rpx; font-size: 18rpx; line-height: 24rpx; }
+.waterfall-play { right: 10rpx; top: 10rpx; display: flex; align-items: center; justify-content: center; width: 30rpx; height: 30rpx; border-radius: 50%; flex-direction: row; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux8{color:var(--text-main);font-size:26rpx;}
+.ux14{color:#fff;}
+.ux15{font-size:18rpx;}
+.ux27{text-align:left;}
+.ux28{line-height:normal;}
+
+
+
+
+
+
+.ux44{color:#93989b;font-size:18rpx;}
+
+
+
+
+
+.ux50{color:#fa9421;}
+.ux0{}
+.ux9{}
+.ux23{}
+
+
+
+
+
+
+.ux1{overflow:hidden;border-radius:18rpx;background-color:#fff;margin-bottom:20rpx;}
+.ux2{position:relative;height:0;overflow:hidden;border-radius:16rpx;background-color:#e9ecef;}
+.ux3{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;}
+.ux4{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;}
+.ux5{display:flex;flex-direction:row;align-items:center;justify-content:center;}
+.ux16{padding:14rpx 18rpx 11rpx;}
+.ux17{display:flex;flex-direction:column;overflow:hidden;font-size:21rpx;line-height:30rpx;color:#272a2b;}
+.ux19{display:flex;flex-direction:column;overflow:hidden;font-size:21rpx;line-height:30rpx;color:#272a2b;}
+.ux18{font-weight:600;}
+.ux20{color:#929799;}
+.ux22{display:flex;flex-direction:row;align-items:center;justify-content:space-between;margin-top:0;min-height:34rpx;}
+.ux24{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;flex:1;min-width:0;text-align:left;}
+.ux26{width:34rpx;height:34rpx;border-radius:50%;flex-shrink:0;background-color:#e9ecef;}
+.ux29{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#a1a5a8;font-size:18rpx;}
+.ux36{display:flex;flex-direction:row;align-items:center;flex-shrink:0;min-height:34rpx;color:#93989b;font-size:18rpx!important;}
+.ux12{position:absolute;background-color:rgba(0,0,0,.65);color:#fff;border-radius:22rpx;}
+.ux10{position:absolute;background-color:rgba(0,0,0,.65);color:#fff;border-radius:22rpx;}
+.ux6{position:absolute;background-color:rgba(0,0,0,.65);color:#fff;border-radius:22rpx;}
+.ux13{right:8rpx;bottom:8rpx;display:flex;flex-direction:row;align-items:center;padding:4rpx 9rpx;font-size:18rpx;}
+.ux11{right:8rpx;bottom:8rpx;padding:3rpx 8rpx;font-size:18rpx;line-height:24rpx;}
+.ux7{right:10rpx;top:10rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;width:30rpx;height:30rpx;border-radius:50%;}
+.ux25{margin:0;padding:0;border:0px;border-radius:0;background-color:transparent;line-height:normal;}
+.ux21{margin-top:8rpx;}
+.ux37{color:#fa9421;}
+/* #endif */
+</style>
+
+<style scoped>
+.waterfall-identity-name { flex: 1; min-width: 0; margin-left: 8rpx; }
+</style>

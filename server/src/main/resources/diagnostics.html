@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>次元町 · 后端连接检测</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f4f6fa; color: #243044; font: 15px/1.65 system-ui, -apple-system, "Microsoft YaHei", sans-serif; }
+    main { max-width: 1250px; margin: 48px auto; padding: 0 24px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    p { margin: 8px 0; }
+    .subtitle, .meta, .note { color: #627089; }
+    .summary { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; margin: 28px 0 18px; padding: 20px 24px; border-radius: 12px; }
+    .summary strong { display: block; font-size: 22px; }
+    .summary.up { background: #e8f6ee; color: #166534; }
+    .summary.down { background: #fcebec; color: #a22132; }
+    .summary.warn { background: #fff3d6; color: #815810; }
+    .refresh { display: inline-block; color: #243044; background: white; border: 1px solid #d5dbe4; border-radius: 8px; padding: 8px 16px; text-decoration: none; white-space: nowrap; }
+    .refresh:hover { background: #f5f7fb; }
+    .table-wrap { overflow-x: auto; background: white; border: 1px solid #e1e5ec; border-radius: 12px; }
+    table { width: 100%; border-collapse: collapse; min-width: 850px; text-align: left; }
+    th { color: #66738a; font-size: 13px; background: #fafbfe; }
+    td, th { padding: 18px 16px; border-bottom: 1px solid #edf0f5; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .component { width: 155px; font-weight: 600; }
+    .message { width: 36%; overflow-wrap: anywhere; }
+    .suggestion { color: #627089; overflow-wrap: anywhere; }
+    .duration { white-space: nowrap; color: #627089; font-size: 13px; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 6px; font-weight: 600; font-size: 13px; white-space: nowrap; }
+    .badge.up { color: #166534; background: #e8f6ee; }
+    .badge.down { color: #a22132; background: #fcebec; }
+    .badge.warn { color: #815810; background: #fff3d6; }
+    .badge.skipped { color: #627089; background: #eef1f6; }
+    .note { margin-top: 18px; font-size: 13px; }
+    details { background: white; border: 1px solid #e1e5ec; border-radius: 12px; margin-top: 24px; padding: 16px 20px; }
+    summary { cursor: pointer; font-weight: 600; }
+    a { color: #315ac7; }
+    code { font-size: 13px; }
+    @media (max-width: 600px) { main { margin: 24px auto; padding: 0 16px; } h1 { font-size: 24px; } .summary { padding: 16px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>后端连接检测</h1>
+    <p class="subtitle">查看当前服务器上的 Spring Boot 后端能否连接各项依赖。异常项目优先显示。</p>
+    <section class="summary {{statusClass}}" aria-label="总体检测结果">
+      <div><strong>{{summary}}</strong><div class="meta">检测时间：{{checkedAt}}（北京时间） · 总耗时 {{duration}} ms</div></div>
+      <a class="refresh" href="">重新检测</a>
+    </section>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">检测项目</th><th scope="col">状态</th><th scope="col">检测结果</th><th scope="col">处理建议</th><th scope="col">耗时</th></tr></thead>
+        <tbody>{{rows}}</tbody>
+      </table>
+    </div>
+    <p class="note">检测结果保留 10 秒，频繁刷新会显示同一次结果。邮件检测不会发信，云存储检测不会写入对象；正常结果的验证范围详见各项说明。</p>
+    <details>
+      <summary>如果这个页面本身打不开</summary>
+      <p>确认 Java 后端进程已经启动，查看启动日志是否报错；检查 <code>SERVER_PORT</code>、服务器防火墙和安全组。如果通过域名访问，还需检查 DNS、HTTPS 证书和 Nginx 转发路径。</p>
+      <p>可先在服务器本机访问 <code>http://127.0.0.1:后端端口/diagnostics</code>。本机可访问、外部打不开时，应检查服务器入站网络和反向代理配置。</p>
+    </details>
+  </main>
+</body>
+</html>

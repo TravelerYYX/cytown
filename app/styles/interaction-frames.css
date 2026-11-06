@@ -1,0 +1,67 @@
+.interaction-frames.like { width: 2600%; animation: interaction-like 1440ms step-end 1 forwards; }
+@keyframes interaction-like {
+0.00000000% { transform: translateX(0.00000000%); }
+2.77777778% { transform: translateX(-3.84615385%); }
+5.55555556% { transform: translateX(-7.69230769%); }
+8.33333333% { transform: translateX(-11.53846154%); }
+11.11111111% { transform: translateX(-15.38461538%); }
+13.88888889% { transform: translateX(-19.23076923%); }
+16.66666667% { transform: translateX(-23.07692308%); }
+19.44444444% { transform: translateX(-26.92307692%); }
+22.22222222% { transform: translateX(-30.76923077%); }
+25.00000000% { transform: translateX(-34.61538462%); }
+27.77777778% { transform: translateX(-38.46153846%); }
+30.55555556% { transform: translateX(-42.30769231%); }
+33.33333333% { transform: translateX(-46.15384615%); }
+36.11111111% { transform: translateX(-50.00000000%); }
+38.88888889% { transform: translateX(-53.84615385%); }
+41.66666667% { transform: translateX(-57.69230769%); }
+44.44444444% { transform: translateX(-61.53846154%); }
+47.22222222% { transform: translateX(-65.38461538%); }
+50.00000000% { transform: translateX(-69.23076923%); }
+52.77777778% { transform: translateX(-73.07692308%); }
+55.55555556% { transform: translateX(-76.92307692%); }
+58.33333333% { transform: translateX(-80.76923077%); }
+61.11111111% { transform: translateX(-84.61538462%); }
+63.88888889% { transform: translateX(-88.46153846%); }
+66.66666667% { transform: translateX(-92.30769231%); }
+69.44444444% { transform: translateX(-96.15384615%); }
+100% { transform: translateX(-96.15384615%); }
+}
+.interaction-frames.favorite { width: 3300%; animation: interaction-favorite 1440ms step-end 1 forwards; }
+@keyframes interaction-favorite {
+0.00000000% { transform: translateX(0.00000000%); }
+2.77777778% { transform: translateX(-3.03030303%); }
+5.55555556% { transform: translateX(-6.06060606%); }
+8.33333333% { transform: translateX(-9.09090909%); }
+11.11111111% { transform: translateX(-12.12121212%); }
+13.88888889% { transform: translateX(-15.15151515%); }
+16.66666667% { transform: translateX(-18.18181818%); }
+19.44444444% { transform: translateX(-21.21212121%); }
+22.22222222% { transform: translateX(-24.24242424%); }
+25.00000000% { transform: translateX(-27.27272727%); }
+27.77777778% { transform: translateX(-30.30303030%); }
+30.55555556% { transform: translateX(-33.33333333%); }
+33.33333333% { transform: translateX(-36.36363636%); }
+36.11111111% { transform: translateX(-39.39393939%); }
+38.88888889% { transform: translateX(-42.42424242%); }
+41.66666667% { transform: translateX(-45.45454545%); }
+44.44444444% { transform: translateX(-48.48484848%); }
+47.22222222% { transform: translateX(-51.51515152%); }
+50.00000000% { transform: translateX(-54.54545455%); }
+52.77777778% { transform: translateX(-57.57575758%); }
+55.55555556% { transform: translateX(-60.60606061%); }
+58.33333333% { transform: translateX(-63.63636364%); }
+61.11111111% { transform: translateX(-66.66666667%); }
+63.88888889% { transform: translateX(-69.69696970%); }
+66.66666667% { transform: translateX(-72.72727273%); }
+69.44444444% { transform: translateX(-75.75757576%); }
+72.22222222% { transform: translateX(-78.78787879%); }
+75.00000000% { transform: translateX(-81.81818182%); }
+77.77777778% { transform: translateX(-84.84848485%); }
+80.55555556% { transform: translateX(-87.87878788%); }
+83.33333333% { transform: translateX(-90.90909091%); }
+86.11111111% { transform: translateX(-93.93939394%); }
+88.88888889% { transform: translateX(-96.96969697%); }
+100% { transform: translateX(-96.96969697%); }
+}

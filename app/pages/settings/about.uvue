@@ -1,0 +1,117 @@
+<template>
+  <view class="about-page" :style="{ paddingTop: statusBarHeight + 'px' }">
+    <view class="about-header">
+      <ActionButton class="about-back" aria-label="返回" @tap="goBack"><AppIcon name="back" :size="40" /></ActionButton>
+      <text class="about-title">关于次元町</text>
+      <view class="about-header-space" />
+    </view>
+    <scroll-view class="about-scroll" direction="vertical" :show-scrollbar="false">
+      <view class="about-card">
+        <view class="about-brand">
+          <image class="about-logo" src="/static/images/about/ciyuantown-logo.png" mode="aspectFit" />
+          <text class="about-version">{{ versionLabel }}</text>
+        </view>
+        <ActionButton class="about-row" aria-label="检查更新" hover-class="about-row-hover" :disabled="updateChecking" @tap="checkUpdate">
+          <view class="about-update-label">
+            <text class="about-row-title">{{ updateChecking ? '正在检查…' : '检查更新' }}</text>
+            <view v-if="hasAppUpdate" class="about-update-dot" />
+          </view>
+          <RowArrow />
+        </ActionButton>
+        <ActionButton v-for="(title, index) in legalRows" :key="title" class="about-row" :class="{ 'about-row-last': index === legalRows.length - 1 }" :aria-label="title" hover-class="about-row-hover" @tap="openLegal(title)">
+          <text class="about-row-title">{{ title }}</text><RowArrow />
+        </ActionButton>
+      </view>
+      <view class="about-bottom" :style="{ height: (bottomInset + 32) + 'px' }" />
+    </scroll-view>
+    <EyeCareOverlay />
+  </view>
+</template>
+
+<script setup lang="uts">
+import { ref } from 'vue'
+import ActionButton from '@/components/ActionButton.uvue'
+import AppIcon from '@/components/AppIcon.uvue'
+import RowArrow from '@/components/RowArrow.uvue'
+import EyeCareOverlay from '@/components/EyeCareOverlay.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { notifyWindowResize } from '@/utils/window-events'
+import { setStatusBar } from '@/utils/platform'
+import { checkAppUpdate, hasAppUpdate, updateChecking } from '@/utils/app-update'
+import { fetchLegalLinks, openLegalLink, type LegalLinks } from '@/utils/legal-links'
+
+const { statusBarHeight, bottomInset } = useWindowInsets()
+const versionLabel = ref('版本信息读取中…')
+const legalRows = ['用户协议', '隐私政策', '个人信息收集清单', '第三方共享个人信息清单']
+let legalLinks: LegalLinks | null = null
+let pendingLinks: Promise<LegalLinks> | null = null
+let openingLegal = false
+
+function readVersion() {
+  try {
+    const version = uni.getAppBaseInfo().appVersion?.trim() || ''
+    versionLabel.value = version.length > 0 ? 'Version ' + version : '版本信息暂不可用'
+  } catch {
+    versionLabel.value = '版本信息暂不可用'
+  }
+}
+
+function loadLegalLinks(): Promise<LegalLinks> {
+  return pendingLinks ||= fetchLegalLinks().then(value => {
+    legalLinks = value
+    return value
+  }).finally(() => { pendingLinks = null })
+}
+
+async function openLegal(title: string): Promise<void> {
+  // The existing legal-links API currently supplies the first three links only.
+  if (title === '第三方共享个人信息清单') {
+    uni.showToast({ title: '暂未配置链接', icon: 'none' })
+    return
+  }
+  if (openingLegal) return
+  openingLegal = true
+  try {
+    const links = legalLinks || await loadLegalLinks()
+    const link = title === '用户协议' ? links.userAgreement : title === '隐私政策' ? links.privacyPolicy : links.personalInfoCollection
+    openLegalLink(link, title)
+  } catch {
+    uni.showToast({ title: '链接加载失败，请点击重试', icon: 'none' })
+  } finally { openingLegal = false }
+}
+
+function checkUpdate() { if (!updateChecking.value) void checkAppUpdate(true) }
+function goBack() { uni.navigateBack({ fail: () => { uni.redirectTo({ url: '/pages/settings/index' }) } }) }
+onResize(notifyWindowResize)
+onShow(() => {
+  setStatusBar('dark')
+  readVersion()
+  legalLinks = null
+  void loadLegalLinks().catch(() => {})
+})
+</script>
+
+<style scoped>
+.about-page { position: fixed; top: 0; right: 0; bottom: 0; left: 0; display: flex; flex-direction: column; background-color: #f6f7f8; }
+.about-header { height: 108rpx; padding: 0 28rpx; display: flex; flex-direction: row; align-items: center; flex-shrink: 0; }
+.about-back { width: 64rpx; height: 64rpx; margin: 0; padding: 0; border-width: 0; border-radius: 0; background-color: transparent; display: flex; flex-direction: row; align-items: center; justify-content: center; flex-shrink: 0; }
+.about-title { flex: 1; min-width: 0; text-align: center; font-size: 30rpx; font-weight: 400; color: #303436; }
+.about-header-space { width: 64rpx; flex-shrink: 0; }
+.about-scroll { flex: 1; height: 0; min-height: 0; }
+.about-card { display: flex; flex-direction: column; margin: 28rpx 32rpx 0; border-radius: 30rpx; overflow: hidden; background-color: #ffffff; }
+.about-brand { height: 380rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; border-bottom: 1rpx solid #f0f1f2; }
+/* The original PNG has 206px left / 46px right transparent padding.
+   Offset the image by (206 - 46) / 2 / 2172 * 600rpx to center its visible artwork. */
+.about-logo { position: relative; left: -22.1rpx; width: 600rpx; height: 200rpx; flex-shrink: 0; }
+.about-version { margin-top: 24rpx; color: #999fa4; font-size: 26rpx; line-height: 38rpx; text-align: center; }
+.about-row { width: 100%; height: 102rpx; padding: 0 30rpx; margin: 0; display: flex; flex-direction: row; align-items: center; justify-content: space-between; flex-shrink: 0; border-width: 0; border-radius: 0; border-bottom: 1rpx solid #f0f1f2; background-color: #ffffff; text-align: left; }
+.about-row-last { border-bottom-width: 0; }
+.about-row-title { color: #303436; font-size: 25rpx; line-height: 36rpx; }
+.about-update-label { display: flex; flex-direction: row; align-items: center; }
+.about-update-dot { width: 12rpx; height: 12rpx; margin-left: 12rpx; flex-shrink: 0; border-radius: 6rpx; background-color: #f6557b; }
+.about-bottom { flex-shrink: 0; }
+/* #ifndef APP */
+.about-row::after, .about-back::after { border-width: 0; }
+.about-row-hover { background-color: #f7f8f9; }
+/* #endif */
+</style>

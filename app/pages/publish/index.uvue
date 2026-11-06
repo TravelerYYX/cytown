@@ -1,0 +1,595 @@
+<template>
+  <view class="publish-page" :class="[uxNative?'ux7':'',uxNative?'ux8':'']">
+    <view class="surface">
+      <view class="publish-status" :style="{height:statusBarHeight+'px'}"  :class="[uxNative?'ux7':'']"/>
+      <view class="header"><ActionButton :aria-label="&quot;关闭&quot;" class="close-button" @tap="goBack"><AppIcon name="close" :size="45"/></ActionButton><UploadProgress class="publish-header-upload" :compact="true" v-if="uploadStats.visible" :progress="uploadStats.progress" :speed="uploadStats.speed" :label="uploadStats.label" :failed="uploadStats.failed" @retry="retryPublish(editorSession)"/><text v-if="!uploadStats.visible" class="save-state" :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux16':'',uxNative?'ux17':'']">{{ saving ? '保存中…' : draftId ? '已保存' : '' }}</text><ActionButton :aria-label="&quot;草稿箱&quot;" v-if="mode==='post'" class="header-draft" @tap="openDrafts" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux18':'',uxNative?'ux13':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux19':'',uxNative?'ux20':'',uxNative?'ux16':'']">草稿箱</text></ActionButton></view>
+      <scroll-view id="publish-reference-editor" class="editor" @touchstart="modeSwipe.start" @touchmove="modeSwipe.move" @touchend="modeSwipe.end" @touchcancel="modeSwipe.cancel" direction="vertical" :show-scrollbar="false" :class="[uxNative?'ux21':'',uxNative?'ux22':'']">
+        <view v-if="loadingConfig" class="loading" :class="[uxNative?'ux7':'',uxNative?'ux23':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux24':'',uxNative?'ux16':'']">发布设置加载中…</text></view>
+        <view v-else id="publish-reference-body" class="editor-body" :style="{minHeight:editorBodyHeight+'px'}">
+          <view v-if="mode==='image'" class="media-grid">
+            <view v-for="(asset,index) in imageAssets" :key="asset.id" class="media-square filled-media" :style="uxLayout(uxNodePrefix+'-g1000'+'-'+[index].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;,&quot;__padding&quot;:&quot;50rpx&quot;}},{on:true,declarations:{__index:String(0+index)}}],{})" :id="uxNodePrefix+'-g1000'+'-'+[index].join('-')"><image :src="uiAsset(mediaSrc(asset))" mode="aspectFill" :class="[uxNative?'ux27':'']"/><ActionButton :aria-label="&quot;×&quot;" class="remove" @tap="removeAsset(asset.id)" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux28':'',uxNative?'ux13':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux29':'',uxNative?'ux30':'',uxNative?'ux16':'']">×</text></ActionButton><view class="sort-controls" :class="[uxNative?'ux7':'',uxNative?'ux31':'']"><ActionButton :aria-label="&quot;‹&quot;" :disabled="index===0" @tap="moveImage(index,-1)" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux32':'',uxNative&amp;&amp;!!(index===0)?'ux33':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux34':'',uxNative?'ux35':'',uxNative?'ux16':'']">‹</text></ActionButton><ActionButton :aria-label="&quot;›&quot;" :disabled="index===imageAssets.length-1" @tap="moveImage(index,1)" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux32':'',uxNative&amp;&amp;!!(index===imageAssets.length-1)?'ux33':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux34':'',uxNative?'ux35':'',uxNative?'ux16':'']">›</text></ActionButton></view></view>
+            <ActionButton :aria-label="String(imageAssets.length) + ' ' + &quot;/&quot; + ' ' + String(rule.imageMax)" v-if="imageAssets.length<rule.imageMax" class="media-square add-media" @tap="chooseImages" :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;,&quot;__padding&quot;:&quot;50rpx&quot;}},{on:true,declarations:{__index:String(0+imageAssets.length)}}],{})" :id="uxNodePrefix+'-g1001'"><image class="publish-add-icon" :src="uiAsset('/static/images/publish/add.svg')" mode="aspectFit" /><text class="media-count" :id="uxNodePrefix+'-g1003'">{{ imageAssets.length }}/{{ rule.imageMax }}</text></ActionButton>
+          </view>
+          <view v-else-if="mode==='video'" class="video-wrap" :class="[uxNative?'ux7':'',uxNative?'ux39':'']">
+            <ActionButton :aria-label="&quot;添加视频&quot;" v-if="!videoAssets.length" class="video-media" @tap="chooseVideo(false)" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux40':'',uxNative?'ux13':'']" :style="uxLayout(uxNodePrefix+'-n0',[{on:uxNative,declarations:{&quot;aspect-ratio&quot;:&quot;16/9&quot;}}],{})" :id="uxNodePrefix+'-n0'"><AppIcon name="plus" tone="muted" :size="52" :style="uxLayout(uxNodePrefix+'-g1004',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1004'"/><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux41':'',uxNative?'ux38':'',uxNative?'ux16':'']" :style="uxLayout(uxNodePrefix+'-g1005',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1005'">添加视频</text></ActionButton>
+            <view v-else class="video-box" @touchstart.stop="modeSwipe.cancel" :class="[uxNative?'ux7':'',uxNative?'ux42':'']"><video class="video-preview" :src="mediaSrc(videoAssets[0])" :poster="coverSrc(videoAssets[0])" controls :class="[uxNative?'ux43':'']" :style="uxLayout(uxNodePrefix+'-n1',[{on:uxNative,declarations:{&quot;aspect-ratio&quot;:&quot;16/9&quot;}}],{})" :id="uxNodePrefix+'-n1'"/><view class="cover-action" @tap="editCover(videoAssets[0])" :class="[uxNative?'ux7':'',uxNative?'ux44':'']"><image :src="uiAsset(coverSrc(videoAssets[0]))" mode="aspectFill" :class="[uxNative?'ux45':'']" :style="uxLayout(uxNodePrefix+'-n2',[{on:uxNative,declarations:{&quot;width&quot;:&quot;calc(100% + 36rpx)&quot;,&quot;height&quot;:&quot;calc(100% + 36rpx)&quot;}}],{})" :id="uxNodePrefix+'-n2'"/><view class="cover-blur" :class="[uxNative?'ux7':'',uxNative?'ux46':'',uxNative?'ux47':'']" :style="uxLayout(uxNodePrefix+'-n3',[{on:uxNative,declarations:{&quot;width&quot;:&quot;calc(100% + 36rpx)&quot;,&quot;height&quot;:&quot;calc(100% + 36rpx)&quot;}}],{})" :id="uxNodePrefix+'-n3'"/><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux48':'',uxNative?'ux16':'',uxNative?'ux49':'']">设置封面</text></view><ActionButton :aria-label="&quot;×&quot;" class="remove" @tap="removeAsset(videoAssets[0].id)" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux28':'',uxNative?'ux13':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux29':'',uxNative?'ux30':'',uxNative?'ux16':'']">×</text></ActionButton></view>
+          </view>
+
+          <view v-for="(asset, __uxIndex0) in submissionAssets" :key="'status-'+asset.id" class="transcode-status" :class="[uxNative?'ux7':'',uxNative?'ux50':'']"><text v-if="asset.status==='processing'" :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux51':'',uxNative?'ux16':'']">视频处理中，可以先发布，完成后自动可播放</text><template v-else-if="asset.status==='failed'||asset.status==='upload_failed'"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux51':'',uxNative?'ux16':'']">{{asset.errorMessage||'媒体处理失败'}}</text><ActionButton :aria-label="&quot;重新处理&quot;" @tap="retryAsset(asset)" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux52':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux51':'',uxNative?'ux38':'',uxNative?'ux53':'',uxNative?'ux16':'']">{{asset.status==='upload_failed'?'重试上传':'重新处理'}}</text></ActionButton></template></view>
+          <RepostReference v-if="editorSession.data.repost" :source="editorSession.data.repost" readonly/><view class="copy" @touchstart.stop="modeSwipe.cancel"><view class="title-row"><input v-model="title" class="title" placeholder-style="color:#c5c8cc;" :maxlength="rule.titleMax" :placeholder="rule.titleMin &amp;&amp; !editorSession.data.repostOfPostId ? '标题（必填）' : '标题（选填）'"/><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux16':'',uxNative?'ux58':'']">{{ titleLength }}/{{ rule.titleMax }}</text></view>
+            <textarea v-if="mode!=='post'" v-model="content" class="content" placeholder-style="color:#c5c8cc;" :maxlength="rule.contentMax" :placeholder="rule.contentMin ? '请输入正文' : '请尽情发挥吧'"/>
+            <view v-else class="post-editor" :class="[uxNative?'ux7':'',uxNative?'ux61':'']"><textarea v-model="postText" class="post-text" placeholder-style="color:#c5c8cc;" :maxlength="rule.contentMax" placeholder="请输入正文内容" :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux59':'',uxNative?'ux62':'']"/><view v-if="inlineRuns.length" class="inline-preview" :class="[uxNative?'ux7':'',uxNative?'ux63':'']"><template v-for="(run,index) in inlineRuns" :key="index" :style="uxLayout(uxNodePrefix+'-g1006'+'-'+[index].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(0+index)}}],{})" :id="uxNodePrefix+'-g1006'+'-'+[index].join('-')"><image v-if="run.type==='emoji'" :src="uiAsset(resourceUrl(run.imageUrl))" :class="[uxNative?'ux64':'']" :style="uxLayout(uxNodePrefix+'-g1007'+'-'+[index].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1007'+'-'+[index].join('-')"/><text v-else-if="run.type==='mention'" class="mention" :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux16':'',uxNative?'ux65':'']" :style="uxLayout(uxNodePrefix+'-g1008'+'-'+[index].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(index)}}],{})" :id="uxNodePrefix+'-g1008'+'-'+[index].join('-')">@{{ run.nickname }}</text><view v-else-if="run.type==='link'" class="link inline-link" :class="[uxNative?'ux7':'',uxNative?'ux66':'',uxNative?'ux67':'']" :style="uxLayout(uxNodePrefix+'-g1009'+'-'+[index].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;12rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(index)}}],{})" :id="uxNodePrefix+'-g1009'+'-'+[index].join('-')"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux68':'',uxNative?'ux16':'']" :style="uxLayout(uxNodePrefix+'-g1010'+'-'+[index].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;3rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1010'+'-'+[index].join('-')">{{ run.text }}</text><AppIcon name="chevron-round" tone="cyan" :size="22"  :style="uxLayout(uxNodePrefix+'-g1011'+'-'+[index].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;3rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1011'+'-'+[index].join('-')"/></view></template></view><view v-for="(block,index) in postBlocks" :key="index" class="block" :class="[uxNative?'ux7':'',uxNative?'ux69':'']"><image v-if="block.type==='image'" :src="uiAsset(mediaSrc(assetById(block.assetId)))" mode="aspectFill" :class="[uxNative?'ux70':'']"/><video v-else-if="block.type==='video'" :src="mediaSrc(assetById(block.assetId))" :poster="coverSrc(assetById(block.assetId))" controls :class="[uxNative?'ux71':'']"/><text v-else-if="block.type==='divider'" class="divider" :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux16':'',uxNative?'ux72':'']">{{ block.previewText }}</text><text v-else-if="block.type==='poll'" class="poll-preview" :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux16':'',uxNative?'ux73':'']">投票 · {{ poll.question || '未填写问题' }} · {{ validPollOptions.length }}个选项</text><ActionButton :aria-label="&quot;删除&quot;" class="block-remove" @tap="postBlocks.splice(index,1)" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux74':'',uxNative?'ux13':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux75':'',uxNative?'ux34':'',uxNative?'ux16':'']">删除</text></ActionButton></view></view>
+          </view>
+
+          <view id="publish-reference-options" class="options">
+            <ActionButton :aria-label="&quot;选择版区&quot; + ' ' + &quot;*&quot; + ' ' + String(channelName || (config.channels.length ? '请选择' : '暂无可发布版区'))" class="option" @tap="chooseChannel"><view :class="[uxNative?'ux7':'',uxNative?'ux78':'']"><image class="publish-option-icon" :src="uiAsset('/static/images/publish/section.svg')" mode="aspectFit" /><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux38':'',uxNative?'ux79':'',uxNative?'ux16':'']" :style="uxLayout(uxNodePrefix+'-g1013',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;14rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1013'">选择版区</text><text class="required" :style="uxLayout(uxNodePrefix+'-g1014',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;14rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1014'">*</text></view><view class="option-end" :class="[uxNative?'ux7':'',uxNative?'ux81':'',uxNative?'ux78':'']" :style="uxLayout(uxNodePrefix+'-n4',[{on:uxNative,declarations:{&quot;max-width&quot;:&quot;55%&quot;}}],{})" :id="uxNodePrefix+'-n4'"><text class="publish-option-value" :style="uxLayout(uxNodePrefix+'-g1015',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative,declarations:{&quot;__gap&quot;:&quot;14rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1015'">{{ channelName || (config.channels.length ? '请选择' : '暂无可发布版区') }}</text><AppIcon name="chevron-round" tone="muted" :size="30" :style="uxLayout(uxNodePrefix+'-g1016',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative,declarations:{&quot;__gap&quot;:&quot;14rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1016'"/></view></ActionButton>
+            <ActionButton :aria-label="&quot;参与话题&quot; + ' ' + String(selectedTopics.length ? selectedTopics.map(t=>t.name).join('、') : '')" class="option" @tap="openTopics"><view :class="[uxNative?'ux7':'',uxNative?'ux78':'']"><image class="publish-option-icon" :src="uiAsset('/static/images/publish/topic.svg')" mode="aspectFit" /><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux38':'',uxNative?'ux79':'',uxNative?'ux16':'']" :style="uxLayout(uxNodePrefix+'-g1018',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;14rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1018'">参与话题</text></view><view class="option-end" :class="[uxNative?'ux7':'',uxNative?'ux81':'',uxNative?'ux78':'']" :style="uxLayout(uxNodePrefix+'-n5',[{on:uxNative,declarations:{&quot;max-width&quot;:&quot;55%&quot;}}],{})" :id="uxNodePrefix+'-n5'"><text class="publish-option-value" :style="uxLayout(uxNodePrefix+'-g1019',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative,declarations:{&quot;__gap&quot;:&quot;14rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1019'">{{ selectedTopics.length ? selectedTopics.map(t=>t.name).join('、') : '' }}</text><AppIcon name="chevron-round" tone="muted" :size="30" :style="uxLayout(uxNodePrefix+'-g1020',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative,declarations:{&quot;__gap&quot;:&quot;14rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1020'"/></view></ActionButton>
+            <ActionButton :aria-label="&quot;创作设置&quot; + ' ' + String(creator.original ? '原创' : '')" class="option" @tap="settingsOpen=true"><view :class="[uxNative?'ux7':'',uxNative?'ux78':'']"><image class="publish-option-icon" :src="uiAsset('/static/images/publish/settings.svg')" mode="aspectFit" /><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux38':'',uxNative?'ux79':'',uxNative?'ux16':'']" :style="uxLayout(uxNodePrefix+'-g1022',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;14rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1022'">创作设置</text></view><view class="option-end" :class="[uxNative?'ux7':'',uxNative?'ux81':'',uxNative?'ux78':'']" :style="uxLayout(uxNodePrefix+'-n6',[{on:uxNative,declarations:{&quot;max-width&quot;:&quot;55%&quot;}}],{})" :id="uxNodePrefix+'-n6'"><text class="publish-option-value" :style="uxLayout(uxNodePrefix+'-g1023',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative,declarations:{&quot;__gap&quot;:&quot;14rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1023'">{{ creator.original ? '原创' : '' }}</text><AppIcon name="chevron-round" tone="muted" :size="30" :style="uxLayout(uxNodePrefix+'-g1024',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;9rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative,declarations:{&quot;__gap&quot;:&quot;14rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1024'"/></view></ActionButton>
+          </view>
+        </view>
+      </scroll-view>
+
+      <view v-if="mode==='post'" class="toolbar" :class="[uxNative?'ux7':'',uxNative?'ux83':'']"><ActionButton :aria-label="&quot;图片&quot;" v-if="rule.imageMax>0" @tap="chooseImages" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux84':'']"><AppIcon name="image" :size="42"/></ActionButton><ActionButton :aria-label="&quot;表情&quot;" v-if="feature('emoji')" @tap="toolPanel='emoji'" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux84':'']"><AppIcon name="smile" :size="42"/></ActionButton><ActionButton :aria-label="&quot;提及&quot;" v-if="feature('mention')" @tap="openMentions" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux84':'']"><AppIcon name="at" :size="42"/></ActionButton><ActionButton :aria-label="&quot;文字颜色&quot;" v-if="feature('color')" @tap="toolPanel='color'" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux84':'']"><AppIcon name="text-tool" :size="42"/></ActionButton><ActionButton :aria-label="&quot;视频&quot;" v-if="rule.videoMax>0" @tap="chooseVideo(true)" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux84':'']"><AppIcon name="video" :size="42"/></ActionButton><ActionButton :aria-label="&quot;更多工具&quot;" v-if="hasMoreTools" @tap="moreTools" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux84':'']"><AppIcon name="plus" :size="42"/></ActionButton></view>
+      <view id="publish-reference-footer" class="footer">
+        <ActionButton aria-label="草稿箱" class="draft-button" @tap="openDrafts">
+          <image class="publish-draft-icon" :src="uiAsset('/static/images/publish/draft.svg')" mode="aspectFit" />
+          <text class="draft-label">草稿箱</text>
+        </ActionButton>
+        <view :id="uxNodePrefix+'-submit-slot'" class="publish-button-slot">
+          <ActionButton :aria-label="publishing ? '发布中…' : '发布'" :id="uxNodePrefix+'-submit'" class="publish-button" :class="{ready,'publish-ready':ready}" :disabled="!ready||publishing" @tap="publish">
+            <text :id="uxNodePrefix+'-submit-label'" class="publish-label">发布</text>
+          </ActionButton>
+        </view>
+      </view>
+    </view>
+    <view class="mode-dock" :style="{paddingBottom:bottomPadding}" :class="[uxNative?'ux7':'',uxNative?'ux95':'']"><ActionButton :aria-label="String(item.label)" v-for="(item, __uxIndex1) in modes" :key="item.key" class="mode-button" :class="[uxNative?'ct-native-button':'',{active:mode===item.key},uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux146':'']" @tap="switchMode(item.key)"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux177':'',uxNative?'ux178':'',uxNative?'ux16':'']">{{ item.label }}</text><view :class="[uxNative?'ux7':'',uxNative?'ux180':'',uxNative&amp;&amp;!!(mode===item.key)?'ux181':'']"/></ActionButton></view>
+
+    <view v-if="settingsRendered" class="creation-mask"><view class="creation-backdrop" :style="{opacity: settingsEntered ? 1 : 0}" @tap="settingsOpen=false" /><view class="sheet creation-sheet" :class="[uxNative?'ux7':'',uxNative?'ux97':'']" :style="uxLayout(uxNodePrefix+'-n7',[{on:uxNative,declarations:{&quot;padding&quot;:&quot;28rpx 34rpx max(38rpx,env(safe-area-inset-bottom))&quot;}}],{transform: settingsEntered ? 'translateY(0%)' : 'translateY(100%)'})" :id="uxNodePrefix+'-n7'"><view class="sheet-title" :class="[uxNative?'ux7':'',uxNative?'ux98':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux135':'',uxNative?'ux16':'']">创作设置</text><ActionButton :aria-label="&quot;完成&quot;" @tap="settingsOpen=false" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux182':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux135':'',uxNative?'ux38':'',uxNative?'ux183':'',uxNative?'ux16':'']">完成</text></ActionButton></view><label class="switch" :class="[uxNative?'ux99':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux136':'',uxNative?'ux16':'']">允许下载</text><switch :checked="creator.allowDownload" :disabled="!policies.allowDownload.userEditable" @change="setAllowDownload"/></label><label class="switch" :class="[uxNative?'ux99':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux136':'',uxNative?'ux16':'']">下载时添加作者昵称与UID水印</text><switch :checked="creator.downloadWatermark" :disabled="!creator.allowDownload||!policies.downloadWatermark.userEditable" @change="setWatermark"/></label><label class="switch" :class="[uxNative?'ux99':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux136':'',uxNative?'ux16':'']">声明原创</text><switch :checked="creator.original" :disabled="!policies.original.userEditable" @change="setOriginal"/></label></view></view>
+    <ChannelPickerSheet :visible="channelSheetOpen" :channels="config.channels" :selected-id="channelId ?? 0" @close="channelSheetOpen=false" @pick="pickChannel" />
+    <!-- #ifdef APP-ANDROID -->
+    <TopicPickerSheet v-if="topicsRendered" :entered="topicsEntered" :selection="selectedTopics" @close="topicSheetOpen=false" @confirm="confirmTopics" />
+    <!-- #endif -->
+    <view v-if="toolPanel" class="mask" @tap.self="toolPanel=''" :class="[uxNative?'ux7':'',uxNative?'ux96':'']">
+      <view class="sheet tool-sheet" :class="[uxNative?'ux7':'',uxNative?'ux97':'',uxNative?'ux101':'']" :style="uxLayout(uxNodePrefix+'-n11',[{on:uxNative,declarations:{&quot;padding&quot;:&quot;28rpx 34rpx max(38rpx,env(safe-area-inset-bottom))&quot;}}],{})" :id="uxNodePrefix+'-n11'"><view class="sheet-title" :class="[uxNative?'ux7':'',uxNative?'ux98':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux135':'',uxNative?'ux16':'']">{{ panelTitle }}</text><ActionButton :aria-label="&quot;完成&quot;" @tap="toolPanel=''" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux182':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux135':'',uxNative?'ux38':'',uxNative?'ux183':'',uxNative?'ux16':'']">完成</text></ActionButton></view>
+        <scroll-view v-if="toolPanel==='emoji'" class="tool-list" direction="horizontal" :class="[uxNative?'ux21':'',uxNative?'ux102':'']"><ActionButton :aria-label="String(emoji.name)" v-for="(emoji, __uxIndex3) in config.emojis" :key="emoji.id" @tap="addEmoji(emoji)" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux218':'']"><image :src="uiAsset(resourceUrl(emoji.imageUrl))" :class="[uxNative?'ux219':'']" :style="uxLayout(uxNodePrefix+'-g1029'+'-'+[__uxIndex3].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1029'+'-'+[__uxIndex3].join('-')"/><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux138':'',uxNative?'ux38':'',uxNative?'ux16':'']" :style="uxLayout(uxNodePrefix+'-g1030'+'-'+[__uxIndex3].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;8rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1030'+'-'+[__uxIndex3].join('-')">{{emoji.name}}</text></ActionButton><EmptyState v-if="configLoaded && !loadingConfig && !config.emojis.length" compact /></scroll-view>
+        <view v-else-if="toolPanel==='color'" class="colors" :class="[uxNative?'ux7':'',uxNative?'ux103':'']"><ActionButton :aria-label="'文字颜色 ' + color.colorValue" v-for="(color, __uxIndex4) in config.colors" :key="color.id" :style="uxLayout(uxNodePrefix+'-g1031'+'-'+[__uxIndex4].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;28rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(0+__uxIndex4)}}],{background:color.colorValue})" :class="[uxNative?'ct-native-button':'',{chosen:activeColorId===color.id},uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux220':'',uxNative&amp;&amp;!!(activeColorId===color.id)?'ux221':'']" @tap="activeColorId=color.id;toolPanel=''" :id="uxNodePrefix+'-g1031'+'-'+[__uxIndex4].join('-')"/><EmptyState v-if="configLoaded && !loadingConfig && !config.colors.length" compact /></view>
+        <view v-else-if="toolPanel==='mention'" class="vertical" :class="[uxNative?'ux7':'',uxNative?'ux104':'']"><IntrinsicScroller max-height="400rpx"><ActionButton :aria-label="&quot;@&quot; + ' ' + String(user.nickname) + ' ' + &quot;UID&quot; + ' ' + String(user.publicUid)" v-for="(user, __uxIndex5) in following" :key="user.userId" @tap="addMention(user)" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux222':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux38':'',uxNative?'ux223':'',uxNative?'ux16':'',uxNative?'ux224':'']">@{{user.nickname}} </text><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux38':'',uxNative?'ux223':'',uxNative?'ux16':'',uxNative?'ux224':'']">UID {{user.publicUid}}</text></ActionButton><text v-if="followingLoading">加载中…</text><ActionButton v-if="followingError" aria-label="重新加载关注用户" @tap="openMentions"><text>加载失败，点击重试</text></ActionButton><EmptyState v-if="!followingLoading && !followingError && !following.length" compact /></IntrinsicScroller></view>
+        <view v-else-if="toolPanel==='divider'" class="vertical" :class="[uxNative?'ux7':'',uxNative?'ux104':'']"><IntrinsicScroller max-height="400rpx"><ActionButton :aria-label="String(divider.name) + ' ' + String(divider.previewText)" v-for="(divider, __uxIndex6) in config.dividers" :key="divider.id" @tap="addDivider(divider)" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux222':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux38':'',uxNative?'ux223':'',uxNative?'ux16':'',uxNative?'ux224':'']">{{divider.name}} </text><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux38':'',uxNative?'ux223':'',uxNative?'ux16':'',uxNative?'ux224':'']">{{divider.previewText}}</text></ActionButton><EmptyState v-if="configLoaded && !loadingConfig && !config.dividers.length" compact /></IntrinsicScroller></view>
+        <view v-else-if="toolPanel==='link'" class="form" :class="[uxNative?'ux7':'',uxNative?'ux105':'']"><input v-model="linkForm.text" placeholder="链接文本" :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux56':'',uxNative?'ux225':'']" :style="uxLayout(uxNodePrefix+'-g1032',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1032'"/><input v-model="linkForm.url" placeholder="https://..." :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux56':'',uxNative?'ux225':'']" :style="uxLayout(uxNodePrefix+'-g1033',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1033'"/><radio-group @change="linkForm.openMode=$event.detail.value as 'inapp'|'browser'" :class="[uxNative?'ux226':'']" :style="uxLayout(uxNodePrefix+'-g1034',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1034'"><label :style="uxLayout(uxNodePrefix+'-g1035',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;28rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1035'"><radio value="inapp" :checked="linkForm.openMode==='inapp'"/><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux16':'']">软件内打开</text></label><label :style="uxLayout(uxNodePrefix+'-g1036',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;28rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1036'"><radio value="browser" :checked="linkForm.openMode==='browser'"/><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux16':'']">浏览器打开</text></label></radio-group><ActionButton :aria-label="&quot;添加链接&quot;" class="primary" @tap="addLink" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux227':'']" :style="uxLayout(uxNodePrefix+'-g1037',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0+1+1+1)}}],{})" :id="uxNodePrefix+'-g1037'"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux38':'',uxNative?'ux228':'',uxNative?'ux16':'']">添加链接</text></ActionButton></view>
+        <view v-else-if="toolPanel==='poll'" class="form" :class="[uxNative?'ux7':'',uxNative?'ux105':'']"><input v-model="poll.question" maxlength="200" placeholder="投票问题（选填）" :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux56':'',uxNative?'ux225':'']" :style="uxLayout(uxNodePrefix+'-g1038',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1038'"/><input v-for="(_,i) in poll.options" :key="i" v-model="poll.options[i]" maxlength="100" :placeholder="'选项'+(i+1)" :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux56':'',uxNative?'ux225':'']" :style="uxLayout(uxNodePrefix+'-g1039'+'-'+[i].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0+1+i)}}],{})" :id="uxNodePrefix+'-g1039'+'-'+[i].join('-')"/><picker mode="date" :value="poll.endsAt?.slice(0,10)||''" :start="tomorrow" @change="setPollDate" :style="uxLayout(uxNodePrefix+'-g1040',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0+1+poll.options.length)}}],{})" :id="uxNodePrefix+'-g1040'"><view class="date-picker" :class="[uxNative?'ux7':'',uxNative?'ux106':'']"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux229':'',uxNative?'ux16':'']">{{poll.endsAt?'截止日期 '+poll.endsAt.slice(0,10):'设置截止日期（可选）'}}</text></view></picker><ActionButton :aria-label="&quot;清除截止日期&quot;" v-if="poll.endsAt" @tap="poll.endsAt=undefined" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'']" :style="uxLayout(uxNodePrefix+'-g1041',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0+1+poll.options.length+1)}}],{})" :id="uxNodePrefix+'-g1041'"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux38':'',uxNative?'ux16':'']">清除截止日期</text></ActionButton><view class="form-actions" :class="[uxNative?'ux7':'',uxNative?'ux107':'']" :style="uxLayout(uxNodePrefix+'-g1042',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;18rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0+1+poll.options.length+1+(poll.endsAt?1:0))}}],{})" :id="uxNodePrefix+'-g1042'"><ActionButton :aria-label="&quot;增加选项&quot;" v-if="poll.options.length<config.pollRule.maxOptions" @tap="poll.options.push('')" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux230':'']" :style="uxLayout(uxNodePrefix+'-g1043',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;28rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1043'"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux30':'',uxNative?'ux16':'']">增加选项</text></ActionButton><ActionButton :aria-label="&quot;完成&quot;" class="primary" @tap="savePoll" :class="[uxNative?'ct-native-button':'',uxNative?'ux11':'',uxNative?'ux13':'',uxNative?'ux230':'',uxNative?'ux227':'']" :style="uxLayout(uxNodePrefix+'-g1044',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;28rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+(poll.options.length<config.pollRule.maxOptions?1:0))}}],{})" :id="uxNodePrefix+'-g1044'"><text :class="[uxNative?'ux14':'',uxNative?'ux15':'',uxNative?'ux30':'',uxNative?'ux231':'',uxNative?'ux16':'']">完成</text></ActionButton></view></view>
+      </view>
+    </view>
+    <view v-if="publishing" class="publish-interaction-blocker" @touchmove.stop.prevent />
+    <EyeCareOverlay />
+  </view>
+</template>
+
+<script setup lang="uts">
+import { chooseAlbumImages, chooseAlbumVideo } from '@/utils/media-picker'
+import RepostReference from '@/components/RepostReference.uvue'
+import { startRepostEditor } from '@/utils/publish-tasks'
+import { useHorizontalSwipe } from '@/composables/useHorizontalSwipe'
+import EmptyState from '@/components/EmptyState.uvue'
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+import ChannelPickerSheet from '@/components/ChannelPickerSheet.uvue'
+// #ifdef APP-ANDROID
+import TopicPickerSheet from '@/components/TopicPickerSheet.uvue'
+// #endif
+import { usePublishSheetMotion } from '@/composables/usePublishSheetMotion'
+import IntrinsicScroller from '@/components/IntrinsicScroller.uvue'
+
+import { notifyWindowResize, observeWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+
+import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue'
+import UploadProgress from '@/components/UploadProgress.uvue'
+import { addPublishMedia, enqueuePublish, getPublishEditor, publishUploadStats, removePublishMedia, restorePublishMedia, retainPublishEditor, retryPublish, savePublishEditor, serverAssetId } from '@/utils/publish-tasks'
+import { entryTabRequest, entryMinePublishRequest } from '@/utils/navigation'
+
+import AppIcon from '@/components/AppIcon.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { API_BASE_URL } from '@/config/env'
+import { fetchDraft, fetchFollowing, fetchPublishConfig } from '@/utils/publish-api'
+import type { Asset, CreatorPolicy, FollowingUser, PollDraft, PublishChannel, PublishConfig, PublishEmoji, PublishRule, RichBlock, RichRun, Topic } from '@/types/publish'
+import { mediaUrl as resourceUrl } from '@/utils/media-cache'
+import { GET, POST } from '@/utils/request'
+import type { PublishMode } from '@/types/home'
+
+const base=API_BASE_URL,{statusBarHeight,bottomInset}=useWindowInsets(),bottomPadding=computed(()=>uxNative?Math.max(bottomInset.value,uni.getWindowInfo().safeAreaInsets?.bottom||0)+'px':'max('+bottomInset.value+'px, env(safe-area-inset-bottom, 0px))')
+// Reference: 1080px screenshot scaled to 750rpx; system bars remain device-owned.
+// Native getWindowInfo() can still contain the previous page's viewport during setup.
+const editorWindowHeight=ref(uni.getWindowInfo().windowHeight),measuredEditorHeight=ref(0)
+function syncEditorHeight(){
+  editorWindowHeight.value=uni.getWindowInfo().windowHeight
+  // #ifdef APP
+  const bounds=uni.getElementById('publish-reference-editor')?.getBoundingClientRect()
+  if(bounds&&bounds.height>0)measuredEditorHeight.value=bounds.height
+  // #endif
+}
+const stopEditorResize=observeWindowResize(()=>{void nextTick(syncEditorHeight)})
+onUnmounted(stopEditorResize)
+onReady(()=>{void nextTick(syncEditorHeight)})
+const editorBodyHeight=computed(()=>{
+  if(uxNative&&measuredEditorHeight.value>0)return measuredEditorHeight.value
+  const info=uni.getWindowInfo(),scale=info.windowWidth/750
+  const safeBottom=Math.max(bottomInset.value,info.safeAreaInsets?.bottom||0)
+  const toolbarHeight=mode.value==='post'?88:0
+  return Math.max(0,editorWindowHeight.value-statusBarHeight.value-safeBottom-(92+114+128+toolbarHeight)*scale)
+})
+const modes:{key:PublishMode;label:string}[]=[{key:'image',label:'图文'},{key:'video',label:'视频'},{key:'post',label:'帖子'}]
+const fallbackRules:PublishRule[]=[{mode:'image',titleMin:0,titleMax:30,contentMin:0,contentMax:2000,imageMax:9,videoMax:0,totalMediaMax:9,maxVideoMb:0},{mode:'video',titleMin:0,titleMax:30,contentMin:0,contentMax:2000,imageMax:0,videoMax:1,totalMediaMax:1,maxVideoMb:0},{mode:'post',titleMin:1,titleMax:30,contentMin:1,contentMax:30000,imageMax:9,videoMax:3,totalMediaMax:12,maxVideoMb:0}]
+const defaultPolicy:CreatorPolicy={defaultValue:false,userEditable:true}
+const config=reactive<PublishConfig>({rules:fallbackRules,channels:[],defaultChannelId:null,creatorPolicies:{allowDownload:{defaultValue:true,userEditable:true},downloadWatermark:defaultPolicy,original:defaultPolicy},reviewRequired:true,featureFlags:{},pollRule:{minOptions:2,maxOptions:10},topics:[],emojiGroups:[],emojis:[],colors:[],dividers:[]})
+const editorSession=ref(getPublishEditor())
+const mode=computed({get:()=>editorSession.value.data.mode,set:(v:PublishMode)=>{editorSession.value.data.mode=v}})
+const title=computed({get:()=>editorSession.value.data.title,set:(v:string)=>{editorSession.value.data.title=v}})
+const content=computed({get:()=>editorSession.value.data.content,set:(v:string)=>{editorSession.value.data.content=v}})
+const postText=computed({get:()=>editorSession.value.data.postText,set:(v:string)=>{editorSession.value.data.postText=v}})
+const assets=computed({get:()=>editorSession.value.data.assets,set:(v:Asset[])=>{editorSession.value.data.assets=v}})
+const postBlocks=computed({get:()=>editorSession.value.data.postBlocks,set:(v:RichBlock[])=>{editorSession.value.data.postBlocks=v}})
+const inlineRuns=computed({get:()=>editorSession.value.data.inlineRuns,set:(v:RichRun[])=>{editorSession.value.data.inlineRuns=v}})
+const selectedTopics=computed({get:()=>editorSession.value.data.selectedTopics,set:(v:Topic[])=>{editorSession.value.data.selectedTopics=v}})
+const channelId=computed({get:()=>editorSession.value.data.channelId,set:(v:number|null)=>{editorSession.value.data.channelId=v}})
+const activeColorId=computed({get:()=>editorSession.value.data.activeColorId,set:(v:number|undefined)=>{editorSession.value.data.activeColorId=v}})
+const following=ref<FollowingUser[]>([])
+const uploadStats=computed(()=>publishUploadStats(editorSession.value))
+const uploading=computed(()=>uploadStats.value.visible)
+const draftId=computed({get:()=>editorSession.value.draftId,set:(v:number|undefined)=>{editorSession.value.draftId=v}})
+const revision=computed({get:()=>editorSession.value.revision,set:(v:number|undefined)=>{editorSession.value.revision=v}})
+const saving=computed(()=>editorSession.value.saving)
+const creator=computed(()=>editorSession.value.data.creator),poll=computed(()=>editorSession.value.data.poll),linkForm=reactive<{text:string;url:string;openMode:'inapp'|'browser'}>({text:'',url:'',openMode:'inapp'})
+const followingLoading=ref(false),followingError=ref(false)
+const publishing=ref(false),loadingConfig=ref(true),initialized=ref(false),settingsOpen=ref(false),channelSheetOpen=ref(false),toolPanel=ref('')
+// #ifdef APP-ANDROID
+const topicSheetOpen=ref(false)
+const { rendered: topicsRendered, entered: topicsEntered } = usePublishSheetMotion(() => topicSheetOpen.value)
+function confirmTopics(topics:Topic[]){selectedTopics.value=topics.slice(0,5);uni.setStorageSync('publish-topic-selection',selectedTopics.value)}
+// #endif
+onBackPress(()=>{
+ // #ifdef APP-ANDROID
+ if(topicsRendered.value){uni.hideKeyboard();topicSheetOpen.value=false;return true}
+ // #endif
+ if(!publishing.value)retainPublishEditor(editorSession.value);return false
+})
+const { rendered: settingsRendered, entered: settingsEntered } = usePublishSheetMotion(() => settingsOpen.value)
+const rule=computed(()=>config.rules.find(item=>item.mode===mode.value)||fallbackRules.find(item=>item.mode===mode.value)!),policies=computed(()=>config.creatorPolicies)
+const titleLength=computed(()=>Array.from(title.value).length),imageAssets=computed(()=>assets.value.filter(a=>a.mediaType==='image')),videoAssets=computed(()=>assets.value.filter(a=>a.mediaType==='video')),validPollOptions=computed(()=>poll.value.options.map(v=>v.trim()).filter(Boolean)),channelName=computed(()=>config.channels.find(c=>c.id===channelId.value)?.name||'')
+const referencedAssetIds=computed(()=>new Set(postBlocks.value.filter((block):block is Extract<RichBlock,{assetId:number}>=>'assetId'in block).map(block=>block.assetId)))
+const submissionAssets=computed(()=>mode.value==='image'?imageAssets.value:mode.value==='video'?videoAssets.value.slice(0,1):assets.value.filter(asset=>referencedAssetIds.value.has(asset.id)))
+const submissionImages=computed(()=>submissionAssets.value.filter(asset=>asset.mediaType==='image')),submissionVideos=computed(()=>submissionAssets.value.filter(asset=>asset.mediaType==='video'))
+onLoad(async q=>{const id=String(q?.repostOfPostId||'');if(!/^[1-9]\d*$/.test(id))return;try{const source=await GET<import('@/types/post-api').PostResponse>('/app/post/'+id);const cover=source.media[0];editorSession.value=startRepostEditor({id:source.id,authorNickname:source.authorNickname,label:source.title||source.content||source.createTime,coverUrl:cover?.coverUrl||cover?.url||'',available:true});reconcileChannel(false)}catch{uni.showToast({title:'原帖不可转发',icon:'none'});leave()}})
+const bodyText=computed(()=>mode.value==='post'?postText.value:content.value),dirty=computed(()=>!!(editorSession.value.data.repostOfPostId||title.value.trim()||bodyText.value.trim()||assets.value.length||postBlocks.value.length||inlineRuns.value.length||selectedTopics.value.length||poll.value.question.trim()))
+const richTextLength=computed(()=>Array.from(postText.value.trim()).length+inlineRuns.value.reduce((sum,run)=>sum+Array.from(run.type==='mention'?'@'+run.nickname:run.type==='emoji'?'['+run.name+']':run.text).length,0))
+const ready=computed(()=>{if(loadingConfig.value||!config.channels.some(c=>c.id===channelId.value)||submissionAssets.value.some(a=>(a.status==='failed'||a.status==='upload_failed')))return false;const r=rule.value,t=titleLength.value,c=mode.value==='post'?richTextLength.value:Array.from(bodyText.value.trim()).length;if(t<(editorSession.value.data.repostOfPostId?0:r.titleMin)||t>r.titleMax||c<(editorSession.value.data.repostOfPostId?0:r.contentMin)||c>r.contentMax||!channelId.value)return false;if(submissionImages.value.length>r.imageMax||submissionVideos.value.length>r.videoMax||submissionAssets.value.length>r.totalMediaMax)return false;if(mode.value==='image')return submissionImages.value.length>=1;if(mode.value==='video')return submissionVideos.value.length===1;if(postBlocks.value.some(block=>block.type==='poll')&&(validPollOptions.value.length<config.pollRule.minOptions||validPollOptions.value.length>config.pollRule.maxOptions))return false;return c>0||submissionAssets.value.length>0||!!editorSession.value.data.repostOfPostId})
+const hasMoreTools=computed(()=>['divider','link','poll'].some(feature))
+const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10),panelTitle=computed(()=>({emoji:'选择表情',color:'文字颜色',mention:'@已关注用户',divider:'选择分割线',link:'添加链接',poll:'发布投票'}[toolPanel.value]||''))
+function mediaSrc(asset?:Asset){if(!asset)return'';return asset.localPath||resourceUrl(asset.previewUrl||asset.url)}function coverSrc(asset?:Asset){if(!asset)return'';return asset.coverUrl?resourceUrl(asset.coverUrl):mediaSrc(asset)}async function retryAsset(asset:Asset){if(asset.status==='upload_failed'){retryPublish(editorSession.value,asset.id);return}const updated=await POST<Asset>('/app/publish/assets/'+serverAssetId(asset)+'/retry');Object.assign(asset,updated,{id:asset.id,serverId:updated.id});startAssetPoll()}
+let assetTimer:ReturnType<typeof setInterval>|undefined,pollBusy=false,publishPageVisible=true
+function stopAssetPoll(){clearInterval(assetTimer);assetTimer=undefined}
+function startAssetPoll(){stopAssetPoll();if(!publishPageVisible||!assets.value.some(a=>a.status==='processing'))return;assetTimer=setInterval(async()=>{if(pollBusy||!publishPageVisible)return;pollBusy=true;try{for(const asset of assets.value.filter(a=>a.status==='processing')){if(!publishPageVisible)break;const updated=await GET<Asset>('/app/publish/assets/'+serverAssetId(asset));if(publishPageVisible)Object.assign(asset,updated,{id:asset.id,serverId:updated.id})}}catch{}finally{pollBusy=false;if(!assets.value.some(a=>a.status==='processing'))stopAssetPoll()}},3000)}
+onShow(()=>{publishPageVisible=true;startAssetPoll()})
+onHide(()=>{publishPageVisible=false;modeSwipe.cancel();stopAssetPoll()})
+function assetById(id:number){return assets.value.find(a=>a.id===id)}function removeAsset(id:number){removePublishMedia(editorSession.value,id)}
+function feature(name:string){return config.featureFlags[name]!==false}
+function moveImage(index:number,delta:number){const next=index+delta;if(next<0||next>=imageAssets.value.length)return;const from=assets.value.findIndex(asset=>asset.id===imageAssets.value[index].id),to=assets.value.findIndex(asset=>asset.id===imageAssets.value[next].id);if(from<0||to<0)return;[assets.value[from],assets.value[to]]=[assets.value[to],assets.value[from]]}
+const modeSwipe=useHorizontalSwipe(()=>publishPageVisible&&!loadingConfig.value&&!publishing.value&&!uploading.value&&!settingsOpen.value&&!channelSheetOpen.value&&!toolPanel.value,()=>mode.value,direction=>{
+  const index=modes.findIndex(item=>item.key===mode.value),next=modes[index+direction]
+  if(index>=0&&next)switchMode(next.key)
+})
+function switchMode(next:PublishMode){if(editorSession.value.data.repostOfPostId&&next!=='post')return;mode.value=next}
+function switchValue(event:unknown){return Boolean((event as {detail?:{value?:boolean}}).detail?.value)}function setAllowDownload(event:unknown){creator.value.allowDownload=switchValue(event);if(!creator.value.allowDownload)creator.value.downloadWatermark=false}function setWatermark(event:unknown){creator.value.downloadWatermark=switchValue(event)}function setOriginal(event:unknown){creator.value.original=switchValue(event)}
+function chooseChannel(){if(loadingConfig.value)return;if(!config.channels.length)return uni.showToast({title:'暂无可发布版区',icon:'none'});channelSheetOpen.value=true}
+function pickChannel(channel:PublishChannel){channelId.value=channel.id;channelSheetOpen.value=false}
+function reconcileChannel(notify=true){const previous=channelId.value;if(config.channels.some(c=>c.id===previous))return;channelId.value=config.channels.find(c=>c.id===config.defaultChannelId)?.id??config.channels[0]?.id??null;if(notify&&previous)uni.showToast({title:channelId.value?'原版区不可发布，已切换版区':'暂无可发布版区',icon:'none'})}
+let configFlight:Promise<void>|undefined
+const configLoaded=ref(false)
+function refreshConfig(){if(configFlight)return configFlight;loadingConfig.value=true;configFlight=(async()=>{try{Object.assign(config,await fetchPublishConfig());if(!configLoaded.value&&!dirty.value){creator.value.allowDownload=config.creatorPolicies.allowDownload.defaultValue;creator.value.downloadWatermark=config.creatorPolicies.downloadWatermark.defaultValue;creator.value.original=config.creatorPolicies.original.defaultValue}configLoaded.value=true;reconcileChannel()}catch(error){config.channels=[];config.defaultChannelId=null;throw error}finally{loadingConfig.value=false;configFlight=undefined}})();return configFlight}
+function openTopics(){
+ // #ifdef APP-ANDROID
+ if(!topicsRendered.value){uni.hideKeyboard();topicSheetOpen.value=true}
+ // #endif
+ // #ifndef APP-ANDROID
+ uni.setStorageSync('publish-topic-selection',selectedTopics.value);uni.navigateTo({url:'/pages/publish/topic'})
+ // #endif
+}
+function openDrafts(){uni.navigateTo({url:'/pages/publish/drafts'})}
+async function chooseImages(){
+ const used=mode.value==='post'?submissionImages.value.length:imageAssets.value.length,slots=Math.max(0,rule.value.totalMediaMax-submissionAssets.value.length),remaining=Math.max(0,Math.min(rule.value.imageMax-used,slots))
+ if(!remaining)return uni.showToast({title:'图片数量已达上限',icon:'none'})
+ const session=editorSession.value,inPost=mode.value==='post'
+ chooseAlbumImages({count:remaining,sizeType:['original'],sourceType:['album','camera'],confirmText:'确定',success:res=>{
+  const files=res.tempFiles as {path:string;size:number}[]
+  addPublishMedia(session,res.tempFilePaths.map((path,index)=>({path,size:files?.[index]?.size||0})),'image',inPost)
+ }})
+}
+async function chooseVideo(forPost:boolean){
+ if(submissionVideos.value.length>=rule.value.videoMax||submissionAssets.value.length>=rule.value.totalMediaMax)return uni.showToast({title:'视频数量已达上限',icon:'none'})
+ const session=editorSession.value,maxMb=rule.value.maxVideoMb
+ chooseAlbumVideo({sourceType:['album','camera'],compressed:false,confirmText:'确定',success:res=>{
+  if(maxMb>0&&res.size>maxMb*1024*1024)return uni.showToast({title:'视频不能超过'+maxMb+'MB',icon:'none'})
+  addPublishMedia(session,[{path:res.tempFilePath,size:res.size,width:res.width,height:res.height,durationMs:res.duration*1000}],'video',forPost)
+ }})
+}
+function editCover(asset:Asset){if(serverAssetId(asset)<0)return uni.showToast({title:'视频上传完成后可以设置封面',icon:'none'});uni.setStorageSync('publish-cover-context',{...asset,id:serverAssetId(asset)});uni.navigateTo({url:'/pages/publish/cover'})}
+function addEmoji(emoji:PublishEmoji){inlineRuns.value.push({type:'emoji',emojiId:emoji.id,name:emoji.name,imageUrl:emoji.imageUrl});toolPanel.value=''}async function openMentions(){toolPanel.value='mention';followingLoading.value=true;followingError.value=false;try{following.value=await fetchFollowing()}catch{followingError.value=true}finally{followingLoading.value=false}}function addMention(user:FollowingUser){inlineRuns.value.push({type:'mention',userId:user.userId,publicUid:user.publicUid,nickname:user.nickname});toolPanel.value=''}
+function addLink(){if(!linkForm.text.trim()||!/^https?:\/\//i.test(linkForm.url))return uni.showToast({title:'请填写链接文本和http(s)地址',icon:'none'});inlineRuns.value.push({type:'link',text:linkForm.text.trim(),url:linkForm.url.trim(),openMode:linkForm.openMode});linkForm.text='';linkForm.url='';toolPanel.value=''}
+function addDivider(divider:PublishConfig['dividers'][number]){postBlocks.value.push({type:'divider',styleId:divider.id,previewText:divider.previewText});toolPanel.value=''}function setPollDate(event:{detail:{value:string}}){poll.value.endsAt=event.detail.value+'T23:59:59'}
+function moreTools(){const tools=[...(feature('divider')?[{name:'分割线',key:'divider'}]:[]),...(feature('link')?[{name:'链接',key:'link'}]:[]),...(feature('poll')?[{name:'投票',key:'poll'}]:[])];if(!tools.length)return;uni.showActionSheet({itemList:tools.map(item=>item.name),success:r=>{const key=tools[r.tapIndex]?.key;if(key)toolPanel.value=key}})}function savePoll(){if(validPollOptions.value.length<config.pollRule.minOptions||validPollOptions.value.length>config.pollRule.maxOptions)return uni.showToast({title:'投票选项需为'+config.pollRule.minOptions+'-'+config.pollRule.maxOptions+'个',icon:'none'});if(!postBlocks.value.some(b=>b.type==='poll'))postBlocks.value.push({type:'poll'});toolPanel.value=''}
+function richBlocks(){const runs:RichRun[]=[];if(postText.value.trim())runs.push({type:'text',text:postText.value,colorId:activeColorId.value});runs.push(...inlineRuns.value);return [...(runs.length?[{type:'paragraph',runs} as RichBlock]:[]),...postBlocks.value]}
+function payload(){return{repostOfPostId:editorSession.value.data.repostOfPostId,repost:editorSession.value.data.repost,mode:mode.value,title:title.value,content:content.value,postText:postText.value,assets:assets.value,postBlocks:postBlocks.value,inlineRuns:inlineRuns.value,selectedTopics:selectedTopics.value,channelId:channelId.value,creator:{...creator.value},poll:{...poll.value,options:[...poll.value.options]},activeColorId:activeColorId.value}}
+function saveNow(show=false){return savePublishEditor(editorSession.value).then(()=>{if(show)uni.showToast({title:'已保存到草稿箱',icon:'none'})})}
+function scheduleSave(){if(!initialized.value||!dirty.value||publishing.value)return;retainPublishEditor(editorSession.value)}
+function hydrate(value:any){editorSession.value.data.repostOfPostId=value.repostOfPostId;editorSession.value.data.repost=value.repost;mode.value=value.mode||'image';title.value=value.title||'';content.value=value.content||'';postText.value=value.postText||'';assets.value=Array.isArray(value.assets)?value.assets:[];postBlocks.value=Array.isArray(value.postBlocks)?value.postBlocks:[];inlineRuns.value=Array.isArray(value.inlineRuns)?value.inlineRuns:[];selectedTopics.value=Array.isArray(value.selectedTopics)?value.selectedTopics.slice(0,5):[];channelId.value=value.channelId??null;reconcileChannel();Object.assign(creator.value,value.creator||{});Object.assign(poll.value,value.poll||{question:'',options:['','']});activeColorId.value=value.activeColorId;restorePublishMedia(editorSession.value)}
+async function loadDraftId(id:number){try{if(editorSession.value.draftId===id)return;retainPublishEditor(editorSession.value);editorSession.value=getPublishEditor(id);if(editorSession.value.draftId===id&&dirty.value)return;const draft=await fetchDraft(id);draftId.value=draft.id;revision.value=draft.revision;hydrate(draft.payload)}catch{}}
+async function publish(){
+ if(!ready.value||publishing.value)return
+ publishing.value=true
+ if(!enqueuePublish(editorSession.value)){publishing.value=false;return}
+ uni.removeStorageSync('publish-topic-selection')
+ entryMinePublishRequest.value++
+ entryTabRequest.value='mine'
+ uni.reLaunch({url:'/pages/index/index?tab=mine'})
+}
+function goBack(){retainPublishEditor(editorSession.value);leave()}
+function leave(){getCurrentPages().length>1?uni.navigateBack():uni.reLaunch({url:'/pages/index/index'})}
+watch(()=>JSON.stringify(payload()),scheduleSave)
+watch(mode,()=>{void nextTick(syncEditorHeight)})
+onShow(async()=>{
+ startAssetPoll();uni.setNavigationBarColor({frontColor:'#000000',backgroundColor:'#ffffff'});
+ initialized.value=false;
+ try{
+  await refreshConfig();
+  const topics=uni.getStorageSync('publish-topic-selection');if(Array.isArray(topics))selectedTopics.value=topics.slice(0,5);
+  const cover=uni.getStorageSync('publish-cover-result');if(cover?.id){const index=assets.value.findIndex(a=>serverAssetId(a)===cover.id);if(index>=0)assets.value[index]={...assets.value[index],...cover,id:assets.value[index].id,serverId:cover.id};uni.removeStorageSync('publish-cover-result')}
+  const open=Number(uni.getStorageSync('publish-open-draft'));if(open){uni.removeStorageSync('publish-open-draft');await loadDraftId(open)}
+ }catch{}finally{await nextTick();syncEditorHeight();initialized.value=true}
+})
+onHide(()=>{if(initialized.value&&dirty.value&&!publishing.value)retainPublishEditor(editorSession.value)})
+onUnload(()=>{if(!publishing.value)retainPublishEditor(editorSession.value);stopAssetPoll()})
+onHide(stopAssetPoll)
+</script>
+
+<style scoped>
+
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+.creation-mask{position:fixed;top:0;right:0;bottom:0;left:0;z-index:20;display:flex;flex-direction:column;justify-content:flex-end;}
+.creation-backdrop{position:absolute;top:0;right:0;bottom:0;left:0;background-color:rgba(0,0,0,.45);transition-property:opacity;transition-duration:320ms;transition-timing-function:cubic-bezier(.16,1,.3,1);}
+.creation-sheet{position:relative;box-sizing:border-box;transition-property:transform;transition-duration:320ms;transition-timing-function:cubic-bezier(.16,1,.3,1);}
+
+
+/* #ifndef APP */
+
+.publish-page{position:fixed;inset:0;display:flex;flex-direction:column;background:#202123;color:#242729}.surface{min-height:0;flex:1;display:flex;flex-direction:column;background:#fff;border-radius:0 0 44rpx 44rpx;overflow:hidden}.header{height:92rpx;display:flex;align-items:center;padding:0 32rpx;flex-direction:row}.close-button{width:62rpx;display:flex;flex-direction:row}.save-state{margin-left:18rpx;color:#a7abad;font-size:21rpx}.header-draft{margin-left:auto;color:#777;font-size:23rpx}.editor{height:0;min-height:0;flex:1}.loading{padding:180rpx 0;text-align:center;color:#aaa}.media-grid{display:flex;flex-wrap:wrap;gap:16rpx;padding:20rpx 34rpx;flex-direction:row}.media-square{position:relative;width:208rpx;height:208rpx;border-radius:18rpx;overflow:hidden;background:#f2f3f4}.media-square image{width:100%;height:100%}.add-media{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8rpx;color:#a5aaac}.remove{position:absolute;right:8rpx;top:8rpx;z-index:4;width:44rpx;height:44rpx;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:28rpx}.sort-controls{position:absolute;left:8rpx;right:8rpx;bottom:8rpx;display:flex;justify-content:space-between;flex-direction:row}.sort-controls button{width:48rpx;height:42rpx;border-radius:12rpx;background:rgba(0,0,0,.5);color:#fff}.sort-controls button:disabled{opacity:.3}.video-wrap{padding:20rpx 34rpx}.video-media{width:100%;aspect-ratio:16/9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12rpx;border-radius:18rpx;background:#f2f3f4;color:#999}.video-box{position:relative}.video-preview{width:100%;aspect-ratio:16/9;border-radius:18rpx}.cover-action{position:absolute;left:0;right:0;bottom:0;height:74rpx;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#fff;flex-direction:row}.cover-action image,.cover-blur{position:absolute;inset:-18rpx;width:calc(100% + 36rpx);height:calc(100% + 36rpx);filter:blur(14rpx)}.cover-blur{background:rgba(0,0,0,.35)}.cover-action text{position:relative;z-index:2}.copy{padding:0 34rpx}.title-row{height:90rpx;display:flex;align-items:center;border-bottom:1rpx solid #eee;flex-direction:row}.title{min-width:0;flex:1;font-size:28rpx}.title-row>text{color:#bbb;font-size:19rpx}.content,.post-text{width:100%;height:220rpx;padding:24rpx 0;font-size:25rpx;line-height:1.7}.post-editor{min-height:300rpx}.inline-preview{display:flex;flex-wrap:wrap;gap:12rpx;align-items:center;padding:12rpx 0;flex-direction:row}.inline-preview image{width:52rpx;height:52rpx}.mention,.link{color:#0aaee5}.inline-link{display:inline-flex;align-items:center;gap:3rpx;flex-direction:row}.block{position:relative;margin:16rpx 0;padding:12rpx;border-radius:12rpx;background:#f7f8f9}.block image,.block video{width:100%;max-height:420rpx;border-radius:10rpx}.divider,.poll-preview{display:block;padding:24rpx;text-align:center;color:#73787b}.block-remove{position:absolute;right:12rpx;top:12rpx;padding:8rpx 14rpx;border-radius:20rpx;background:rgba(0,0,0,.55);color:#fff;font-size:18rpx}.options{margin-top:18rpx;border-top:1rpx solid #eee}.option{width:100%;min-height:84rpx;display:flex;align-items:center;justify-content:space-between;padding:0 34rpx;box-sizing:border-box;border-bottom:1rpx solid #f3f3f3;flex-direction:row}.option>view{display:flex;align-items:center;gap:14rpx;font-size:24rpx;flex-direction:row}.option-end{display:flex;align-items:center;flex-shrink:0;gap:9rpx;max-width:55%;flex-direction:row}.option-end text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#a4a9ab;font-size:21rpx}.required{color:#ff5d78}.toolbar{height:88rpx;display:flex;align-items:center;justify-content:space-around;border-top:1rpx solid #eee;flex-direction:row}.toolbar button{width:64rpx}.footer{min-height:118rpx;display:flex;align-items:center;gap:24rpx;padding:10rpx 34rpx 20rpx;flex-direction:row}.draft-button{width:94rpx;display:flex;flex-direction:column;align-items:center;gap:5rpx;font-size:18rpx}.publish-button{height:82rpx;flex:1;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;border-radius:23rpx;background:#b8e7f5;color:#fff;font-size:27rpx;flex-direction:row}.publish-button.ready{background:#10b9ef}.mode-dock{min-height:114rpx;display:flex;justify-content:center;flex-direction:row}.mode-dock>button{width:31%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-size:27rpx;font-weight:600}.mode-dock button>view{width:40rpx;height:7rpx;margin-top:12rpx;border-radius:5rpx}.mode-dock button.active>view{background:#10b9ef}.mask{position:fixed;inset:0;z-index:20;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.45);flex-direction:row}.sheet{width:100%;padding:28rpx 34rpx max(38rpx,env(safe-area-inset-bottom));border-radius:28rpx 28rpx 0 0;background:#fff}.sheet-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:20rpx;font-size:28rpx;font-weight:600;flex-direction:row}.sheet-title button{color:#10b9ef;font-size:23rpx}.switch{min-height:86rpx;display:flex;align-items:center;justify-content:space-between;border-top:1rpx solid #eee;font-size:23rpx;flex-direction:row}.exit-card{width:650rpx;margin-bottom:60rpx;padding:34rpx;border-radius:24rpx;background:#fff;text-align:center}.exit-card>text{display:block;margin-bottom:20rpx;font-size:26rpx}.exit-card button{height:80rpx;border-top:1rpx solid #eee}.exit-card .save-red{color:#ed3d4f}.exit-card .cancel{color:#999}.tool-sheet{max-height:620rpx}.tool-list{white-space:nowrap}.tool-list button{display:inline-flex;width:118rpx;flex-direction:column;align-items:center;gap:8rpx}.tool-list image{width:70rpx;height:70rpx}.colors{display:flex;flex-wrap:wrap;gap:28rpx;flex-direction:row}.colors button{width:64rpx;height:64rpx;border-radius:50%}.colors button.chosen{outline:5rpx solid #10b9ef}.vertical{max-height:400rpx;overflow:auto}.vertical button{width:100%;height:76rpx;text-align:left;border-bottom:1rpx solid #eee}.vertical button text{float:right;color:#aaa}.form{display:flex;flex-direction:column;gap:18rpx}.form input,.date-picker{height:72rpx;padding:0 18rpx;border-radius:10rpx;background:#f4f5f6;line-height:72rpx}.form radio-group,.form-actions{display:flex;gap:28rpx;flex-direction:row}.form .primary{height:72rpx;border-radius:12rpx;background:#10b9ef;color:#fff}.form-actions button{flex:1}.uploading{position:fixed;z-index:40;left:50%;top:45%;transform:translate(-50%,-50%);padding:24rpx 38rpx;border-radius:16rpx;background:rgba(0,0,0,.75);color:#fff}
+.transcode-status{padding:16rpx 0;color:#8b9197;font-size:22rpx}.transcode-status button{color:#10b9ef;font-size:22rpx;background:none;padding:0;margin:0}
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux14{color:var(--text-main);font-size:26rpx;}
+.ux15{color:#242729;}
+.ux19{color:#777;font-size:23rpx;}
+.ux20{line-height:normal;}
+.ux24{text-align:center;color:#aaa;}
+.ux29{color:#fff;font-size:28rpx;}
+.ux30{line-height:normal;}
+.ux34{line-height:normal;}
+.ux35{color:#fff;}
+.ux37{color:#a5aaac;}
+.ux38{line-height:normal;}
+.ux41{color:#999;}
+.ux48{color:#fff;}
+.ux51{color:#8b9197;font-size:22rpx;}
+.ux53{color:#10b9ef;font-size:22rpx;}
+.ux68{color:#0aaee5;}
+.ux75{color:#fff;font-size:18rpx;}
+.ux79{font-size:24rpx;}
+.ux87{font-size:18rpx;}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ux134{line-height:27rpx;color:#fff;font-size:27rpx;}
+.ux135{font-size:28rpx;font-weight:600;}
+.ux136{font-size:23rpx;}
+
+.ux138{white-space:nowrap;}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ux169{text-align:center;}
+
+
+
+
+
+
+
+.ux177{line-height:normal;}
+.ux178{color:#fff;font-size:27rpx;font-weight:600;}
+
+.ux183{color:#10b9ef;font-size:23rpx;}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ux215{color:#ed3d4f;}
+.ux217{color:#999;}
+.ux223{text-align:left;}
+.ux228{color:#fff;}
+.ux229{line-height:72rpx;}
+.ux231{color:#fff;}
+.ux232{color:#fff;}
+.ux7{}
+.ux21{}
+.ux16{}
+.ux56{}
+.ux59{}
+.ux11{}
+
+
+
+
+
+
+.ux8{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;background-color:#202123;color:#242729;}
+.ux9{min-height:0;flex:1;display:flex;flex-direction:column;background-color:#fff;border-radius:0 0 44rpx 44rpx;overflow:hidden;}
+.ux10{height:92rpx;display:flex;flex-direction:row;align-items:center;padding:0 32rpx;}
+.ux12{width:62rpx;display:flex;flex-direction:row;}
+.ux17{margin-left:18rpx;color:#a7abad;font-size:21rpx;}
+.ux18{margin-left:auto;color:#777;font-size:23rpx;}
+.ux22{height:0;min-height:0;flex:1;}
+.ux23{padding:180rpx 0;text-align:center;color:#aaa;}
+.ux25{display:flex;flex-direction:row;flex-wrap:wrap;padding:20rpx 34rpx;}
+.ux26{position:relative;width:208rpx;height:208rpx;border-radius:18rpx;overflow:hidden;background-color:#f2f3f4;}
+.ux36{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#a5aaac;}
+.ux28{position:absolute;right:8rpx;top:8rpx;z-index:4;width:44rpx;height:44rpx;border-radius:50%;background-color:rgba(0,0,0,.55);color:#fff;font-size:28rpx;}
+.ux31{position:absolute;left:8rpx;right:8rpx;bottom:8rpx;display:flex;flex-direction:row;justify-content:space-between;}
+.ux39{padding:20rpx 34rpx;}
+.ux40{width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:18rpx;background-color:#f2f3f4;color:#999;}
+.ux42{position:relative;}
+.ux43{width:100%;border-radius:18rpx;}
+.ux44{position:absolute;left:0;right:0;bottom:0;height:74rpx;overflow:hidden;display:flex;flex-direction:row;align-items:center;justify-content:center;color:#fff;}
+.ux46{position:absolute;top:-18rpx;right:-18rpx;bottom:-18rpx;left:-18rpx;}
+.ux47{background-color:rgba(0,0,0,.35);}
+.ux54{padding:0 34rpx;}
+.ux55{height:90rpx;display:flex;flex-direction:row;align-items:center;border-bottom:1rpx solid #eee;}
+.ux57{min-width:0;flex:1;font-size:28rpx;}
+.ux60{width:100%;height:220rpx;padding:24rpx 0;font-size:25rpx;line-height:42.5rpx;}
+.ux62{width:100%;height:220rpx;padding:24rpx 0;font-size:25rpx;line-height:42.5rpx;}
+.ux61{min-height:300rpx;}
+.ux63{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;padding:12rpx 0;}
+.ux65{color:#0aaee5;}
+.ux66{color:#0aaee5;}
+.ux67{display:flex;flex-direction:row;align-items:center;}
+.ux69{position:relative;margin:16rpx 0;padding:12rpx;border-radius:12rpx;background-color:#f7f8f9;}
+.ux72{display:flex;flex-direction:column;padding:24rpx;text-align:center;color:#73787b;}
+.ux73{display:flex;flex-direction:column;padding:24rpx;text-align:center;color:#73787b;}
+.ux74{position:absolute;right:12rpx;top:12rpx;padding:8rpx 14rpx;border-radius:20rpx;background-color:rgba(0,0,0,.55);color:#fff;font-size:18rpx;}
+.ux76{margin-top:18rpx;border-top:1rpx solid #eee;}
+.ux77{width:100%;min-height:84rpx;display:flex;flex-direction:row;align-items:center;justify-content:space-between;padding:0 34rpx;border-bottom:1rpx solid #f3f3f3;}
+.ux81{display:flex;flex-direction:row;align-items:center;flex-shrink:0;}
+.ux80{color:#ff5d78;}
+.ux83{height:88rpx;display:flex;flex-direction:row;align-items:center;justify-content:space-around;border-top:1rpx solid #eee;}
+.ux85{min-height:118rpx;display:flex;flex-direction:row;align-items:center;padding:10rpx 34rpx 20rpx;}
+.ux86{width:94rpx;display:flex;flex-direction:column;align-items:center;font-size:18rpx;}
+.ux94{height:82rpx;flex:1;display:flex;flex-direction:row;align-items:center;justify-content:center;padding:0;line-height:27rpx;border-radius:23rpx;background-color:#b8e7f5;color:#fff;font-size:27rpx;}
+.ux95{min-height:114rpx;display:flex;flex-direction:row;justify-content:center;}
+.ux96{position:fixed;top:0;right:0;bottom:0;left:0;z-index:20;display:flex;flex-direction:row;align-items:flex-end;justify-content:center;background-color:rgba(0,0,0,.45);}
+.ux97{width:100%;border-radius:28rpx 28rpx 0 0;background-color:#fff;}
+.ux98{display:flex;flex-direction:row;justify-content:space-between;align-items:center;margin-bottom:20rpx;font-size:28rpx;font-weight:600;}
+.ux99{min-height:86rpx;display:flex;flex-direction:row;align-items:center;justify-content:space-between;border-top:1rpx solid #eee;font-size:23rpx;}
+.ux100{width:650rpx;margin-bottom:60rpx;padding:34rpx;border-radius:24rpx;background-color:#fff;text-align:center;}
+.ux101{max-height:620rpx;}
+.ux102{white-space:nowrap;}
+.ux103{display:flex;flex-direction:row;flex-wrap:wrap;}
+.ux104{}
+.ux105{display:flex;flex-direction:column;}
+.ux106{height:72rpx;padding:0 18rpx;border-radius:10rpx;background-color:#f4f5f6;line-height:72rpx;}
+.ux107{display:flex;flex-direction:row;}
+.ux108{position:fixed;z-index:40;left:50%;top:45%;transform:translate(-50%,-50%);padding:24rpx 38rpx;border-radius:16rpx;background-color:rgba(0,0,0,.75);color:#fff;}
+.ux50{padding:16rpx 0;color:#8b9197;font-size:22rpx;}
+.ux13{margin:0;padding:0;border:0px;border-radius:0;background-color:transparent;line-height:normal;overflow:visible;}
+.ux27{width:100%;height:100%;}
+.ux32{width:48rpx;height:42rpx;border-radius:12rpx;background-color:rgba(0,0,0,.5);color:#fff;}
+.ux45{position:absolute;top:-18rpx;right:-18rpx;bottom:-18rpx;left:-18rpx;}
+.ux49{position:relative;z-index:2;}
+.ux58{color:#bbb;font-size:19rpx;}
+.ux64{width:52rpx;height:52rpx;}
+.ux70{width:100%;max-height:420rpx;border-radius:10rpx;}
+.ux71{width:100%;max-height:420rpx;border-radius:10rpx;}
+.ux78{display:flex;flex-direction:row;align-items:center;font-size:24rpx;}
+.ux82{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#a4a9ab;font-size:21rpx;}
+.ux84{width:64rpx;}
+.ux146{width:31%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-size:27rpx;font-weight:600;}
+.ux182{color:#10b9ef;font-size:23rpx;}
+.ux145{display:flex;flex-direction:column;margin-bottom:20rpx;font-size:26rpx;}
+.ux213{height:80rpx;border-top:1rpx solid #eee;}
+.ux218{display:flex;width:118rpx;flex-direction:column;align-items:center;}
+.ux219{width:70rpx;height:70rpx;}
+.ux220{width:64rpx;height:64rpx;border-radius:50%;}
+.ux222{width:100%;height:76rpx;text-align:left;border-bottom:1rpx solid #eee;}
+.ux225{height:72rpx;padding:0 18rpx;border-radius:10rpx;background-color:#f4f5f6;line-height:72rpx;}
+.ux226{display:flex;flex-direction:row;}
+.ux230{flex:1;}
+.ux52{color:#10b9ef;font-size:22rpx;background-color:transparent;padding:0;margin:0;}
+.ux180{width:40rpx;height:7rpx;margin-top:12rpx;border-radius:5rpx;}
+.ux224{margin-left:auto;color:#aaa;}
+.ux116{background-color:#10b9ef;}
+.ux214{color:#ed3d4f;}
+.ux216{color:#999;}
+.ux227{height:72rpx;border-radius:12rpx;background-color:#10b9ef;color:#fff;}
+.ux33{opacity:.3;}
+.ux221{box-shadow:0 0 0 5rpx #10b9ef;}
+.ux181{background-color:#10b9ef;}
+/* #endif */
+</style>
+
+<style scoped>
+/* #ifndef APP */
+/* Publishing reference layout. Keep the existing typeface and mode navigation. */
+.publish-page .publish-status { flex-shrink:0; background-color:#f8f8f8; }
+.publish-page .surface { border-bottom-left-radius:48rpx; border-bottom-right-radius:48rpx; }
+.publish-page .header { height:92rpx; flex-shrink:0; }
+.publish-page .editor-body { display:flex; flex-direction:column; padding-bottom:126rpx; }
+.publish-page .media-grid { padding:8rpx 25rpx 12rpx; flex-shrink:0; }
+.publish-page .media-square { width:208rpx; height:208rpx; border-radius:25rpx; background-color:#f6f7f9; }
+.publish-page .add-media { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.publish-page .publish-add-icon { width:62rpx; height:62rpx; flex-shrink:0; }
+.publish-page .media-count { position:absolute; left:0; right:0; bottom:16rpx; margin:0; color:#a5aaae; font-size:19rpx; line-height:26rpx; text-align:center; }
+.publish-page .copy { flex-grow:1; flex-shrink:0; padding:0 34rpx; }
+.publish-page .title-row { height:80rpx; border-bottom-width:1rpx; border-bottom-color:#f4f4f4; }
+.publish-page .title { font-size:26rpx; }
+.publish-page .content { height:220rpx; padding:24rpx 0; font-size:25rpx; }
+.publish-page .options { flex-shrink:0; margin-top:0; border-top-width:0; }
+.publish-page .option { width:100%; height:92rpx; min-height:92rpx; margin:0; padding:0 34rpx 0 30rpx; border-width:0; display:flex; flex-direction:row; align-items:center; justify-content:space-between; background-color:transparent; }
+.publish-page .publish-option-icon { width:40rpx; height:40rpx; flex-shrink:0; }
+.publish-page .option-end { max-width:55%; }
+.publish-page .option-end text { color:#a8aaae; font-size:24rpx; }
+.publish-page .required { color:#f27c94; font-size:20rpx; }
+.publish-page .footer { height:128rpx; min-height:128rpx; flex-shrink:0; display:flex; flex-direction:row; align-items:flex-start; padding:4rpx 34rpx 32rpx; }
+.publish-page .draft-button { width:96rpx; height:92rpx; flex-shrink:0; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:0 24rpx 0 0; padding:0; background-color:transparent; border-width:0; }
+.publish-page .publish-draft-icon { width:46rpx; height:46rpx; flex-shrink:0; }
+.publish-page .draft-label { margin-top:8rpx; color:#96999b; font-size:20rpx; line-height:28rpx; text-align:center; }
+.publish-page .publish-button { width:100%; height:92rpx; min-height:92rpx; display:flex; flex-direction:row; align-items:center; justify-content:center; margin:0; padding:0; border-width:0; border-radius:26rpx; background-color:#cdeefd; color:#ffffff; }
+.publish-page .publish-button.ready { background-color:#10b9ef; }
+.publish-page .publish-label { color:#ffffff; font-size:27rpx; line-height:38rpx; }
+.publish-page .footer,.publish-page .draft-button { gap:0; }
+.publish-page .editor-body { box-sizing:border-box; }
+/* #endif */
+</style>
+
+<style scoped>
+/* #ifdef APP */
+.publish-status { flex-shrink:0; background-color:#f8f8f8; }
+.surface { min-height:0; flex:1; display:flex; flex-direction:column; background-color:#ffffff; overflow:hidden; border-bottom-left-radius:48rpx; border-bottom-right-radius:48rpx; }
+.header { display:flex; flex-direction:row; align-items:center; padding:0 32rpx; height:92rpx; flex-shrink:0; }
+.editor-body { display:flex; flex-direction:column; padding-bottom:126rpx; }
+.media-grid { display:flex; flex-direction:row; flex-wrap:wrap; padding:8rpx 25rpx 12rpx; flex-shrink:0; }
+.media-square { position:relative; overflow:hidden; width:208rpx; height:208rpx; border-radius:25rpx; background-color:#f6f7f9; }
+.add-media { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.publish-add-icon { width:62rpx; height:62rpx; flex-shrink:0; }
+.media-count { position:absolute; left:0; right:0; bottom:16rpx; margin:0; color:#a5aaae; font-size:19rpx; line-height:26rpx; text-align:center; }
+.copy { flex-grow:1; flex-shrink:0; padding:0 34rpx; }
+.title-row { display:flex; flex-direction:row; align-items:center; border-bottom-style:solid; height:80rpx; border-bottom-width:1px; border-bottom-color:#e5e7eb; }
+/* Native input has no intrinsic height when vertically centered in a row. */
+.title { min-width:0; height:78rpx; flex:1; color:#242729; font-size:26rpx; }
+.content { width:100%; color:#242729; line-height:42.5rpx; height:220rpx; padding:24rpx 0; font-size:25rpx; }
+.options { flex-shrink:0; margin-top:18rpx; border-top-width:0; }
+.option { width:100%; height:92rpx; min-height:92rpx; margin:0; padding:0 34rpx 0 30rpx; border-width:0; display:flex; flex-direction:row; align-items:center; justify-content:space-between; background-color:transparent; }
+.publish-option-icon { width:40rpx; height:40rpx; flex-shrink:0; }
+.publish-option-value { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#a8aaae; font-size:24rpx; }
+.required { color:#f27c94; font-size:20rpx; }
+.footer { height:128rpx; min-height:128rpx; flex-shrink:0; display:flex; flex-direction:row; align-items:flex-start; padding:4rpx 34rpx 32rpx; }
+.draft-button { width:96rpx; height:92rpx; flex-shrink:0; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:0 24rpx 0 0; padding:0; background-color:transparent; border-width:0; }
+.publish-draft-icon { width:46rpx; height:46rpx; flex-shrink:0; }
+.draft-label { margin-top:8rpx; color:#96999b; font-size:20rpx; line-height:28rpx; text-align:center; }
+.publish-button { width:100%; height:92rpx; min-height:92rpx; display:flex; flex-direction:row; align-items:center; justify-content:center; margin:0; padding:0; border-width:0; border-radius:26rpx; background-color:#cdeefd; color:#ffffff; }
+.publish-ready { background-color:#10b9ef; }
+.publish-label { color:#ffffff; font-size:27rpx; line-height:38rpx; }
+.close-button { width:62rpx; display:flex; flex-direction:row; align-items:center; justify-content:flex-start; padding:0; margin:0; background-color:transparent; }
+/* #endif */
+</style>
+
+<style scoped>
+.publish-interaction-blocker { position:fixed; left:0; top:0; right:0; bottom:0; z-index:19; background-color:rgba(0,0,0,0); }
+.publish-button-slot { flex:1; min-width:0; height:92rpx; display:flex; flex-direction:row; justify-content:center; align-items:center; }
+.publish-button { flex-grow:0; flex-shrink:0; width:100%; position:relative; overflow:hidden; transition:width 300ms ease-in-out, border-radius 300ms ease-in-out; }
+.publish-morph { width:92rpx; border-radius:46rpx; }
+.publish-label { transition:opacity 150ms ease-in-out; }
+.publish-label-hidden { opacity:0; }
+.publish-spinner { transition:opacity 150ms ease-in-out; position:absolute; width:36rpx; height:36rpx; border-width:4rpx; border-style:solid; border-color:rgba(255,255,255,.35); border-top-color:#fff; border-radius:50%; }
+.publish-spinner-fading { opacity:0; }
+.publish-check { position:absolute; width:42rpx; height:32rpx; }
+.publish-check-short, .publish-check-long { position:absolute; height:4rpx; border-radius:4rpx; background-color:#fff; transform-origin:left center; }
+.publish-check-short { width:15rpx; left:2rpx; top:16rpx; transform:rotate(45deg); }
+.publish-check-long { width:30rpx; left:12rpx; top:26rpx; transform:rotate(-45deg); }
+/* #ifndef APP */
+.publish-page .publish-button { flex:none; width:100%; }
+.publish-page .publish-button.publish-morph { width:92rpx; border-radius:46rpx; }
+.publish-spinner { animation:publish-spin 800ms linear infinite; }
+.publish-check-short { animation:publish-check-short 180ms ease-in-out both; }
+.publish-check-long { animation:publish-check-long 220ms ease-in-out 180ms both; }
+@keyframes publish-spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+@keyframes publish-check-short { from { transform:rotate(45deg) scaleX(0); } to { transform:rotate(45deg) scaleX(1); } }
+@keyframes publish-check-long { from { transform:rotate(-45deg) scaleX(0); } to { transform:rotate(-45deg) scaleX(1); } }
+/* #endif */
+</style>
+
+<style>
+.publish-header-upload{margin-left:10rpx;margin-right:12rpx;}
+.header-draft{flex-shrink:0;}
+</style>

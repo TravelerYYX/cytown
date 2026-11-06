@@ -1,0 +1,52 @@
+import { onBeforeUnmount, watch } from 'vue'
+import { uxMedia } from '@/utils/native-styles'
+
+/** Opt-in feedback for header buttons; a scroll gesture cancels the press. */
+export function usePressMotion(id: () => string, enabled: () => boolean) {
+  let pressed = false, startX = 0, startY = 0, scale = 1, revision = 0
+  // #ifdef APP
+  let motion: UniAnimation | null = null
+  // #endif
+  // #ifndef APP
+  let motion: Animation | null = null
+  // #endif
+  function reduced(): boolean {
+    // #ifdef APP
+    return uxMedia('(prefers-reduced-motion: reduce)')
+    // #endif
+    // #ifdef WEB
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // #endif
+    // #ifdef MP-WEIXIN
+    return true
+    // #endif
+  }
+  function paint(target: number, immediate: boolean = false) {
+    // #ifdef APP || WEB
+    const element = uni.getElementById(id())
+    if (!element) return
+    const token = ++revision
+    element.style.setProperty('transform', 'scale(' + scale + ')')
+    motion?.cancel(); motion = null
+    const previous = scale
+    scale = target
+    element.style.setProperty('transform', 'scale(' + target + ')')
+    if (immediate || reduced()) return
+    motion = element.animate([{ transform: 'scale(' + previous + ')' }, { transform: 'scale(' + target + ')' }], { duration: target < 1 ? 100 : 160, easing: 'ease-out', fill: 'backwards' })
+    if (motion) motion.onfinish = () => { if (revision === token) { motion?.cancel(); motion = null } }
+    // #endif
+  }
+  function start(event?: UniTouchEvent) {
+    if (!enabled() || reduced()) return
+    if (event?.touches.length) { startX = event.touches[0]!.clientX; startY = event.touches[0]!.clientY }
+    pressed = true; paint(.97)
+  }
+  function end() { if (pressed) { pressed = false; paint(1) } }
+  function move(event: UniTouchEvent) {
+    if (pressed && event.touches.length && (Math.abs(event.touches[0]!.clientX - startX) > 8 || Math.abs(event.touches[0]!.clientY - startY) > 8)) end()
+  }
+  watch(enabled, () => { pressed = false; paint(1, true) })
+  onHide(() => { pressed = false; paint(1, true) })
+  onBeforeUnmount(() => { revision++; motion?.cancel(); motion = null })
+  return { start, move, end }
+}

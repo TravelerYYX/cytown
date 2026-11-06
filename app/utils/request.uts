@@ -1,0 +1,135 @@
+import { ANDROID_USB_TUNNEL, API_BASE_URL } from '@/config/env'
+import type { AppLoginResult } from '@/types/auth'
+import { clearLogin, getRefreshToken, getSessionGeneration, getToken, saveLogin } from './auth'
+interface Result<T> { code: string; msg: string; data: T }
+let refreshFlight: { generation: number; promise: Promise<void> } | null = null
+let redirecting = false
+class AuthError extends Error {}
+// Android 开发基座经 USB 隧道连接时，连接失败几乎都是 adb reverse 失效，
+// 直接提示修复命令，避免只看到“无法连接服务器”却无从下手。
+const CONNECT_FAILED = ANDROID_USB_TUNNEL ? 'USB 转发已断开，请运行 connect:usb' : '无法连接服务器，请重试'
+function expire(): never {
+  clearLogin()
+  if (!redirecting) {
+    redirecting = true
+    uni.showToast({ title: '请重新登录', icon: 'none' })
+    uni.reLaunch({ url: '/pages/login/index', complete: () => { setTimeout(() => { redirecting = false }, 500) } })
+  }
+  throw new AuthError('请重新登录')
+}
+function parse<T>(status: number, data: unknown): Result<T> {
+  if (status < 200 || status >= 300) throw new Error('服务暂不可用，请重试')
+  if (typeof data === 'string') { try { data = JSON.parse(data) } catch { throw new Error('响应异常') } }
+  if (!data || typeof data !== 'object' || typeof (data as Result<T>).code !== 'string') throw new Error('响应异常')
+  return data as Result<T>
+}
+function raw<T>(method: 'GET' | 'POST', url: string, data?: Record<string, unknown>, token?: string | null): Promise<Result<T>> {
+  const generation = getSessionGeneration()
+  const send = (attempt: number): Promise<Result<T>> => new Promise((resolve, reject) => {
+    const startedAt = Date.now()
+    uni.request({
+      url: API_BASE_URL + url, method, data, timeout: attempt === 0 ? 15000 : 5000,
+      header: token ? { Authorization: 'Bearer ' + token } : {},
+      success(response) { try { resolve(parse<T>(response.statusCode, response.data)) } catch (e) { reject(e) } },
+      fail(failure) {
+        const errMsg = failure.errMsg || ''
+        if (import.meta.env.DEV) console.warn('[request:fail]', method, API_BASE_URL + url, Date.now() - startedAt, errMsg)
+        const timedOut = /timeout|timed out/i.test(errMsg)
+        // uni-app x Android 在连接被拒绝时只回 "server system error"，不像 H5/App 那样带 "Failed to connect"。
+        // 漏判会落到笼统的“网络异常”，既不提示可操作的修复命令，也不会触发一次读取重试。
+        const connectionFailed = /failed to connect|server system error|network|connection|unreachable|socket/i.test(errMsg)
+        // 仅重试读取接口的明确超时/连接失败；发布、上传及主动取消不能自动重放。
+        if (method === 'GET' && attempt === 0 && (timedOut || connectionFailed)) {
+          setTimeout(() => {
+            if (generation !== getSessionGeneration()) return reject(new AuthError('登录状态已改变'))
+            resolve(send(1))
+          }, 300)
+          return
+        }
+        reject(new Error(timedOut ? '连接超时，请重试' : connectionFailed ? CONNECT_FAILED : '网络异常'))
+      }
+    })
+  })
+  return send(0)
+}
+async function refresh(): Promise<void> {
+  const generation = getSessionGeneration()
+  if (refreshFlight?.generation === generation) return refreshFlight.promise
+  const token = getRefreshToken()
+  if (!token) return expire()
+  const promise = (async () => {
+    try {
+      const result = await raw<AppLoginResult>('POST', '/app/auth/refreshToken', { refreshToken: token })
+      if (generation !== getSessionGeneration()) throw new AuthError('登录状态已改变')
+      if (result.code !== '0000' || !result.data?.token || !result.data?.refreshToken || !result.data?.userInfo) return expire()
+      saveLogin(result.data)
+    } catch (error) {
+      if (error instanceof AuthError) throw error
+      if (generation !== getSessionGeneration()) throw new AuthError('登录状态已改变')
+      return expire()
+    } finally {
+      if (refreshFlight?.generation === generation) refreshFlight = null
+    }
+  })()
+  refreshFlight = { generation, promise }
+  return promise
+}
+async function authenticated<T>(send: (token: string | null) => Promise<Result<T>>, publicAuth = false, silent = false): Promise<T> {
+  const generation = getSessionGeneration()
+  const usedToken = publicAuth ? null : getToken()
+  try {
+    let result = await send(usedToken)
+    if (!publicAuth && generation !== getSessionGeneration()) throw new AuthError('登录状态已改变')
+    if (!publicAuth && result.code === '9999') {
+      // 另一请求已经完成刷新时，迟到响应直接用新 token 重放。
+      if (!getToken() || getToken() === usedToken) await refresh()
+      result = await send(getToken())
+      if (generation !== getSessionGeneration()) throw new AuthError('登录状态已改变')
+    }
+    if (!publicAuth && (result.code === '8888' || result.code === '9999')) return expire()
+    if (result.code !== '0000') throw new Error(result.msg || '请求失败')
+    return result.data
+  } catch (error) {
+    if (!silent && !(error instanceof AuthError)) uni.showToast({ title: error instanceof Error ? error.message : '请求失败', icon: 'none' })
+    throw error
+  }
+}
+function request<T>(method: 'GET' | 'POST', url: string, data?: Record<string, unknown>, silent = false): Promise<T> {
+  return authenticated(token => raw<T>(method, url, data, token), url.startsWith('/app/auth/') && url !== '/app/auth/logout', silent)
+}
+export const GET = <T>(url: string, params?: Record<string, unknown>, silent = false) => request<T>('GET', url, params, silent)
+export const POST = <T>(url: string, data?: Record<string, unknown>, silent = false) => request<T>('POST', url, data, silent)
+// Optional background writes should neither replay nor interrupt the current page to log in.
+export async function postBestEffort(url: string): Promise<boolean> {
+  const token = getToken(), generation = getSessionGeneration()
+  if (!token) return false
+  try {
+    const result = await raw<unknown>('POST', url, undefined, token)
+    return result.code === '0000' && generation === getSessionGeneration()
+  } catch { return false }
+}
+export interface UploadProgress { sent: number; total: number }
+export interface UploadControl { cancelled: boolean; abort?: () => void }
+export function upload<T>(url: string, filePath: string, onProgress?: (percent: number) => void, onBytes?: (value: UploadProgress) => void, control?: UploadControl): Promise<T> {
+  let uploadPath = filePath
+  // #ifdef APP-ANDROID
+  // uni.uploadFile resolves bare native album paths relative to the app bundle.
+  if (/^\/data\/(?:user\/\d+|data)\/[^/]+\/cache\/ct-album\//.test(filePath)) uploadPath = 'file://' + filePath
+  // #endif
+  return authenticated(token => new Promise((resolve, reject) => {
+    if (control?.cancelled) { reject(new Error('上传已取消')); return }
+    try {
+      const task = uni.uploadFile({
+        url: API_BASE_URL + url, filePath: uploadPath, name: 'file', timeout: 300000,
+        header: token ? { Authorization: 'Bearer ' + token } : {},
+        success(response) { try { resolve(parse<T>(response.statusCode, response.data)) } catch (e) { reject(e) } },
+        fail() { reject(new Error('文件上传失败，请重试')) }
+      })
+      if (control) control.abort = () => { control.cancelled = true; task.abort() }
+      task.onProgressUpdate?.(event => { onProgress?.(event.progress); onBytes?.({sent:event.totalBytesSent,total:event.totalBytesExpectedToSend}) })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      reject(new Error(/FileNotFoundException|ENOENT/.test(message) ? '本地文件已失效，请重新选择' : '文件上传失败，请重试'))
+    }
+  }))
+}

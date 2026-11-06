@@ -1,0 +1,5 @@
+import type { Conversation } from '@/types/home'
+export const chatConversations: Conversation[] = [
+  { id: 'chat-1', name: '小镇交流', isTop: false, isOfficial: false, lastMsg: '一起聊聊最近的游戏见闻', time: '09-04', unread: 0 },
+  { id: 'chat-2', name: '旅行者', isTop: false, isOfficial: false, lastMsg: '下次一起出发', time: '09-03', unread: 0 }
+]

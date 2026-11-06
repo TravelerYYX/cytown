@@ -1,0 +1,289 @@
+<template>
+ <view :id="hostId" :flatten="false" class="post-video" @fullscreenchange="onFullscreenChange" :class="[{'is-fullscreen':fullscreen},uxNative?'ux3':'',uxNative?'ux10':'',uxNative&amp;&amp;!!fullscreen?'ux33':'']" @tap="reveal">
+  <view class="video-stage" :style="uxLayout(uxNodePrefix+'-n0',[],fullscreen?{}:{aspectRatio:String(media.aspectRatio||16/9)})" :class="[uxNative?'ux3':'',uxNative?'ux11':'',uxNative&amp;&amp;!!fullscreen?'ux35':'']" :id="uxNodePrefix+'-n0'">
+   <!-- #ifdef WEB -->
+   <WebVideoSurface :options="engineOptions" @event="onEngine" />
+   <!-- #endif -->
+   <!-- #ifdef APP -->
+   <NativeVideoSurface :options="engineOptions" @event="onEngine" />
+   <view class="native-player-touch" @tap.stop="reveal" />
+   <!-- #endif -->
+   <!-- #ifdef MP-WEIXIN -->
+   <NativeVideoSurface :options="engineOptions" @event="onEngine"><MpFullscreenControls :active="fullscreen" :processing="media.status==='processing'?'视频处理中，稍后即可播放':media.status==='failed'?(media.errorMessage||'视频处理失败'):''" :can-retry="media.status==='failed' &amp;&amp; !!canRetry" @retry-processing="$emit('retry')" :title="title || ''" :controls="controls" :playing="playing||waiting" :waiting="waiting" :error="error" :time="time" :duration="duration" :quality="quality" :actual-level="actualLevel" :speed="speed" :menu="menu" :available-levels="(media.qualities || []).map(q => q.height)" @reveal="reveal" @back="back" @toggle="toggle" @retry="retry" @save="menu='';$emit('more')" @menu="menu=$event" @quality="chooseQuality" @speed="chooseSpeed" @seek="seek({detail:{value:$event}})" @dragging="dragging=$event" /></NativeVideoSurface>
+   <!-- #endif -->
+   <template v-if="outsideOverlay">
+   <view v-if="media.status==='processing'||media.status==='failed'" class="processing" :class="[uxNative?'ux3':'',uxNative?'ux28':'']" :style="uxLayout(uxNodePrefix+'-n1',[{on:uxNative,declarations:{&quot;max-width&quot;:&quot;80%&quot;}}],{})" :id="uxNodePrefix+'-n1'"><text :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux50':'',uxNative?'ux51':'']">{{media.status==='failed'?(media.errorMessage||'视频处理失败'):'视频处理中，稍后即可播放'}}</text><ActionButton :aria-label="&quot;重新处理&quot;" v-if="media.status==='failed'&&!!canRetry" @tap.stop="$emit('retry')" :class="[uxNative?'ct-native-button':'',uxNative?'ux52':'',uxNative?'ux61':'']"><text :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux50':'',uxNative?'ux70':'',uxNative?'ux51':'']">重新处理</text></ActionButton></view>
+   <view v-else-if="!!error" class="processing" :class="[uxNative?'ux3':'',uxNative?'ux28':'']" :style="uxLayout(uxNodePrefix+'-n2',[{on:uxNative,declarations:{&quot;max-width&quot;:&quot;80%&quot;}}],{})" :id="uxNodePrefix+'-n2'"><text :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux50':'',uxNative?'ux51':'']">{{error}}</text><ActionButton :aria-label="&quot;重试播放&quot;" @tap.stop="retry" :class="[uxNative?'ct-native-button':'',uxNative?'ux52':'',uxNative?'ux61':'']"><text :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux50':'',uxNative?'ux70':'',uxNative?'ux51':'']">重试播放</text></ActionButton></view>
+   <view v-if="waiting&&!error" class="buffering" :class="[uxNative?'ux3':'',uxNative?'ux29':'']" :style="uxLayout(uxNodePrefix+'-n3',[{on:uxNative,declarations:{&quot;max-width&quot;:&quot;80%&quot;}}],{})" :id="uxNodePrefix+'-n3'"><text :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux72':'',uxNative?'ux51':'']">缓冲中…</text></view>
+   <template v-if="controls">
+    <view class="top-gradient" :class="[uxNative?'ux3':'',uxNative?'ux13':'',uxNative&amp;&amp;!!fullscreen?'ux73':'']"><ActionButton class="player-back" aria-label="返回" @tap.stop="back" :class="[uxNative?'ct-native-button':'',uxNative?'ux52':'',uxNative?'ux14':'',uxNative?'ux58':'']"><AppIcon name="back" tone="white" :size="42"/></ActionButton><text v-if="fullscreen" class="player-title" :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux51':'',uxNative?'ux17':'',uxNative&amp;&amp;!!fullscreen?'ux74':'']">{{title}}</text><ActionButton class="player-more" aria-label="视频更多操作" @tap.stop="menu='quality'" :class="[uxNative?'ct-native-button':'',uxNative?'ux52':'',uxNative?'ux15':'',uxNative?'ux16':'',uxNative?'ux58':'']"><AppIcon name="more" tone="white" :size="32" /></ActionButton></view>
+    <view class="bottom-gradient" :class="[uxNative?'ux3':'',uxNative?'ux18':'',uxNative&amp;&amp;!!fullscreen?'ux77':'']">
+     <slider v-if="fullscreen" class="fullscreen-track" :value="percent" :max="1000" activeColor="#24b9fb" backgroundColor="#bfc0c5" :block-size="12" @changing="dragging=true" @change="seek" @tap.stop  :class="[uxNative?'ux22':'',uxNative&amp;&amp;!!fullscreen?'ux78':'']"/>
+     <view class="control-row" :class="[uxNative?'ux3':'',uxNative?'ux19':'',uxNative&amp;&amp;!!fullscreen?'ux79':'']"><ActionButton class="play-toggle" :aria-label="playing||waiting?'暂停':'播放'" @tap.stop="toggle" :class="[uxNative?'ct-native-button':'',uxNative?'ux52':'',uxNative?'ux59':'']" :style="uxLayout(uxNodePrefix+'-g1000',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;24rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;!!fullscreen,declarations:{&quot;__gap&quot;:&quot;24px&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1000'"><AppIcon :name="playing||waiting?'pause':'play'" tone="white" :size="39"/></ActionButton><text class="time" :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux51':'',uxNative?'ux20':'',uxNative&amp;&amp;!!fullscreen?'ux80':'']" :style="uxLayout(uxNodePrefix+'-g1001',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;24rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;!!fullscreen,declarations:{&quot;__gap&quot;:&quot;24px&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1001'">{{clock(time)+(fullscreen?'/'+clock(duration):'')}}</text>
+      <slider v-if="!fullscreen" class="inline-track" :value="percent" :max="1000" activeColor="#24b9fb" backgroundColor="#bfc0c5" :block-size="12" @changing="dragging=true" @change="seek" @tap.stop  :class="[uxNative?'ux21':'']" :style="uxLayout(uxNodePrefix+'-g1002',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;24rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;!!fullscreen,declarations:{&quot;__gap&quot;:&quot;24px&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1002'"/>
+      <text v-if="!fullscreen" class="time" :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux51':'',uxNative?'ux20':'',uxNative&amp;&amp;!!fullscreen?'ux80':'']" :style="uxLayout(uxNodePrefix+'-g1003',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;24rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;!!fullscreen,declarations:{&quot;__gap&quot;:&quot;24px&quot;}},{on:true,declarations:{__index:String(0+1+1+(!fullscreen?1:0))}}],{})" :id="uxNodePrefix+'-g1003'">{{clock(duration)}}</text><view class="control-spacer" v-else  :class="[uxNative?'ux3':'',uxNative?'ux23':'']" :style="uxLayout(uxNodePrefix+'-g1004',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;24rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;!!fullscreen,declarations:{&quot;__gap&quot;:&quot;24px&quot;}},{on:true,declarations:{__index:String(0+1+1+(!fullscreen?1:0)+(!fullscreen?1:0))}}],{})" :id="uxNodePrefix+'-g1004'"/>
+      <ActionButton :aria-label="String(speed===1?'倍速':speed+'×')" v-if="fullscreen" class="speed-button" @tap.stop="menu='speed'" :class="[uxNative?'ct-native-button':'',uxNative?'ux52':'',uxNative?'ux25':'',uxNative?'ux59':'',uxNative&amp;&amp;!!fullscreen?'ux81':'']" :style="uxLayout(uxNodePrefix+'-g1005',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;24rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;!!fullscreen,declarations:{&quot;__gap&quot;:&quot;24px&quot;}},{on:true,declarations:{__index:String(0+1+1+(!fullscreen?1:0)+(!fullscreen?1:0)+1)}}],{})" :id="uxNodePrefix+'-g1005'"><text :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux82':'',uxNative?'ux88':'',uxNative&amp;&amp;!!fullscreen?'ux92':'',uxNative?'ux51':'']">{{speed===1?'倍速':speed+'×'}}</text></ActionButton><ActionButton :aria-label="String(quality==='auto'?'自动'+(actualLevel?' · '+actualLevel+'P':''):quality+'P')" v-if="fullscreen" class="quality-button" @tap.stop="menu='quality'" :class="[uxNative?'ct-native-button':'',uxNative?'ux52':'',uxNative?'ux24':'',uxNative?'ux59':'',uxNative&amp;&amp;!!fullscreen?'ux93':'']" :style="uxLayout(uxNodePrefix+'-g1006',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;24rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;!!fullscreen,declarations:{&quot;__gap&quot;:&quot;24px&quot;}},{on:true,declarations:{__index:String(0+1+1+(!fullscreen?1:0)+(!fullscreen?1:0)+1+(fullscreen?1:0))}}],{})" :id="uxNodePrefix+'-g1006'"><text :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux94':'',uxNative?'ux88':'',uxNative&amp;&amp;!!fullscreen?'ux95':'',uxNative?'ux51':'']">{{quality==='auto'?'自动'+(actualLevel?' · '+actualLevel+'P':''):quality+'P'}}</text></ActionButton><ActionButton aria-label="全屏" class="fullscreen-button" @tap.stop="toggleFullscreen" :class="[uxNative?'ct-native-button':'',uxNative?'ux52':'',uxNative?'ux59':'']" :style="uxLayout(uxNodePrefix+'-g1007',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;24rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:uxNative&amp;&amp;!!fullscreen,declarations:{&quot;__gap&quot;:&quot;24px&quot;}},{on:true,declarations:{__index:String(0+1+1+(!fullscreen?1:0)+(!fullscreen?1:0)+1+(fullscreen?1:0)+(fullscreen?1:0))}}],{})" :id="uxNodePrefix+'-g1007'"><AppIcon name="fullscreen" tone="white" :size="38"/></ActionButton>
+     </view>
+    </view>
+   </template>
+   <view v-if="!controls" class="minimal-track" :class="[uxNative?'ux3':'',uxNative?'ux27':'']"><view :style="{width:percent/10+'%'}"  :class="[uxNative?'ux3':'',uxNative?'ux34':'']"/></view>
+   <view v-if="menuRendered" class="player-menu player-menu-motion" @tap.stop :class="[uxNative?'ux3':'',uxNative?'ux30':'',uxNative&amp;&amp;!!fullscreen?'ux96':'']" :style="uxLayout(uxNodePrefix+'-n4',[{on:uxNative,declarations:{&quot;max-height&quot;:&quot;90%&quot;}}],{opacity:menuEntered?1:0})" :id="uxNodePrefix+'-n4'"><IntrinsicScroller max-height="90%" :limit-id="uxNodePrefix+'-n0'" inset="32rpx"><text class="menu-title" :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux51':'',uxNative?'ux31':'']">{{lastMenu==='quality'?'清晰度':'播放速度'}}</text><template v-if="lastMenu==='quality'"><ActionButton :aria-label="&quot;自动&quot;" :class="[uxNative?'ct-native-button':'',{selected:quality==='auto'},uxNative?'ux52':'',uxNative?'ux62':'',uxNative&amp;&amp;!!(quality==='auto')?'ux97':'']" @tap="chooseQuality('auto')"><text :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux71':'',uxNative&amp;&amp;!!(quality==='auto')?'ux109':'',uxNative?'ux51':'']">自动</text></ActionButton><ActionButton :aria-label="String(level) + ' ' + &quot;P&quot; + ' ' + String(!available(level)?'（不可用）':'')" v-for="(level, __uxIndex0) in levels" :key="level" :disabled="!available(level)" :class="[uxNative?'ct-native-button':'',{selected:quality===level},uxNative?'ux52':'',uxNative?'ux62':'',uxNative&amp;&amp;!!(quality===level)?'ux97':'',uxNative&amp;&amp;!!!available(level)?'ux114':'']" @tap="chooseQuality(level)"><text :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux71':'',uxNative&amp;&amp;!!(quality===level)?'ux109':'',uxNative&amp;&amp;!!!available(level)?'ux115':'',uxNative?'ux51':'']">{{level}}P{{!available(level)?'（不可用）':''}}</text></ActionButton><ActionButton :aria-label="&quot;源画质&quot; + ' ' + String(q.height) + ' ' + &quot;P&quot;" v-for="(q, __uxIndex1) in sourceQualities" :key="q.height" @tap="chooseQuality(q.height)" :class="[uxNative?'ct-native-button':'',uxNative?'ux52':'',uxNative?'ux62':'']"><text :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux71':'',uxNative?'ux51':'']">源画质 {{q.height}}P</text></ActionButton></template><template v-else><ActionButton :aria-label="String(value) + ' ' + &quot;×&quot;" v-for="(value, __uxIndex2) in speeds" :key="value" :class="[uxNative?'ct-native-button':'',{selected:speed===value},uxNative?'ux52':'',uxNative?'ux62':'',uxNative&amp;&amp;!!(speed===value)?'ux97':'']" @tap="chooseSpeed(value)"><text :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux71':'',uxNative&amp;&amp;!!(speed===value)?'ux109':'',uxNative?'ux51':'']">{{value}}×</text></ActionButton></template><ActionButton :aria-label="String(lastMenu==='quality'?'倍速':'清晰度')" @tap="menu=lastMenu==='quality'?'speed':'quality'" :class="[uxNative?'ct-native-button':'',uxNative?'ux52':'',uxNative?'ux62':'']"><text :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux71':'',uxNative?'ux51':'']">{{lastMenu==='quality'?'倍速':'清晰度'}}</text></ActionButton><ActionButton :aria-label="&quot;保存视频&quot;" @tap="menu='';$emit('more')" :class="[uxNative?'ct-native-button':'',uxNative?'ux52':'',uxNative?'ux62':'']"><text :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux71':'',uxNative?'ux51':'']">保存视频</text></ActionButton><ActionButton v-if="reportable" aria-label="举报" class="video-report-action" @tap="reportVideo"><text class="video-report-text">举报</text></ActionButton><ActionButton :aria-label="&quot;关闭&quot;" class="menu-close" @tap="menu=''" :class="[uxNative?'ct-native-button':'',uxNative?'ux52':'',uxNative?'ux32':'',uxNative?'ux62':'']"><text :class="[uxNative?'ux36':'',uxNative?'ux38':'',uxNative?'ux71':'',uxNative?'ux51':'']">关闭</text></ActionButton></IntrinsicScroller></view>
+   </template>
+  </view>
+
+ </view>
+</template>
+<script setup lang="uts">
+// #ifdef APP-ANDROID
+import { captureScreenOrientation, restoreScreenOrientation } from '@/uni_modules/ct-platform'
+let orientationSnapshot:number[]=[]
+// #endif
+import ActionButton from '@/components/ActionButton.uvue'
+// #ifdef MP-WEIXIN
+import MpFullscreenControls from './MpFullscreenControls.uvue'
+// #endif
+import IntrinsicScroller from '@/components/IntrinsicScroller.uvue'
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import {computed,ref,watch,onBeforeUnmount,onMounted} from 'vue'
+import { usePublishSheetMotion } from '@/composables/usePublishSheetMotion'
+
+import AppIcon from './AppIcon.uvue'
+// #ifdef WEB
+import WebVideoSurface from './WebVideoSurface.uvue'
+// #endif
+// #ifndef WEB
+import NativeVideoSurface from './NativeVideoSurface.uvue'
+// #endif
+import {mediaUrl} from '@/utils/media-cache'
+import {videoAutoplayMode} from '@/utils/app-settings'
+import type {MediaSkeletonSpec} from '@/types/home'
+const props=defineProps<{media:MediaSkeletonSpec;title?:string;canRetry?:boolean;reportable?:boolean}>()
+const emit=defineEmits<{(e:'back'):void;(e:'more'):void;(e:'retry'):void;(e:'report'):void}>()
+const hostId='ct-player-'+Math.random().toString(36).slice(2),controls=ref(true),fullscreen=ref(false),playing=ref(false),waiting=ref(false),error=ref(''),time=ref(0),duration=ref((props.media.durationMs||0)/1000),quality=ref<string|number>('auto'),actualLevel=ref(0),speed=ref(1),active=ref(true),autoplay=ref(false),menu=ref(''),dragging=ref(false),command=ref<{id:number;type:string;value?:number}>({id:0,type:''})
+const lastMenu=ref('quality')
+watch(menu,value=>{if(value)lastMenu.value=value})
+const {rendered:menuRendered,entered:menuEntered}=usePublishSheetMotion(()=>menu.value!=='')
+let reportTimer:ReturnType<typeof setTimeout>|undefined
+function reportVideo(){menu.value='';if(fullscreen.value)toggleFullscreen();clearTimeout(reportTimer);reportTimer=setTimeout(()=>emit('report'),320)}
+onBeforeUnmount(()=>clearTimeout(reportTimer))
+const levels=[1080,720,480,360],speeds=[.5,.75,1,1.25,1.5,2],sourceQualities=computed(()=>props.media.qualities?.filter(q=>q.height<360)||[])
+let hideTimer:ReturnType<typeof setTimeout>|undefined
+const suspendId=ref(0)
+let suspendSequence=0,pendingSuspend:{id:number;promise:Promise<void>;resolve:()=>void}|undefined
+const percent=computed(()=>duration.value?time.value/duration.value*1000:0)
+const outsideOverlay=computed(()=>{
+ // #ifdef MP-WEIXIN
+ return !fullscreen.value
+ // #endif
+ // #ifndef MP-WEIXIN
+ return true
+ // #endif
+})
+const engineOptions=computed(()=>({hostId,source:props.media.status==='processing'||props.media.status==='failed'?'':mediaUrl(props.media.hlsUrl||props.media.url),poster:mediaUrl(props.media.coverUrl),qualities:(props.media.qualities||[]).map(q=>({...q,url:mediaUrl(q.url)})),quality:quality.value,rate:speed.value,command:command.value,active:active.value,suspendId:suspendId.value,autoplay:autoplay.value,fullscreen:fullscreen.value}))
+function clock(value:number){if(!Number.isFinite(value))return'00:00';return String(Math.floor(value/60)).padStart(2,'0')+':'+String(Math.floor(value%60)).padStart(2,'0')}
+function send(type:string,value?:number){command.value={id:command.value.id+1,type,value}}
+function schedule(){clearTimeout(hideTimer);if(playing.value&&!menu.value&&!dragging.value)hideTimer=setTimeout(()=>controls.value=false,3000)}
+function reveal(){if(menu.value){menu.value='';return}controls.value=!controls.value;if(controls.value)schedule()}
+function toggle(){const pauseRequested=playing.value||waiting.value;waiting.value=!pauseRequested;send(pauseRequested?'pause':'play');controls.value=true;schedule()}
+function seek(event:{detail:{value:number}}){send('seek',event.detail.value/1000*duration.value);dragging.value=false;schedule()}
+function available(level:number){return props.media.qualities?.some(q=>q.height===level)||false}
+function chooseQuality(level:string|number){quality.value=level;menu.value='';controls.value=true;schedule()}
+function chooseSpeed(value:number){speed.value=value;menu.value='';schedule()}
+function retry(){error.value='';waiting.value=true;send('retry')}
+function toggleFullscreen(){
+ // #ifndef APP
+ fullscreen.value=!fullscreen.value
+ // #endif
+ menu.value='';controls.value=true
+ // #ifdef APP
+ const pages=getCurrentPages(),page=pages[pages.length-1]
+ if(!fullscreen.value){
+  // #ifdef APP-ANDROID
+  orientationSnapshot=captureScreenOrientation()
+  // #endif
+  const element=uni.getElementById(hostId)
+  if(element)element.requestFullscreen({navigationUI:'hide',orientation:'landscape-primary',success:()=>{fullscreen.value=true},fail:()=>{fullscreen.value=false;uni.showToast({title:'无法进入全屏，请重试',icon:'none'})},complete:null})
+  else fullscreen.value=false
+ }else page?.exitFullscreen({success:()=>{fullscreen.value=false},fail:()=>{controls.value=true},complete:null})
+ // #endif
+ // #ifdef H5
+ if(fullscreen.value){document.documentElement.requestFullscreen?.().catch(()=>{});(screen.orientation as ScreenOrientation&{lock?:(value:string)=>Promise<void>})?.lock?.('landscape').catch(()=>{})}else if(document.fullscreenElement)void document.exitFullscreen()
+ // #endif
+}
+function onFullscreenChange(){
+ // #ifdef APP
+ const pages=getCurrentPages(),page=pages[pages.length-1]
+ // #ifdef APP-ANDROID
+ if(fullscreen.value){restoreScreenOrientation(orientationSnapshot);orientationSnapshot=[]}
+ // #endif
+ fullscreen.value=page?.fullscreenElement?.id===hostId
+ // #endif
+ controls.value=true;menu.value=''
+}
+function back(){if(fullscreen.value)toggleFullscreen();else emit('back')}
+function onEngine(event:import('@/types/playback').PlaybackEvent){if(typeof event.fullscreen==='boolean'){fullscreen.value=event.fullscreen;controls.value=true;menu.value=''}if(pendingSuspend&&event.suspended===pendingSuspend.id){pendingSuspend.resolve();pendingSuspend=undefined;return}if(!dragging.value&&typeof event.time==='number')time.value=event.time;if(typeof event.duration==='number'&&event.duration>0)duration.value=event.duration;if(typeof event.playing==='boolean'){const changed=playing.value!==event.playing;playing.value=event.playing;if(changed)schedule()}if(typeof event.waiting==='boolean')waiting.value=event.waiting;if(typeof event.level==='number')actualLevel.value=event.level;if(typeof event.error==='string'){error.value=event.error;controls.value=true}}
+function handleBack(){if(fullscreen.value){toggleFullscreen();return true}return false}
+function pause(){active.value=false;send('pause')}
+function suspend(){
+ if(pendingSuspend)return pendingSuspend.promise
+ const id=++suspendSequence
+ let resolve!:()=>void
+ const promise=new Promise<void>(done=>{resolve=done})
+ pendingSuspend={id,promise,resolve}
+ suspendId.value=id;pause()
+ return promise
+}
+function resume(){suspendId.value=0;active.value=true}
+defineExpose({onEngine,handleBack,pause,resume,suspend})
+// #ifdef H5
+function fullscreenChanged(){if(!document.fullscreenElement&&fullscreen.value){fullscreen.value=false;controls.value=true;menu.value='';screen.orientation?.unlock?.()}}
+onMounted(()=>document.addEventListener('fullscreenchange',fullscreenChanged))
+onBeforeUnmount(()=>document.removeEventListener('fullscreenchange',fullscreenChanged))
+// #endif
+onMounted(()=>uni.getNetworkType({success:r=>{autoplay.value=videoAutoplayMode.value==='all-networks'||(videoAutoplayMode.value==='wifi-only'&&r.networkType==='wifi')}}))
+onHide(pause);onShow(resume)
+onBeforeUnmount(()=>{pendingSuspend?.resolve();pendingSuspend=undefined;clearTimeout(hideTimer);if(fullscreen.value)toggleFullscreen();pause()})
+</script>
+
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.post-video{background:#000;color:#fff;position:relative}.video-stage{position:relative;width:100%;background:#000;min-height:180rpx}.player-host{position:absolute;inset:0;width:100%;height:100%}.top-gradient{position:absolute;top:0;left:0;right:0;height:140rpx;display:flex;align-items:flex-start;padding:24rpx 32rpx;background:linear-gradient(#000b,transparent);pointer-events:none;flex-direction:row}.top-gradient button{pointer-events:auto}.player-back,.player-more{padding:0;background:none;color:white;margin:0}.player-more{margin-left:auto;font-size:42rpx;line-height:1}.player-title{font-size:25rpx;flex:1;margin:0 24rpx;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.bottom-gradient{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,#000b);padding:50rpx 32rpx 20rpx}.control-row{display:flex;align-items:center;gap:24rpx;flex-direction:row}.control-row button{background:none;color:white;padding:0;margin:0;flex-shrink:0}.time{font-size:19rpx;flex-shrink:0;font-variant-numeric:tabular-nums}.inline-track{flex:1;min-width:0;margin:0}.fullscreen-track{margin:0 0 36rpx}.control-spacer{flex:1}.quality-button{font-size:21rpx;border:2rpx solid #fff!important;border-radius:7rpx;padding:4rpx 18rpx!important}.speed-button{font-size:22rpx}.inline-settings{position:absolute;bottom:86rpx;right:32rpx;display:flex;gap:24rpx;font-size:19rpx;opacity:0;pointer-events:none;flex-direction:row}.post-video:focus-within .inline-settings{opacity:1;pointer-events:auto}.inline-settings button{padding:2rpx 12rpx;color:white;background:#0008;border-radius:8rpx}.minimal-track{position:absolute;left:0;right:0;bottom:0;height:5rpx;background:#ccd1d6}.minimal-track>view{height:100%;background:#13b9f4}.processing,.buffering{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:23rpx;text-align:center;max-width:80%;background:#0009;border-radius:12rpx;padding:18rpx;z-index:2}.processing button{color:#15b9ff;font-size:23rpx;margin-top:12rpx;background:transparent}.player-menu{position:absolute;z-index:4;right:18rpx;bottom:18rpx;width:240rpx;max-height:90%;overflow:auto;background:#202124ed;border-radius:16rpx;padding:16rpx 0}.player-menu button{background:none;color:white;font-size:23rpx;padding:8rpx;margin:0}.player-menu button[disabled]{color:#777}.player-menu .selected{color:#20baff}.menu-title{display:block;text-align:center;color:#aaa;font-size:20rpx;padding:8rpx}.menu-close{border-top:1rpx solid #ffffff26!important}.is-fullscreen{position:fixed!important;inset:0;z-index:60}.is-fullscreen .video-stage{width:100%;height:100%;min-height:0}.is-fullscreen .control-row{gap:24px}.is-fullscreen .bottom-gradient{padding:80px 7.5% 30px}.is-fullscreen .top-gradient{padding:40px 7.5%;height:180px}.is-fullscreen .player-title{font-size:18px}.is-fullscreen .time,.is-fullscreen .speed-button,.is-fullscreen .quality-button{font-size:16px}.is-fullscreen .player-menu{width:180px}.is-fullscreen .fullscreen-track{margin-bottom:18px}.is-fullscreen .top-gradient :deep(.app-icon),.is-fullscreen .control-row :deep(.app-icon){width:32px!important;height:32px!important}button:after{border:none}
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux36{color:var(--text-main);font-size:26rpx;}
+
+.ux38{color:#fff;}
+
+
+
+
+
+
+
+
+
+
+
+.ux50{font-size:23rpx;text-align:center;}
+
+
+
+
+
+
+
+.ux70{color:#15b9ff;font-size:23rpx;}
+.ux71{color:white;font-size:23rpx;}
+.ux72{font-size:23rpx;text-align:center;}
+.ux75{color:white;}
+.ux76{font-size:42rpx;line-height:42rpx;}
+.ux82{font-size:22rpx;}
+
+
+
+
+
+.ux88{color:white;}
+
+
+
+.ux92{font-size:16px;}
+.ux94{font-size:21rpx;}
+.ux95{font-size:16px;}
+
+
+
+
+
+
+
+
+
+
+
+.ux109{color:#20baff;}
+
+
+
+
+.ux115{color:#777;}
+.ux3{}
+.ux51{}
+.ux52{}
+
+
+
+
+
+
+.ux10{background-color:#000;color:#fff;position:relative;}
+.ux11{position:relative;width:100%;background-color:#000;min-height:180rpx;}
+
+.native-player-touch{position:absolute;top:0;right:0;bottom:0;left:0;z-index:1;}
+/* Android hit testing excludes descendants when their parent has pointer-events:none. */
+.ux13{position:absolute;top:0;left:0;right:0;height:140rpx;display:flex;flex-direction:row;align-items:flex-start;padding:24rpx 32rpx;background-image:linear-gradient(#000b,transparent);z-index:2;}
+.ux14{padding:0;background-color:transparent;color:white;margin:0;}
+.ux15{padding:0;background-color:transparent;color:white;margin:0;}
+.ux16{margin-left:auto;font-size:42rpx;line-height:42rpx;}
+.ux17{font-size:25rpx;flex:1;margin:0 24rpx;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.ux18{position:absolute;bottom:0;left:0;right:0;background-image:linear-gradient(transparent,#000b);padding:50rpx 32rpx 20rpx;z-index:2;}
+.ux19{display:flex;flex-direction:row;align-items:center;}
+.ux20{font-size:19rpx;flex-shrink:0;}
+.ux21{flex:1;min-width:0;margin:0;}
+.ux22{margin:0 0 36rpx;}
+.ux23{flex:1;}
+.ux24{font-size:21rpx;border:2rpx solid #fff!important;border-radius:7rpx;padding:4rpx 18rpx!important;}
+.ux25{font-size:22rpx;}
+
+.ux27{position:absolute;left:0;right:0;bottom:0;height:5rpx;background-color:#ccd1d6;}
+.ux28{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:23rpx;text-align:center;background-color:#0009;border-radius:12rpx;padding:18rpx;z-index:2;}
+.ux29{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:23rpx;text-align:center;background-color:#0009;border-radius:12rpx;padding:18rpx;z-index:2;}
+.ux30{position:absolute;z-index:4;right:18rpx;bottom:18rpx;width:240rpx;background-color:#202124ed;border-radius:16rpx;padding:16rpx 0;}
+.ux31{display:flex;flex-direction:column;text-align:center;color:#aaa;font-size:20rpx;padding:8rpx;}
+.ux32{border-top:1rpx solid #ffffff26!important;}
+.ux33{}
+
+
+
+
+
+.ux58{pointer-events:auto;}
+.ux59{background-color:transparent;color:white;padding:0;margin:0;flex-shrink:0;}
+
+.ux34{height:100%;background-color:#13b9f4;}
+.ux61{color:#15b9ff;font-size:23rpx;margin-top:12rpx;background-color:transparent;}
+.ux62{background-color:transparent;color:white;font-size:23rpx;padding:8rpx;margin:0;}
+.ux97{color:#20baff;}
+.ux35{width:100%;height:100%;min-height:0;}
+.ux79{}
+.ux77{padding:80px 7.5% 30px;}
+.ux73{padding:40px 7.5%;height:180px;}
+.ux74{font-size:18px;}
+.ux80{font-size:16px;}
+.ux81{font-size:16px;}
+.ux93{font-size:16px;}
+.ux96{width:180px;}
+.ux78{margin-bottom:18px;}
+.ux114{color:#777;}
+/* #endif */
+</style>
+
+<style scoped>
+.player-menu-motion{transition-property:opacity;transition-duration:320ms;transition-timing-function:cubic-bezier(.16,1,.3,1);}.video-report-action{display:flex;align-items:center;justify-content:flex-start;width:100%;margin:0;padding:18rpx 24rpx;border-width:0;border-radius:0;background-color:transparent;}.video-report-text{color:#fff;font-size:24rpx;}
+</style>

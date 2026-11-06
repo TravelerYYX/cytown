@@ -1,0 +1,11 @@
+import { GET, POST } from './request'
+import { ensureInteractionLogin } from './interactions'
+export interface ReportOption { id:string;kind:string;name:string;sortOrder:number }
+export interface ReportOptions { types:ReportOption[];reasons:ReportOption[] }
+export const fetchReportOptions = () => GET<ReportOptions>('/app/report/options')
+export const setUserBlock = (id:string,blocked:boolean) => POST<boolean>('/app/user/'+encodeURIComponent(id)+'/block',{blocked})
+export const submitReport = (targetKind:string,targetId:string,typeId:string,reasonId:string,content:string,assetIds:string[]) => POST<string>('/app/report/submit',{targetKind,targetId,typeId,reasonId,content,assetIds})
+export function openReport(targetKind:string,targetId:string) {
+  if(!ensureInteractionLogin())return
+  uni.navigateTo({url:'/pages/report/index?targetKind='+targetKind+'&targetId='+encodeURIComponent(targetId),animationType:'slide-in-right',animationDuration:320})
+}

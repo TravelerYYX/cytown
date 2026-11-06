@@ -1,0 +1,148 @@
+<template>
+ <view class="social-page">
+  <view class="social-status" :style="{height:statusBarHeight+'px'}"/>
+  <view class="social-header">
+   <ActionButton class="social-back" aria-label="返回" @tap="back"><image class="social-back-icon" :src="uiAsset('/static/icons/social/back.svg')" mode="aspectFit"/></ActionButton>
+   <view v-if="isComments" class="social-tabs"><ActionButton v-for="tab in tabs" :key="tab.kind" :id="'social-tab-'+tab.kind" class="social-tab" :aria-label="tab.label" @tap="selectKind(tab.kind)"><text class="social-tab-label" :class="{'social-tab-active':kind===tab.kind}">{{tab.label}}</text><view v-if="kind===tab.kind" class="social-tab-line"/></ActionButton></view>
+   <text v-else class="social-title">{{kind==='follow'?'新增关注':'收到的赞'}}</text>
+   <ActionButton v-if="kind==='follow'" class="social-fans" aria-label="粉丝列表" @tap="fans"><text class="social-fans-text">粉丝列表</text></ActionButton>
+   <view v-else-if="!isComments" class="social-header-spacer"/>
+  </view>
+  <view v-if="kind!=='follow'" class="social-filters"><ActionButton class="social-filter" :class="{'social-filter-selected':!followingOnly}" :aria-label="kind==='like'?'所有收到的赞':'所有回复'" @tap="filter(false)"><text class="social-filter-text" :class="{'social-filter-text-selected':!followingOnly}">{{kind==='like'?'所有收到的赞':'所有回复'}}</text></ActionButton><ActionButton class="social-filter" :class="{'social-filter-selected':followingOnly}" aria-label="我关注的" @tap="filter(true)"><text class="social-filter-text" :class="{'social-filter-text-selected':followingOnly}">我关注的</text></ActionButton></view>
+  <scroll-view class="social-scroll" direction="vertical" :show-scrollbar="false" :lower-threshold="120" @scrolltolower="more">
+   <view v-if="kind==='follow'" class="social-follow-list">
+    <view v-for="row in rows" :key="row.id" :id="'social-follower-'+row.id" class="social-follow-row">
+     <view class="social-follow-avatar-slot"><UserAvatar navigable :user-id="row.actorId" :src="row.avatar" :size="84" :style="{position:'absolute',left:'-15rpx',top:'-15rpx'}"/></view>
+     <view class="social-follow-copy" @tap="profile(row)"><text class="social-follow-name">{{row.nickname}}</text><text class="social-follow-time">开始关注你了　{{row.createTime.slice(5,10)}}</text></view>
+     <ActionButton class="social-follow-button" :class="{'social-followed':relation(row)}" :aria-label="relation(row)?'已互关':'回关'" :disabled="interactionBusy.has('follow:'+row.actorId)" @tap="follow(row)"><text class="social-follow-button-text" :class="{'social-followed-text':relation(row)}">{{relation(row)?'已互关':row.followedBy?'回关':'关注'}}</text></ActionButton>
+    </view>
+    <ActionButton v-if="!expanded&&total>7" class="social-expand" aria-label="查看全部" @tap="expand"><text class="social-expand-text">查看全部</text><image class="social-expand-icon" :src="uiAsset('/static/icons/social/chevron.svg')" mode="aspectFit"/></ActionButton>
+   </view>
+   <view v-else class="social-notifications">
+    <view v-for="row in rows" :key="row.id" :id="'social-notification-'+row.id" class="social-notification">
+     <view class="social-notification-heading"><view class="social-avatar-slot"><UserAvatar navigable :user-id="row.actorId" :src="row.avatar" :size="66" :style="{position:'absolute',left:'-12rpx',top:'-12rpx'}"/></view><view class="social-actor" @tap="profile(row)"><text class="social-actor-name">{{row.nickname}}</text><text class="social-actor-time">{{kind==='reply'?'回复了我的帖子 ':''}}{{row.createTime.slice(0,10)}}</text></view><image v-if="row.coverUrl" class="social-cover" :src="resourceUrl(row.coverUrl)" mode="aspectFill" @tap="openSocialPost(row)"/></view>
+     <view class="social-notification-body">
+      <view class="social-content" @tap="openSocialPost(row)"><text class="social-content-text">{{message(row)}}</text><image v-if="row.stickerUrl&&kind==='reply'" class="social-sticker" :src="resourceUrl(row.stickerUrl)" mode="aspectFit"/></view>
+      <ActionButton :id="'social-reference-'+row.id" class="social-reference" :aria-label="row.postLabel" @tap="openSocialPost(row)"><view class="social-reference-line"/><text class="social-reference-label" :max-lines="1">{{row.postLabel}}</text><image class="social-reference-arrow" :src="uiAsset('/static/icons/social/chevron.svg')" mode="aspectFit"/></ActionButton>
+      <ActionButton v-if="kind==='like'" :id="'social-thanks-'+row.id" class="social-thanks" aria-label="私信感谢" :disabled="thanksBusy.length>0" @tap="thankSocialLike(row)"><text class="social-thanks-text">{{thanksBusy.includes(row.id)?'打开中…':'私信🥰感谢'}}</text></ActionButton>
+     </view>
+    </view>
+   </view>
+   <view v-if="loading" class="social-state"><text class="social-state-text">加载中…</text></view>
+   <ActionButton v-else-if="error" class="social-state" aria-label="加载失败，点击重试" @tap="load"><text class="social-state-text">{{error}}，点击重试</text></ActionButton>
+   <EmptyState v-else-if="!rows.length" class="social-empty"/>
+   <view v-else-if="!hasMore" class="social-state"><text class="social-state-text">已经到底了哦</text></view>
+   <view :style="{height:(bottomInset+24)+'px'}"/>
+  </scroll-view>
+  <EyeCareOverlay/>
+ </view>
+</template>
+<script setup lang="uts">
+import { computed, ref, watch } from 'vue'
+import ActionButton from '@/components/ActionButton.uvue'
+import UserAvatar from '@/components/UserAvatar.uvue'
+import EmptyState from '@/components/EmptyState.uvue'
+import EyeCareOverlay from '@/components/EyeCareOverlay.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { uiAsset } from '@/utils/ui-assets'
+import { mediaUrl as resourceUrl } from '@/utils/media-cache'
+import { authRevision, getSessionGeneration, isLoggedIn } from '@/utils/auth'
+import { openUserProfile } from '@/utils/navigation'
+import { performFollow, relationshipStates, interactionBusy } from '@/utils/interactions'
+import { fetchSocial, readSocial, refreshSocial, openSocialPost, thankSocialLike, thanksBusy } from '@/utils/social-inbox'
+import type { SocialKind, SocialNotification } from '@/types/social'
+const {statusBarHeight,bottomInset}=useWindowInsets()
+const kind=ref<SocialKind>('reply'),followingOnly=ref(false),expanded=ref(false)
+const rows=ref<SocialNotification[]>([]),loading=ref(false),error=ref(''),hasMore=ref(true),total=ref(0)
+const isComments=computed(()=>kind.value==='reply'||kind.value==='repost'||kind.value==='mention')
+const tabs:{kind:SocialKind;label:string}[]=[{kind:'reply',label:'回复我的'},{kind:'repost',label:'转发@'},{kind:'mention',label:'主动@'}]
+let page=1,generation=0,visible=true,viewerSession=getSessionGeneration()
+function reset(){generation++;page=1;rows.value=[];loading.value=false;error.value='';hasMore.value=true;total.value=0;void load()}
+async function load(){
+ if(loading.value||!hasMore.value||!isLoggedIn()||!visible)return
+ loading.value=true;error.value=''
+ const request=generation,session=getSessionGeneration()
+ try{
+  const size=kind.value==='follow'&&!expanded.value?7:20
+  const result=await fetchSocial(kind.value,page,size,followingOnly.value)
+  if(request!==generation||session!==getSessionGeneration())return
+  const ids=new Set(rows.value.map(row=>row.id));rows.value.push(...result.records.filter(row=>!ids.has(row.id)))
+  total.value=result.total;hasMore.value=page<result.pages;page++
+  void readSocial(result.records.map(row=>row.id)).catch(()=>{})
+ }catch(e){if(request===generation)error.value=e instanceof Error?e.message:'加载失败'}finally{if(request===generation)loading.value=false}
+}
+function selectKind(value:SocialKind){if(kind.value!==value){kind.value=value;reset()}}
+function filter(value:boolean){if(followingOnly.value!==value){followingOnly.value=value;reset()}}
+function more(){if(kind.value!=='follow'||expanded.value)void load()}
+function expand(){expanded.value=true;reset()}
+function relation(row:SocialNotification){return relationshipStates[row.actorId]?.following??!!row.following}
+async function follow(row:SocialNotification){const value=await performFollow(row.actorId);if(value){row.following=value.active;row.followedBy=!!value.followedBy}}
+function profile(row:SocialNotification){openUserProfile(row.actorId)}
+function message(row:SocialNotification){if(kind.value==='like')return row.type==='comment_like'?'赞了我的评论':'赞了我的帖子';if(kind.value==='mention')return '在帖子中@了我';if(kind.value==='repost')return '转发帖子并@了我';return row.content||(row.contentType==='image'?'[图片]':row.contentType==='sticker'?'':'[评论已删除]')}
+function back(){getCurrentPages().length>1?uni.navigateBack():uni.reLaunch({url:'/pages/index/index?tab=message'})}
+function fans(){uni.navigateTo({url:'/pages/relationships/index?type=followers'})}
+onLoad(q=>{const value=q?.kind;if(value==='reply'||value==='repost'||value==='mention'||value==='like'||value==='follow')kind.value=value;void load()})
+onShow(()=>{visible=true;void refreshSocial();if(!rows.value.length&&!loading.value)void load()})
+onHide(()=>{visible=false})
+onUnload(()=>{visible=false;generation++})
+watch(authRevision,()=>{const next=getSessionGeneration();if(next===viewerSession)return;viewerSession=next;generation++;rows.value=[];if(isLoggedIn())reset();else{loading.value=false;back()}})
+</script>
+<style scoped>
+.social-page{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;background-color:#fff;}
+.social-status{flex-shrink:0;}
+.social-header{height:104rpx;display:flex;flex-direction:row;align-items:center;position:relative;padding:0 30rpx;flex-shrink:0;}
+.social-back{width:56rpx;height:64rpx;display:flex;flex-direction:row;align-items:center;justify-content:flex-start;margin:0;padding:0;background-color:transparent;border-width:0;}
+.social-back-icon{width:30rpx;height:42rpx;}
+.social-tabs{flex:1;display:flex;flex-direction:row;align-items:center;justify-content:space-around;height:100%;margin-right:40rpx;}
+.social-tab{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:0;margin:0;background-color:transparent;border-width:0;}
+.social-tab-label{font-size:30rpx;line-height:44rpx;color:#626877;}
+.social-tab-active{color:#293244;font-weight:600;}
+.social-tab-line{position:absolute;bottom:16rpx;width:38rpx;height:8rpx;border-radius:4rpx;background-color:#00c3ff;}
+.social-title{position:absolute;left:200rpx;right:200rpx;text-align:center;color:#293244;font-size:30rpx;line-height:44rpx;}
+.social-fans{margin-left:auto;background-color:transparent;padding:0;border-width:0;}
+.social-fans-text{font-size:25rpx;color:#626877;}
+.social-header-spacer{width:56rpx;}
+.social-filters{height:112rpx;display:flex;flex-direction:row;align-items:flex-start;padding:14rpx 34rpx 44rpx;flex-shrink:0;}
+.social-filter{height:54rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;padding:0 22rpx;margin:0 17rpx 0 0;border-radius:14rpx;background-color:#f6f7fa;border-width:0;}
+.social-filter-selected{background-color:#edf9ff;}
+.social-filter-text{font-size:23rpx;color:#626877;line-height:34rpx;}
+.social-filter-text-selected{color:#18a4e5;font-weight:600;}
+.social-scroll{flex:1;height:0;min-height:0;width:100%;}
+.social-notifications{padding:0 34rpx;}
+.social-notification{padding:6rpx 0 34rpx;margin-bottom:32rpx;border-bottom-width:1rpx;border-bottom-style:solid;border-bottom-color:#f4f4f5;}
+.social-notification-heading{display:flex;flex-direction:row;align-items:flex-start;}
+.social-avatar-slot{position:relative;width:66rpx;height:66rpx;flex-shrink:0;overflow:visible;}
+.social-follow-avatar-slot{position:relative;width:84rpx;height:84rpx;flex-shrink:0;overflow:visible;}
+.social-actor{flex:1;min-width:0;margin-left:13rpx;display:flex;flex-direction:column;padding-top:4rpx;}
+.social-actor-name{font-size:24rpx;line-height:33rpx;font-weight:600;color:#293244;}
+.social-actor-time{font-size:18rpx;line-height:28rpx;color:#9296a0;margin-top:2rpx;}
+.social-cover{width:66rpx;height:66rpx;border-radius:8rpx;margin-left:16rpx;flex-shrink:0;}
+.social-notification-body{margin-left:79rpx;display:flex;flex-direction:column;align-items:flex-start;}
+.social-content{display:flex;flex-direction:row;align-items:center;flex-wrap:wrap;min-height:56rpx;margin-top:13rpx;}
+.social-content-text{font-size:25rpx;line-height:40rpx;color:#293244;}
+.social-sticker{width:54rpx;height:54rpx;margin-left:8rpx;}
+.social-reference{display:flex;flex-direction:row;align-items:center;max-width:590rpx;margin:14rpx 0 14rpx;padding:0;border-width:0;background-color:transparent;}
+.social-reference-line{width:6rpx;height:34rpx;border-radius:3rpx;background-color:#dfe2eb;margin-right:11rpx;flex-shrink:0;}
+.social-reference-label{max-width:490rpx;flex-shrink:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:22rpx;line-height:34rpx;color:#969ba7;}
+.social-reference-arrow{width:15rpx;height:24rpx;margin-left:12rpx;flex-shrink:0;}
+.social-thanks{height:58rpx;display:flex;flex-direction:row;align-items:center;margin:13rpx 0 0;padding:0 15rpx;border-width:0;border-radius:17rpx;background-color:#f6f7fa;}
+.social-thanks-text{font-size:22rpx;line-height:34rpx;color:#697080;}
+.social-follow-list{padding:0 32rpx;border-top-width:1rpx;border-top-style:solid;border-top-color:#f2f2f3;}
+.social-follow-row{min-height:170rpx;display:flex;flex-direction:row;align-items:center;border-bottom-width:1rpx;border-bottom-style:solid;border-bottom-color:#e9e9eb;}
+.social-follow-copy{flex:1;min-width:0;display:flex;flex-direction:column;margin-left:21rpx;}
+.social-follow-name{font-size:29rpx;line-height:42rpx;color:#293244;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.social-follow-time{font-size:23rpx;line-height:36rpx;color:#93989c;margin-top:13rpx;}
+.social-follow-button{width:150rpx;height:54rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;margin:0 0 0 12rpx;padding:0;border-width:1rpx;border-style:solid;border-color:var(--brand);border-radius:28rpx;background-color:#fff;}
+.social-follow-button-text{font-size:27rpx;line-height:40rpx;color:var(--brand);}
+.social-followed{border-color:#d0d4d8;background-color:#f7f8f9;}
+.social-followed-text{color:#969ba0;}
+.social-expand{height:80rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;width:100%;border-width:0;background-color:#fff;margin:0;padding:0;}
+.social-expand-text{color:#a0a3a6;font-size:28rpx;line-height:42rpx;}
+.social-expand-icon{width:20rpx;height:25rpx;transform:rotate(90deg);margin-left:16rpx;}
+.social-state{width:100%;padding:26rpx 10rpx;display:flex;flex-direction:row;justify-content:center;background-color:transparent;border-width:0;margin:0;}
+.social-state-text{font-size:22rpx;line-height:34rpx;color:#a0a4af;}
+.social-empty{margin-top:120rpx;}
+/* #ifndef APP */
+.social-back::after,.social-tab::after,.social-filter::after,.social-reference::after,.social-thanks::after,.social-follow-button::after,.social-expand::after,.social-state::after,.social-fans::after{border:0;}
+/* #endif */
+</style>

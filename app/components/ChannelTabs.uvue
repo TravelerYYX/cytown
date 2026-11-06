@@ -1,0 +1,246 @@
+<template>
+  <view :id="indicatorId+'-tabs'" class="channel-tabs" :class="[{profile:searchable},uxNative?'ux1':'',uxNative?'ux8':'',uxNative&amp;&amp;!!searchable?'ux11':'',searchable?'profile-geometry':'home-tabs-geometry']">
+    <scroll-view v-if="!searchable" class="home-tabs-scroll" direction="horizontal" :show-scrollbar="false" :scroll-left="homeScrollLeft" :scroll-with-animation="true">
+      <view class="home-tabs-track" :style="{ width: homeTrackWidth + 'rpx' }">
+        <ActionButton :disabled="!interactive" :aria-label="String(tab.name)" v-for="(tab, __uxIndex0) in tabs" :key="tab.id" class="channel-tab" :style="{ width: homeTabWidths[Number(__uxIndex0)] + 'rpx', flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }" :class="[uxNative?'ct-native-button':'',{active:active===tab.id},uxNative?'ux15':'',uxNative?'ux9':'',uxNative&amp;&amp;!!(active===tab.id)?'ux14':'',uxNative&amp;&amp;!!searchable?'ux22':'',searchable?'profile-tab':'']" @tap="selectTab(tab)">
+          <text class="channel-tab-label" :style="tabFont > 0 ? {fontSize:tabFont + 'rpx', fontFamily:tabFontFamily} : {}" :class="[uxNative?'ux24':'',uxNative?'ux29':'',uxNative&amp;&amp;!!(active===tab.id)?'ux35':'',uxNative&amp;&amp;!!searchable?'ux36':'',uxNative?'ux37':'',searchable?'profile-tab-label':'',searchable && active===tab.id?'profile-tab-label-active':'']">{{ tab.name }}</text>
+        </ActionButton>
+        <view v-if="tabs.length" :id="indicatorId" class="profile-indicator" :class="{'home-indicator':!searchable}" :style="[indicatorStyle,indicatorGeometry]">
+          <view :id="indicatorId+'-bar'" class="profile-indicator-bar" :class="[{'is-moving-a':indicatorPhase,'is-moving-b':!indicatorPhase && indicatorMoving},{'home-indicator-bar':!searchable}]" />
+        </view>
+      </view>
+    </scroll-view>
+    <template v-else>
+    <ActionButton :disabled="!interactive" :aria-label="String(tab.name)" v-for="(tab, __uxIndex0) in tabs" :key="tab.id" class="channel-tab" :class="[uxNative?'ct-native-button':'',{active:active===tab.id},uxNative?'ux15':'',uxNative?'ux9':'',uxNative&amp;&amp;!!(active===tab.id)?'ux14':'',uxNative&amp;&amp;!!searchable?'ux22':'',searchable?'profile-tab':'']" @tap="selectTab(tab)">
+      <text class="channel-tab-label" :style="tabFont > 0 ? {fontSize:tabFont + 'rpx', fontFamily:tabFontFamily} : {}" :class="[uxNative?'ux24':'',uxNative?'ux29':'',uxNative&amp;&amp;!!(active===tab.id)?'ux35':'',uxNative&amp;&amp;!!searchable?'ux36':'',uxNative?'ux37':'',searchable?'profile-tab-label':'',searchable && active===tab.id?'profile-tab-label-active':'']">{{ tab.name }}</text>
+    </ActionButton>
+    <view v-if="tabs.length" :id="indicatorId" class="profile-indicator" :class="{'home-indicator':!searchable}" :style="[indicatorStyle,indicatorGeometry]">
+      <view :id="indicatorId+'-bar'" class="profile-indicator-bar" :class="[{'is-moving-a':indicatorPhase,'is-moving-b':!indicatorPhase && indicatorMoving},{'home-indicator-bar':!searchable}]" />
+    </view>
+    </template>
+    <view v-if="searchable" class="tab-spacer"  :class="[uxNative?'ux1':'',uxNative?'ux12':'']"/>
+    <ActionButton v-if="searchable" class="icon-button tab-search" aria-label="搜索发布内容" @tap="$emit('search')" :class="[uxNative?'ct-native-button':'',uxNative?'ux15':'',uxNative?'ux3':'',uxNative?'ux13':'','profile-search']"><AppIcon name="search" :size="44.444" /></ActionButton>
+  </view>
+</template>
+<script setup lang="uts">
+import ActionButton from '@/components/ActionButton.uvue'
+import { computed, getCurrentInstance, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import AppIcon from './AppIcon.uvue'
+import type { Channel } from '@/types/home'
+import { observeWindowResize } from '@/utils/window-events'
+import { TAB_INDICATOR_DURATION, TAB_INDICATOR_STEPS, indicatorPose, sampleIndicatorPose, indicatorTransform } from '@/utils/tab-indicator-motion'
+import type { IndicatorPose } from '@/utils/tab-indicator-motion'
+const props = withDefaults(defineProps<{ tabs: Channel[]; active: string | number; searchable?: boolean; interactive?: boolean; viewportWidth?: number; tabWidth?: number; tabFont?: number; tabFontFamily?: string }>(), { searchable: false, interactive: true, viewportWidth: 0, tabWidth: 0, tabFont: 0, tabFontFamily: '' })
+const emit = defineEmits<{ (e: 'change', tab: Channel): void; (e: 'search'): void }>()
+// The node and its base style stay stable while an animation owns its transform.
+const indicatorId = 'mine-channel-indicator-' + getCurrentInstance()!.uid
+const activeIndex = computed(() => Math.max(0, props.tabs.findIndex(tab => tab.id === props.active)))
+// Home tabs size to their labels (reference: 26rpx text, ~50rpx gaps, scrolls when long).
+const HOME_TAB_FONT = 26
+const HOME_TAB_GAP = 50
+function labelWidth(name: string): number {
+  let width = 0
+  for (let i = 0; i < name.length; i++) {
+    const code = name.charCodeAt(i)
+    width += code >= 65 && code <= 90 ? 0.66 : code < 128 ? 0.56 : 1
+  }
+  return Math.ceil(width * HOME_TAB_FONT)
+}
+const homeTabWidths = computed(() => props.tabs.map(tab => props.tabWidth > 0 ? props.tabWidth : labelWidth(String(tab.name)) + HOME_TAB_GAP))
+const homeTrackWidth = computed(() => homeTabWidths.value.reduce((sum, width) => sum + width, 0))
+function homeTabCenter(index: number): number {
+  let left = 0
+  for (let i = 0; i < index; i++) left += homeTabWidths.value[i] ?? 0
+  return left + (homeTabWidths.value[index] ?? 0) / 2
+}
+// Offset of a tab's indicator from the first tab's, in rpx.
+function indicatorOffset(index: number): number {
+  return props.searchable ? index * 102.778 : homeTabCenter(index) - homeTabCenter(0)
+}
+const indicatorGeometry = computed(() => props.searchable ? {} : {left: (homeTabCenter(0) - 17) + 'rpx'})
+const homeScrollLeft = computed(() => {
+  if (props.searchable || homeTrackWidth.value <= 750) return 0
+  const left = Math.max(0, Math.min(homeTrackWidth.value - 750, homeTabCenter(activeIndex.value) - 375))
+  return uni.rpx2px(left)
+})
+const indicatorMoving = ref(false)
+const indicatorPhase = ref(false)
+// #ifdef MP-WEIXIN
+const indicatorStyle = computed(() => ({transform: 'translateX(' + indicatorOffset(activeIndex.value) + 'rpx)'}))
+// #endif
+// #ifdef APP || WEB
+const indicatorStyle = {transform: 'translateX(' + indicatorOffset(activeIndex.value) + 'rpx) scaleX(1)'}
+function indicatorDestination(index: number): number {
+  const windowWidth = typeof uni.getWindowInfo === 'function' ? (uni.getWindowInfo().windowWidth ?? 0) : 0
+  const width = props.viewportWidth > 0 ? props.viewportWidth : windowWidth > 0 ? windowWidth : uni.rpx2px(750)
+  return width * indicatorOffset(index) / 750
+}
+let targetIndex = activeIndex.value
+let origin: IndicatorPose = {x: indicatorDestination(targetIndex), scale: 1}
+let destination = origin.x
+let started = 0
+let generation = 0
+// #ifdef APP
+let motion: UniAnimation | null = null
+// #endif
+// #ifdef WEB
+let motion: Animation | null = null
+// #endif
+function reducedMotion(): boolean {
+  // #ifdef APP
+  return uxMedia('(prefers-reduced-motion: reduce)')
+  // #endif
+  // #ifdef WEB
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  // #endif
+}
+function moveIndicator(index: number, immediate: boolean = false): void {
+  if (!immediate && index === targetIndex) return
+  const element = uni.getElementById(indicatorId)
+  if (element == null) return
+  const now = Date.now()
+  const current = motion == null ? {x: destination, scale: 1} : sampleIndicatorPose(origin, destination, (now - started) / TAB_INDICATOR_DURATION)
+  targetIndex = index
+  origin = current
+  destination = indicatorDestination(index)
+  const token = ++generation
+  // Commit before canceling so interruption never exposes the initial position.
+  element.style.setProperty('transform', indicatorTransform(current))
+  motion?.cancel()
+  motion = null
+  if (immediate || reducedMotion()) {
+    element.style.setProperty('transform', indicatorTransform({x: destination, scale: 1}))
+    return
+  }
+  const frames: {transform: string; offset: number}[] = []
+  for (let step = 0; step <= TAB_INDICATOR_STEPS; step++) {
+    frames.push({transform: indicatorTransform(indicatorPose(current, destination, step / TAB_INDICATOR_STEPS)), offset: step / TAB_INDICATOR_STEPS})
+  }
+  started = Date.now()
+  motion = element.animate(frames, {duration: TAB_INDICATOR_DURATION, easing: 'linear', fill: 'forwards'})
+  if (motion != null) motion.onfinish = () => {
+    if (token !== generation) return
+    element.style.setProperty('transform', indicatorTransform({x: destination, scale: 1}))
+    motion?.cancel()
+    motion = null
+  }
+}
+const unobserveResize = observeWindowResize(() => moveIndicator(activeIndex.value, true))
+watch(() => [props.tabs.length, props.viewportWidth, props.interactive], () => moveIndicator(activeIndex.value, true), {flush: 'post'})
+onMounted(() => moveIndicator(activeIndex.value, true))
+onBeforeUnmount(() => { generation++; motion?.cancel(); unobserveResize() })
+// #endif
+function selectTab(tab: Channel): void {
+  if (props.interactive === false || tab.id === props.active) return
+  // Start before emitting: content refresh/layout must not delay visual feedback.
+  // #ifdef APP || WEB
+  moveIndicator(Math.max(0, props.tabs.findIndex(item => item.id === tab.id)))
+  // #endif
+  emit('change', tab)
+}
+watch(activeIndex, next => {
+  // #ifdef APP || WEB
+  moveIndicator(next, !props.interactive)
+  // #endif
+  // #ifdef MP-WEIXIN
+  indicatorMoving.value = true
+  indicatorPhase.value = !indicatorPhase.value
+  // #endif
+}, {flush: 'sync'})
+</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.channel-tabs { height: 90rpx; display: flex; align-items: stretch; background: #fff; border-radius: 32rpx 32rpx 0 0; border-bottom: 1rpx solid #f6f6f6; padding: 0; flex-direction: row; }
+.channel-tab { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; color: #7c7f82; font-size: 26rpx; white-space: nowrap; flex-direction: row; }
+.channel-tab.active { color: #17191a; font-weight: 600; }
+.underline { position: absolute; bottom: 2rpx; left: 50%; transform: translateX(-50%); width: 34rpx; height: 10rpx; border-radius: 6rpx; background: transparent; }
+.active .underline { background: #13a8f7; }
+.profile { height: 76rpx; padding: 0 34rpx; border: 0; border-radius: 0; }
+
+.profile .underline { left: 22rpx; bottom: 20rpx; width: 42rpx; height: 8rpx; }
+.tab-spacer { flex: 1; }
+.tab-search { align-self: center; width: 50rpx; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux24{color:var(--text-main);font-size:26rpx;}
+
+
+
+
+.ux29{color:#7c7f82;font-size:26rpx;white-space:nowrap;}
+
+
+
+
+
+.ux35{color:#17191a;font-weight:600;}
+.ux36{font-size:28rpx;}
+.ux1{}
+.ux37{}
+.ux15{}
+
+.ux3{display:flex;flex-direction:row;align-items:center;justify-content:center;width:64rpx;height:64rpx;flex-shrink:0;}
+
+
+
+
+.ux8{height:90rpx;display:flex;flex-direction:row;align-items:stretch;background-color:#fff;border-radius:32rpx 32rpx 0 0;border-bottom:1rpx solid #f6f6f6;padding:0;}
+.ux9{position:relative;flex:1;min-width:0;display:flex;flex-direction:row;align-items:center;justify-content:center;color:#8e9396;font-size:26rpx;white-space:nowrap;}
+.ux10{position:absolute;bottom:2rpx;left:50%;transform:translateX(-50%);width:34rpx;height:10rpx;border-radius:6rpx;background-color:transparent;}
+.ux11{height:76rpx;padding:0 34rpx;border:0px;border-radius:0;}
+.ux12{flex:1;}
+.ux13{align-self:center;width:50rpx;}
+
+
+
+
+
+.ux14{color:#17191a;font-weight:600;}
+.ux21{background-color:#13a8f7;}
+.ux22{flex:0 0 104rpx;justify-content:flex-start;font-size:28rpx;}
+.ux23{left:22rpx;bottom:20rpx;width:42rpx;height:8rpx;}
+/* #endif */
+</style>
+
+<style scoped>
+/* Shared Web/native profile geometry; home channel tabs retain their layout. */
+.profile-geometry { position: relative; height: 76rpx; padding: 0 33.333rpx; border-width: 0; border-radius: 0; }
+.profile-tab { flex: none; width: 102.778rpx; height: 64rpx; justify-content: flex-start; flex-shrink: 0; }
+.profile-tab-label { margin-left: 1.389rpx; font-size: 26.389rpx; line-height: 40rpx; color: #797d80; font-weight: 400; }
+.profile-tab-label-active { color: #252525; font-weight: 600; }
+.profile-indicator { position: absolute; left: 38.889rpx; top: 52rpx; width: 41.667rpx; height: 6rpx; pointer-events: none; }
+.profile-indicator-bar { width: 41.667rpx; height: 6rpx; border-radius: 3rpx; background-color: #48d5f6; }
+.profile-search { align-self: flex-start; margin-top: 10rpx; width: 44.444rpx; height: 44.444rpx; }
+.home-tabs-geometry { position: relative; }
+.home-tabs-scroll { flex: 1; width: 750rpx; height: 90rpx; }
+.home-tabs-track { position: relative; height: 90rpx; display: flex; flex-direction: row; align-items: stretch; }
+.home-indicator { top: auto; bottom: 2rpx; width: 34rpx; height: 10rpx; }
+.home-indicator-bar { width: 34rpx; height: 10rpx; border-radius: 6rpx; background-color: #13a8f7; }
+/* #ifdef WEB */
+.profile-indicator { will-change: transform; }
+/* #endif */
+/* #ifdef MP-WEIXIN */
+.profile-indicator { transition: transform 240ms ease-out; }
+.profile-indicator-bar.is-moving-a { animation: profile-indicator-contract-a 240ms linear; }
+.profile-indicator-bar.is-moving-b { animation: profile-indicator-contract-b 240ms linear; }
+@keyframes profile-indicator-contract-a { 0%, 100% { transform: scaleX(1); } 50% { transform: scaleX(.42); } }
+@keyframes profile-indicator-contract-b { 0%, 100% { transform: scaleX(1); } 50% { transform: scaleX(.42); } }
+@media (prefers-reduced-motion: reduce) {
+  .profile-indicator { transition: none; }
+  .profile-indicator-bar.is-moving-a, .profile-indicator-bar.is-moving-b { animation: none; }
+}
+/* #endif */
+</style>

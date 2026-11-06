@@ -1,0 +1,19 @@
+<template>
+  <ActionButton class="level-identity" :aria-label="'查看等级 ' + label + ' Lv.' + level" @tap="open">
+    <LevelBadge :level="level" :size="38" />
+    <text class="level-identity-copy">{{ label }} · Lv.{{ level }} ›</text>
+  </ActionButton>
+</template>
+<script setup lang="uts">
+import { computed } from 'vue'
+import LevelBadge from '@/components/LevelBadge.uvue'
+import ActionButton from '@/components/ActionButton.uvue'
+import { levelConfig } from '@/utils/level-api'
+const props = defineProps<{ level: number }>()
+const label = computed(() => levelConfig.value?.tiers.find(t => props.level >= t.minLevel && props.level <= t.maxLevel)?.fullTitle || '社区等级')
+function open() { uni.navigateTo({ url: '/pages/level/index' }) }
+</script>
+<style scoped>
+.level-identity{display:flex;flex-direction:row;align-items:center;height:38rpx;flex-shrink:0;margin:0;padding:0;border-width:0;background-color:transparent;justify-content:flex-start;}
+.level-identity-copy{font-size:20rpx;color:#ffffff;margin-left:8rpx;min-width:0;flex-shrink:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+</style>

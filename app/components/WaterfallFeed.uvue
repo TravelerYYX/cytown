@@ -1,0 +1,69 @@
+<template>
+  <view class="waterfall-feed" :class="[uxNative?'ux0':'',uxNative?'ux1':'']">
+    <view v-for="(column, index) in columnPosts" :key="index" class="waterfall-column" :class="[uxNative?'ux0':'',uxNative?'ux2':'']" :style="uxLayout(uxNodePrefix+'-n0'+'-'+[index].join('-'),[{on:uxNative,declarations:{&quot;width&quot;:&quot;calc((100% - 16rpx) / 2)&quot;}},{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__padding&quot;:&quot;32rpx&quot;,&quot;__columns&quot;:&quot;2&quot;}},{on:true,declarations:{__index:String(0+index)}}],{})" :id="uxNodePrefix+'-n0'+'-'+[index].join('-')">
+      <VirtualPostColumn :posts="column" variant="waterfall" :active="visible" :viewport-width="viewportWidth" />
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, ref, watch } from 'vue'
+import VirtualPostColumn from './VirtualPostColumn.uvue'
+import { waterfallPostHeight } from '@/utils/waterfall-layout'
+import type { Post } from '@/types/home'
+
+const props = withDefaults(defineProps<{ posts: Post[]; visible?: boolean; viewportWidth?: number }>(), { visible: true, viewportWidth: 375 })
+const columns = ref<[string[], string[]]>([[], []])
+const byId = computed(() => { const result = new Map<string, Post>(); for (const post of props.posts) result.set(post.id, post); return result })
+const columnPosts = computed(() => columns.value.map(column => column.map(id => byId.value.get(id)).filter((post): post is Post => !!post)))
+let assigned: string[] = []
+
+// Keep existing membership; assign new posts without relying on native bridge timing.
+watch(() => [props.posts.map(post => post.id), props.visible] as const, ([ids, visible]) => {
+  if (!visible) return
+  if (!assigned.every((id, index) => ids[index] === id)) {
+    assigned = []
+    columns.value = [[], []]
+  }
+  const heights = columns.value.map(column => column.reduce((height, id) => {
+    const post = byId.value.get(id)
+    return height + (post ? waterfallPostHeight(post) : 0)
+  }, 0))
+  for (let index = assigned.length; index < ids.length; index++) {
+    const column = heights[0]! <= heights[1]! ? 0 : 1
+    const id = ids[index]!
+    const post = byId.value.get(id)
+    columns.value[column].push(id)
+    assigned.push(id)
+    heights[column]! += post ? waterfallPostHeight(post) : 0
+  }
+}, { immediate: true, flush: 'post' })
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.waterfall-feed { display: flex; align-items: flex-start; gap: 16rpx; padding: 0 16rpx; flex-direction: row; }
+.waterfall-column { width: calc((100% - 16rpx) / 2); flex-shrink: 0; min-width: 0; }
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+
+.ux0{}
+.ux1{display:flex;flex-direction:row;align-items:flex-start;padding:0 16rpx;}
+.ux2{flex-shrink:0;min-width:0;}
+/* #endif */
+</style>

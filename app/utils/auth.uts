@@ -1,0 +1,95 @@
+import { ref } from 'vue'
+import { API_BASE_URL } from '@/config/env'
+import { SETTINGS_STORAGE_KEYS } from '@/utils/app-settings'
+import type { AppLoginResult, AppUserInfo } from '@/types/auth'
+
+const KEYS = { token: 'app_token', refresh: 'app_refresh_token', user: 'app_user_info' } as const
+const ACCOUNTS_KEY = 'ct.accounts.v1'
+// generation 使退出登录后返回的刷新响应不能恢复旧会话。
+export const authRevision = ref(0)
+let generation = 0
+const read = (key: string): unknown => { try { return uni.getStorageSync(key) } catch { return null } }
+export const getToken = (): string | null => typeof read(KEYS.token) === 'string' && read(KEYS.token) ? read(KEYS.token) as string : null
+export const getRefreshToken = (): string | null => typeof read(KEYS.refresh) === 'string' && read(KEYS.refresh) ? read(KEYS.refresh) as string : null
+export function getUserInfo(): AppUserInfo | null {
+  const value = read(KEYS.user)
+  return value && typeof value === 'object' && typeof (value as AppUserInfo).userId === 'string' ? value as AppUserInfo : null
+}
+export const isLoggedIn = () => !!getToken()
+export const getSessionGeneration = () => generation
+/** 兼容旧版单帐号缓存；按 userId 去重，不保存密码或验证码。 */
+export function getRememberedAccounts(): AppLoginResult[] {
+  const stored = read(ACCOUNTS_KEY)
+  const accounts: AppLoginResult[] = []
+  if (Array.isArray(stored)) {
+    for (const value of stored) {
+      const item = value as AppLoginResult
+      if (item && typeof item.token === 'string' && item.token && typeof item.refreshToken === 'string' && item.refreshToken && typeof item.userInfo?.userId === 'string' && !accounts.some(account => account.userInfo.userId === item.userInfo.userId)) accounts.push(item)
+    }
+  }
+  const token = getToken(), refreshToken = getRefreshToken(), userInfo = getUserInfo()
+  if (token && refreshToken && userInfo) {
+    const current: AppLoginResult = { token, refreshToken, userInfo }
+    const index = accounts.findIndex(account => account.userInfo.userId === userInfo.userId)
+    if (index < 0) accounts.unshift(current)
+    else accounts[index] = current
+  }
+  return accounts
+}
+export function forgetAccount(userId: string): void {
+  uni.setStorageSync(ACCOUNTS_KEY, getRememberedAccounts().filter(account => account.userInfo.userId !== userId))
+}
+export function saveLogin(result: AppLoginResult) {
+  const accounts = getRememberedAccounts()
+  const index = accounts.findIndex(account => account.userInfo.userId === result.userInfo.userId)
+  if (index < 0) accounts.push(result)
+  else accounts[index] = result
+  uni.setStorageSync(ACCOUNTS_KEY, accounts)
+  if(getUserInfo()?.userId !== result.userInfo.userId) generation++
+  uni.setStorageSync('ct.push-consent',true)
+  uni.setStorageSync(KEYS.token, result.token)
+  uni.setStorageSync(KEYS.refresh, result.refreshToken)
+  uni.setStorageSync(KEYS.user, result.userInfo)
+  authRevision.value++
+}
+export function saveUserInfo(user: AppUserInfo) {
+  if (getUserInfo()?.userId !== user.userId) return
+  uni.setStorageSync(KEYS.user, user)
+  uni.setStorageSync(ACCOUNTS_KEY, getRememberedAccounts())
+  authRevision.value++
+}
+export function clearLogin() {
+  const userId = getUserInfo()?.userId
+  if (userId) forgetAccount(userId)
+  generation++
+  for (const key of Object.values(KEYS)) uni.removeStorageSync(key)
+  authRevision.value++
+}
+const PERSISTENT_KEYS: string[] = [...Object.values(KEYS), ACCOUNTS_KEY, ...Object.values(SETTINGS_STORAGE_KEYS), 'ct.push-consent', 'ct.notice.pending.v1']
+/** 读取本地缓存总大小，格式化为 “X.XXM”，单位与设置页展示一致。 */
+export function getStorageCacheSize(): string {
+  try {
+    const info = uni.getStorageInfoSync()
+    const kb = typeof info.currentSize === 'number' ? info.currentSize : 0
+    return (kb / 1024).toFixed(2) + 'M'
+  } catch { return '0.00M' }
+}
+/** 仅清除非登录态的本地缓存数据，登录凭证（token/userInfo）不受影响。 */
+export function clearAppCache(): void {
+  try {
+    const info = uni.getStorageInfoSync()
+    for (const key of info.keys) {
+      if (PERSISTENT_KEYS.includes(key) || key.startsWith('ct.chat.')) continue
+      uni.removeStorageSync(key)
+    }
+  } catch { /* 缓存读取失败时静默跳过。 */ }
+}
+export const DEFAULT_AVATAR = '/static/images/assate/moren.png'
+/** 头像相对路径 → 完整 URL；空值回退本地默认头像，绝对地址（http/https）原样返回。 */
+export function avatarSrc(path?: string | null): string {
+  if (!path) return DEFAULT_AVATAR
+  return /^https?:\/\//i.test(path) ? path : API_BASE_URL + path
+}
+export function avatarUrl(user: AppUserInfo | null): string {
+  return avatarSrc(user?.avatar)
+}

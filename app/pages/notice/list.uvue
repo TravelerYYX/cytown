@@ -1,0 +1,46 @@
+<template><view class="notice-page" :class="[uxNative?'ux1':'',uxNative?'ux2':'']"><view class="page-header" :style="{paddingTop:statusBarHeight+'px'}" :class="[uxNative?'ux1':'',uxNative?'ux3':'']"><ActionButton :aria-label="&quot;返回&quot;" @tap="back" :class="[uxNative?'ux4':'',uxNative?'ux5':'']"><AppIcon name="back" :size="40" /></ActionButton><text :class="[uxNative?'ux6':'',uxNative?'ux7':'',uxNative?'ux8':'']">{{name}}</text><view  :class="[uxNative?'ux1':'',uxNative?'ux9':'']"/></view><scroll-view class="notice-scroll" direction="vertical" :show-scrollbar="false" :lower-threshold="100" @scrolltolower="load" :class="[uxNative?'ux10':'',uxNative?'ux11':'']"><ActionButton :aria-label="String(item.title) + ' ' + String(item.publishTime)" v-for="(item, __uxIndex0) in rows" :key="item.id" class="notice-row" @tap="detail(item.id)" :class="[uxNative?'ux4':'',uxNative?'ux12':'']"><view :class="[uxNative?'ux1':'',uxNative?'ux13':'']"><text class="title" :class="[uxNative?'ux6':'',uxNative?'ux14':'',uxNative?'ux7':'',uxNative?'ux15':'']">{{item.title}}</text><text class="time" :class="[uxNative?'ux6':'',uxNative?'ux14':'',uxNative?'ux7':'',uxNative?'ux16':'']">{{item.publishTime}}</text></view><AppIcon name="chevron" tone="muted" :size="30" /></ActionButton><EmptyState v-if="!loading && !error && !rows.length" /><view v-else class="load-tip" :class="[uxNative?'ux1':'',uxNative?'ux17':'']"><text :class="[uxNative?'ux6':'',uxNative?'ux18':'',uxNative?'ux7':'']">{{loading?'加载中…':error||(hasMore?'上拉加载更多':'已经到底了')}}</text></view></scroll-view><EyeCareOverlay /></view></template>
+<script setup lang="uts">
+import EmptyState from '@/components/EmptyState.uvue'
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+import {authRevision,getUserInfo} from '@/utils/auth';import {readNoticeCategory} from '@/utils/notice-state';import {ref,watch} from 'vue';import AppIcon from '@/components/AppIcon.uvue';import {useWindowInsets} from '@/composables/useWindowInsets';import {fetchNoticeList} from '@/utils/notice-api';import type {NoticeListItem} from '@/types/home';const {statusBarHeight}=useWindowInsets();const name=ref('通知'),rows=ref<NoticeListItem[]>([]),loading=ref(false),error=ref(''),hasMore=ref(true);let categoryId=0,page=1,fromPush=false;async function load(){if(loading.value||!hasMore.value)return;loading.value=true;error.value='';try{const result=await fetchNoticeList(categoryId,page);rows.value.push(...result.records);if(page===1)await readNoticeCategory(categoryId,result.readPublicationIds||[]).catch(()=>{});hasMore.value=page<result.pages&&result.records.length>0;page++}catch(e){error.value=e instanceof Error?e.message:'通知加载失败'}finally{loading.value=false}}onLoad(q=>{categoryId=Number(q?.categoryId||0);fromPush=q?.fromPush==='1';name.value=decodeURIComponent(q?.name??'通知')!;void load()});const detail=(id:number)=>uni.navigateTo({url:'/pages/notice/detail?id='+id});const back=()=>fromPush?uni.reLaunch({url:'/pages/index/index?tab=message'}):getCurrentPages().length>1?uni.navigateBack():uni.reLaunch({url:'/pages/index/index?tab=message'});let currentUser=getUserInfo()?.userId||'';let reloadPending=false;
+watch(authRevision,()=>{const user=getUserInfo()?.userId||'';if(user!==currentUser){currentUser=user;rows.value=[];page=1;hasMore.value=true;error.value='';reloadPending=true;}});
+onShow(()=>{if(reloadPending){reloadPending=false;void load()}});
+onBackPress(()=>{if(fromPush){back();return true;}return false;});</script>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+.notice-page{position:fixed;inset:0;display:flex;flex-direction:column;background:#fff}.page-header{flex-shrink:0;display:flex;align-items:flex-end;border-bottom:1rpx solid #eee;flex-direction:row}.page-header button,.page-header view{width:96rpx;height:88rpx;display:flex;align-items:center;justify-content:center;background:transparent;border:0;flex-direction:row}.page-header button::after{border:0}.page-header>text{height:88rpx;line-height:88rpx;flex:1;text-align:center;font-size:30rpx;font-weight:600}.notice-scroll{flex:1;height:0}.notice-row{width:100%;min-height:128rpx;padding:24rpx 32rpx;display:flex;align-items:center;text-align:left;background:#fff;border:0;border-bottom:1rpx solid #f1f1f1;flex-direction:row}.notice-row::after{border:0}.notice-row>view{flex:1;min-width:0;display:flex;flex-direction:column}.title{font-size:28rpx;color:#222;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.time{margin-top:14rpx;color:#a2a6a9;font-size:20rpx}
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ux6{color:var(--text-main);font-size:26rpx;}
+.ux14{text-align:left;}
+.ux18{text-align:center;color:var(--text-sub);font-size:22rpx;}
+.ux1{}
+.ux10{}
+.ux7{}
+.ux4{}
+.ux17{text-align:center;color:var(--text-sub);font-size:22rpx;padding:30rpx 0 40rpx;}
+.ux2{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;background-color:#fff;}
+.ux3{flex-shrink:0;display:flex;flex-direction:row;align-items:flex-end;border-bottom:1rpx solid #eee;}
+.ux11{flex:1;height:0;}
+.ux12{width:100%;min-height:128rpx;padding:24rpx 32rpx;display:flex;flex-direction:row;align-items:center;text-align:left;background-color:#fff;border:0px;border-bottom:1rpx solid #f1f1f1;}
+.ux15{font-size:28rpx;color:#222;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.ux16{margin-top:14rpx;color:#a2a6a9;font-size:20rpx;}
+.ux5{width:96rpx;height:88rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;background-color:transparent;border:0px;}
+.ux9{width:96rpx;height:88rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;background-color:transparent;border:0px;}
+.ux8{height:88rpx;line-height:88rpx;flex:1;text-align:center;font-size:30rpx;font-weight:600;}
+.ux13{flex:1;min-width:0;display:flex;flex-direction:column;}
+/* #endif */
+</style>

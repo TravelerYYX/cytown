@@ -1,0 +1,362 @@
+<template>
+	<view :id="motionPrefix ? motionPrefix+'-expanded-header' : undefined" class="home-header" :style="{ paddingTop: statusBarHeight + 'px' }" :class="[uxNative?'ux3':'',uxNative?'ux4':'']">
+		<HomeBanner />
+		<view :id="motionPrefix ? motionPrefix+'-expanded' : undefined" class="header-body" :class="[{'no-news':!showNews},uxNative?'ux3':'',uxNative?'ux11':'',uxNative&amp;&amp;!!!showNews?'ux32':'']">
+			<view class="game-row" :class="[uxNative?'ux3':'',uxNative?'ux12':'']">
+				<scroll-view class="games-scroll" direction="horizontal" :show-scrollbar="false" :class="[uxNative?'ux35':'',uxNative?'ux13':'']">
+					<view class="games-track" :class="[uxNative?'ux3':'',uxNative?'ux14':'']"><ActionButton :disabled="!interactive" :aria-label="String(game.name)" v-for="(game, __uxIndex0) in games" :key="game.id" class="game-name"
+							:class="[uxNative?'ct-native-button':'',{active:activeGame===game.id},uxNative?'ux36':'',uxNative?'ux15':'',uxNative&amp;&amp;!!(activeGame===game.id)?'ux33':'']"
+							@tap="$emit('game-change', game)" :style="uxLayout(uxNodePrefix+'-g1000'+'-'+[Number(__uxIndex0)].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;64rpx&quot;,&quot;__direction&quot;:&quot;row&quot;}},{on:true,declarations:{__index:String(0+Number(__uxIndex0))}}],{})" :id="uxNodePrefix+'-g1000'+'-'+[Number(__uxIndex0)].join('-')"><text :class="[uxNative?'ux43':'',uxNative?'ux54':'',uxNative?'ux57':'',uxNative&amp;&amp;!!(activeGame===game.id)?'ux69':'',uxNative?'ux70':'']">{{ game.name }}</text></ActionButton></view>
+				</scroll-view>
+				<ActionButton v-if="headerEntry && headerEntry.enabled && headerEntry.iconUrl" class="icon-button" style="width:80rpx;height:80rpx;flex-shrink:0;" :press-motion="true" :disabled="!interactive" :aria-label="headerEntry.name" @tap="openHeaderEntry" :class="[uxNative?'ct-native-button':'',uxNative?'ux36':'',uxNative?'ux6':'',uxNative?'ux42':'']">
+					<image :src="uiAsset(resourceUrl(headerEntry.iconUrl))" mode="aspectFit" style="width:72rpx;height:72rpx;flex-shrink:0;" />
+				</ActionButton>
+				<ActionButton class="icon-button" :press-motion="true" :disabled="!interactive" aria-label="搜索" @tap="openSearchPage()" :class="[uxNative?'ct-native-button':'',uxNative?'ux36':'',uxNative?'ux6':'',uxNative?'ux42':'']">
+					<AppIcon name="search" tone="white" :size="42" />
+				</ActionButton>
+			</view>
+			<view v-if="configLoading" class="entries-loading" :class="[uxNative?'ux3':'',uxNative?'ux21':'']">
+				<view v-for="(i, __uxIndex1) in 5" :key="i" class="entry-placeholder" :class="[uxNative?'ux3':'',uxNative?'ux22':'']">
+					<SkeletonBlock :width="88" :height="88" :radius="12" />
+					<SkeletonBlock class="entry-placeholder-label" :width="92" :height="28"  :class="[uxNative?'ux23':'']"/>
+				</view>
+			</view>
+			<scroll-view v-else-if="entries.length" class="entries" direction="horizontal" :show-scrollbar="false" :class="[uxNative?'ux35':'',uxNative?'ux16':'']">
+				<view class="entries-track" :class="[uxNative?'ux3':'',uxNative?'ux17':'']" :style="uxLayout(uxNodePrefix+'-n0',[{on:uxNative,declarations:{&quot;min-width&quot;:&quot;100%&quot;}}],uxNative?{width:entries.length*130+64+'rpx'}:{})" :id="uxNodePrefix+'-n0'">
+					<ActionButton :disabled="!interactive" :aria-label="entry.name" v-for="(entry, __uxIndex2) in entries" :key="entry.id" class="entry" @tap="openEntry(entry)" :class="[uxNative?'ct-native-button':'',uxNative?'ux36':'',uxNative?'ux18':'']">
+						<image v-if="entry.iconUrl" class="entry-image" :src="uiAsset(resourceUrl(entry.iconUrl))"
+							mode="aspectFit"  :class="[uxNative?'ux19':'']"/>
+						<AppIcon v-else name="toolbox" tone="white" :size="88" /><text
+							class="entry-label" :class="[uxNative?'ux43':'',uxNative?'ux71':'',uxNative?'ux70':'',uxNative?'ux20':'']">{{ entry.name }}</text>
+					</ActionButton>
+				</view>
+			</scroll-view>
+			<view v-else class="entries"  :class="[uxNative?'ux3':'',uxNative?'ux16':'']"/>
+			<view v-if="showNews" class="news-zone" :class="[uxNative?'ux3':'',uxNative?'ux24':'']">
+				<view class="news-bar" :class="[uxNative?'ux3':'',uxNative?'ux25':'']">
+					<text class="news-chip" :class="[uxNative?'ux43':'',uxNative?'ux77':'',uxNative?'ux70':'',uxNative?'ux26':'']">资讯</text>
+					<view class="news-window" @tap="openNews" :class="[uxNative?'ux3':'',uxNative?'ux27':'']"><text v-if="!news.items.length"
+							class="news-copy news-empty" :class="[uxNative?'ux43':'',uxNative?'ux77':'',uxNative?'ux70':'',uxNative?'ux28':'',uxNative?'ux29':'']">{{ news.emptyText || DEFAULT_NEWS_EMPTY_TEXT }}</text>
+						<view v-else class="news-track" :class="[{animated},uxNative?'ux3':'',uxNative&amp;&amp;!!animated?'ux34':'']"
+							:style="{ transform: `translateY(-${newsIndex * 68}rpx)` }"
+							@transitionend="onTransitionEnd">
+							<view v-for="(item,index) in loopItems" :key="Number(index)+'-'+item.postId" class="news-copy" :class="[uxNative?'ux3':'',uxNative?'ux28':'']">
+								<text :class="[uxNative?'ux43':'',uxNative?'ux77':'',uxNative?'ux78':'',uxNative?'ux70':'']">{{ item.title }}</text></view>
+						</view>
+					</view>
+					<ActionButton :aria-label="&quot;全部&quot;" class="news-all" :disabled="!interactive" @tap="showAll" :class="[uxNative?'ct-native-button':'',uxNative?'ux36':'',uxNative?'ux30':'']"><text class="news-more" :class="[uxNative?'ux43':'',uxNative?'ux77':'',uxNative?'ux70':'',uxNative?'ux31':'']">全部</text>
+						<AppIcon name="chevron" tone="white" :size="26" />
+					</ActionButton>
+				</view>
+			</view>
+		</view>
+	</view>
+</template>
+<script setup lang="uts">
+import { uiAsset } from '@/utils/ui-assets'
+import ActionButton from '@/components/ActionButton.uvue'
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { mediaUrl as resourceUrl } from '@/utils/media-cache'
+
+	import { computed, onUnmounted, ref, watch } from 'vue'
+	import AppIcon from './AppIcon.uvue'; import HomeBanner from './HomeBanner.uvue'; import SkeletonBlock from './SkeletonBlock.uvue'
+	import { API_BASE_URL } from '@/config/env'; import { openDestination, openConfiguredEntry, openSearchPage } from '@/utils/navigation'
+	import { DEFAULT_NEWS_EMPTY_TEXT } from '@/utils/home-config-api'
+	import type { FeatureEntry, HeaderEntry, GameTab, HomeNews } from '@/types/home'
+	const props = withDefaults(defineProps<{ active?: boolean; motionPrefix?: string; interactive?: boolean; statusBarHeight : number; games : GameTab[]; activeGame : string; entries : FeatureEntry[]; headerEntry?: HeaderEntry | null; news : HomeNews; configLoading : boolean }>(), { active: true, motionPrefix: '', interactive: true })
+	defineEmits<{ (e : 'game-change', game : GameTab) : void }>()
+	const showNews = computed(() => props.news.enabled); const loopItems = computed(() => props.news.items.length > 1 ? [...props.news.items, props.news.items[0]] : props.news.items)
+	const newsIndex = ref(0), animated = ref(true); let timer : ReturnType<typeof setInterval> | undefined
+	function stop() { if (timer) clearInterval(timer); timer = undefined }
+	function start() { stop(); newsIndex.value = 0; animated.value = true; if (props.active && showNews.value && props.news.items.length > 1) timer = setInterval(() => { animated.value = true; newsIndex.value++ }, Math.max(2, props.news.interval) * 1000) }
+	watch(() => [props.active, props.news.enabled, props.news.interval, props.news.items], start, { immediate: true }); onUnmounted(stop)
+	function onTransitionEnd() { if (newsIndex.value === props.news.items.length) { animated.value = false; newsIndex.value = 0 } }
+	function openNews() { if (!props.news.items.length) return; const item = props.news.items[newsIndex.value % props.news.items.length]; if (item) openDestination({ kind: 'post', title: item.title, postId: String(item.postId) }) }
+	// 「全部」直接打开后台「首页资讯轮播」配置的帖子详情页（取轮播第一条；无配置时不跳转）
+	function showAll() { const item = props.news.items[0]; if (item && item.postId) openDestination({ kind: 'post', title: item.title, postId: String(item.postId) }) }
+	function openEntry(entry : FeatureEntry) {
+		openConfiguredEntry(entry.targetType, entry.linkUrl, entry.name, entry.openMode, entry.showTopbar)
+	}
+	function openHeaderEntry() {
+		const entry = props.headerEntry
+		if (entry && entry.enabled) openConfiguredEntry(entry.targetType, entry.linkUrl, entry.name, entry.openMode, entry.showTopbar)
+	}
+</script>
+
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+	.home-header {
+		position: relative
+	}
+
+	.header-body {
+		position: relative;
+		height: 452rpx;
+		padding-top: 12rpx
+	}
+
+	.header-body.no-news {
+		height: 324rpx
+	}
+
+	.game-row {
+		height: 88rpx;
+		padding: 0 26rpx 0 50rpx;
+		display: flex;
+		align-items: center;
+		flex-direction: row
+	}
+
+	.games-scroll {
+		flex: 1;
+		min-width: 0;
+		width: 0
+	}
+
+	.games-track {
+		display: flex;
+		align-items: center;
+		gap: 64rpx;
+		white-space: nowrap;
+		flex-direction: row
+	}
+
+	.game-name {
+		flex-shrink: 0;
+		color: rgba(255, 255, 255, .5);
+		font-size: 28rpx
+	}
+
+	.game-name.active {
+		color: #fff;
+		font-size: 36rpx;
+		font-weight: 600
+	}
+
+	.game-row .icon-button {
+		width: 62rpx;
+		margin-left: 6rpx
+	}
+
+	.entries {
+		height: 198rpx;
+		padding-top: 28rpx
+	}
+
+	.entries-track {
+		display: flex;
+		width: max-content;
+		min-width: 100%;
+		padding: 0 32rpx;
+		justify-content: flex-start;
+		flex-direction: row
+	}
+
+	.entry {
+		width: 130rpx;
+		flex-shrink: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		color: rgba(255, 255, 255, .9)
+	}
+
+	.entry-image {
+		width: 88rpx;
+		height: 88rpx;
+		border-radius: 26rpx;
+		flex-shrink: 0
+	}
+
+	.entry-label {
+		display: block;
+		width: 124rpx;
+		margin-top: 24rpx;
+		font-size: 19rpx;
+		line-height: 30rpx;
+		text-align: center;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis
+	}
+
+	.entries-loading {
+		height: 198rpx;
+		padding: 28rpx 32rpx 0;
+		display: flex;
+		overflow: hidden;
+		justify-content: flex-start;
+		flex-direction: row
+	}
+
+	.entry-placeholder {
+		width: 130rpx;
+		flex-shrink: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center
+	}
+
+	.entry-placeholder-label {
+		margin-top: 24rpx
+	}
+
+	.news-zone {
+		height: 128rpx;
+		padding: 24rpx 34rpx 36rpx
+	}
+
+	.news-bar {
+		width: 100%;
+		height: 68rpx;
+		border-radius: 18rpx;
+		padding: 0 14rpx 0 20rpx;
+		display: flex;
+		align-items: center;
+		background: rgba(255, 255, 255, .14);
+		color: #fff;
+		flex-direction: row
+	}
+
+	.news-chip {
+		height: 22rpx;
+		padding: 0 7rpx;
+		border-radius: 5rpx;
+		background: var(--brand);
+		font-size: 17rpx;
+		line-height: 22rpx
+	}
+
+	.news-window {
+		height: 68rpx;
+		flex: 1;
+		min-width: 0;
+		margin-left: 16rpx;
+		overflow: hidden
+	}
+
+	.news-track.animated {
+		transition: transform .3s ease
+	}
+
+	.news-copy {
+		height: 68rpx;
+		line-height: 68rpx;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		text-align: left;
+		font-size: 20rpx
+	}
+
+	.news-empty {
+		display: block
+	}
+
+	.news-all {
+		height: 68rpx;
+		margin-left: 12rpx;
+		display: flex;
+		align-items: center;
+		flex-direction: row
+	}
+
+	.news-more {
+		color: #c6cbd1;
+		font-size: 18rpx
+	}
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux43{color:var(--text-main);font-size:26rpx;}
+
+
+
+
+
+
+
+
+
+
+.ux54{white-space:nowrap;}
+
+
+.ux57{color:rgba(255, 255, 255, .5);font-size:28rpx;}
+
+
+
+
+
+
+
+
+
+
+
+.ux69{color:#fff;font-size:36rpx;font-weight:600;}
+.ux71{color:rgba(255, 255, 255, .9);}
+
+
+
+
+
+.ux77{color:#fff;}
+.ux78{line-height:68rpx;white-space:nowrap;text-align:left;font-size:20rpx;}
+.ux3{}
+.ux35{}
+.ux70{}
+.ux36{}
+
+.ux6{display:flex;flex-direction:row;align-items:center;justify-content:center;width:64rpx;height:64rpx;flex-shrink:0;}
+
+
+
+
+.ux4{position:relative;}
+.ux11{position:relative;height:452rpx;padding-top:12rpx;}
+.ux12{height:88rpx;padding:0 26rpx 0 50rpx;display:flex;flex-direction:row;align-items:center;}
+.ux13{flex:1;min-width:0;width:0;}
+.ux14{display:flex;flex-direction:row;align-items:center;white-space:nowrap;}
+.ux15{flex-shrink:0;color:rgba(255, 255, 255, .5);font-size:28rpx;}
+.ux16{height:198rpx;padding-top:28rpx;}
+.ux17{display:flex;flex-direction:row;padding:0 32rpx;justify-content:flex-start;}
+.ux18{width:130rpx;flex-shrink:0;display:flex;flex-direction:column;align-items:center;color:rgba(255, 255, 255, .9);}
+.ux19{width:88rpx;height:88rpx;border-radius:26rpx;flex-shrink:0;}
+.ux20{display:flex;flex-direction:column;width:124rpx;margin-top:24rpx;font-size:19rpx;line-height:30rpx;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ux21{height:198rpx;padding:28rpx 32rpx 0;display:flex;flex-direction:row;overflow:hidden;justify-content:flex-start;}
+.ux22{width:130rpx;flex-shrink:0;display:flex;flex-direction:column;align-items:center;}
+.ux23{margin-top:24rpx;}
+.ux24{height:128rpx;padding:24rpx 34rpx 36rpx;}
+.ux25{width:100%;height:68rpx;border-radius:18rpx;padding:0 14rpx 0 20rpx;display:flex;flex-direction:row;align-items:center;background-color:rgba(255, 255, 255, .14);color:#fff;}
+.ux26{height:22rpx;padding:0 7rpx;border-radius:5rpx;background-color:var(--brand);font-size:17rpx;line-height:22rpx;}
+.ux27{height:68rpx;flex:1;min-width:0;margin-left:16rpx;overflow:hidden;}
+.ux28{height:68rpx;line-height:68rpx;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-align:left;font-size:20rpx;}
+.ux29{display:flex;flex-direction:column;}
+.ux30{height:68rpx;margin-left:12rpx;display:flex;flex-direction:row;align-items:center;}
+.ux31{color:#c6cbd1;font-size:18rpx;}
+
+
+
+
+
+.ux32{height:324rpx;}
+.ux33{color:#fff;font-size:36rpx;font-weight:600;}
+.ux42{width:62rpx;margin-left:6rpx;}
+.ux34{transition:transform .3s ease;}
+/* #endif */
+</style>

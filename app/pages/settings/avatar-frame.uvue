@@ -1,0 +1,126 @@
+<template>
+  <view class="frame-page" :style="{ paddingTop: statusBarHeight + 'px' }">
+    <image class="frame-pattern" src="/static/images/avatar-frames/halftone.png" mode="scaleToFill" />
+    <view class="frame-nav">
+      <ActionButton class="frame-back" aria-label="返回" @tap="back"><AppIcon name="back" :size="40" /></ActionButton>
+      <view class="frame-tabs">
+        <view class="frame-tab"><text class="frame-tab-text frame-tab-active">头像挂件</text><view class="frame-tab-indicator" /></view>
+        <view class="frame-tab"><text class="frame-tab-text frame-tab-pending">评论装扮</text></view>
+      </view>
+      <view class="frame-nav-space" />
+    </view>
+    <view class="frame-preview">
+      <UserAvatar :src="user?.avatar" :frame-id="selected" :size="180" preview />
+      <text class="frame-preview-name">{{ selected ? avatarFrameName(selected) : '无' }}</text>
+      <text class="frame-description">{{ selectedDescription }}</text>
+      <ActionButton class="frame-save" :disabled="loading || saving || loadFailed" aria-label="保存头像挂件" @tap="save"><text class="frame-save-text">{{ saving ? '保存中…' : loading ? '加载中…' : '保存' }}</text></ActionButton>
+    </view>
+    <view class="frame-catalog">
+      <scroll-view direction="vertical" class="frame-scroll">
+        <view class="frame-options">
+          <ActionButton v-for="frame in displayFrames" :key="frame.id" class="frame-option" :class="{ 'frame-option-locked': !canUse(frame.id) }" :aria-label="frame.id ? frame.name : '无'" :aria-pressed="selected === frame.id" :disabled="saving || loading || !canUse(frame.id)" @tap="selected = frame.id">
+            <view class="frame-option-art" :class="{ 'frame-option-selected': selected === frame.id }" :style="{ height: tileSize + 'px' }">
+              <UserAvatar v-if="frame.id" :src="DEFAULT_AVATAR" :frame-id="frame.id" :size="thumbnailSize" preview />
+              <text v-else class="frame-option-none">无</text>
+            </view>
+            <view class="frame-option-label"><text class="frame-option-name">{{ frame.id ? frame.name : '无' }}</text></view>
+          </ActionButton>
+        </view>
+        <text v-if="error" class="frame-error">{{ error }}</text>
+        <ActionButton v-if="loadFailed" class="frame-retry" aria-label="重新加载头像挂件" @tap="load"><text class="frame-retry-text">重新加载</text></ActionButton>
+        <view :style="{ height: Math.max(bottomInset, 16) + 'px' }" />
+      </scroll-view>
+    </view>
+  </view>
+</template>
+<script setup lang="uts">
+import { computed, ref } from 'vue'
+import ActionButton from '@/components/ActionButton.uvue'
+import AppIcon from '@/components/AppIcon.uvue'
+import UserAvatar from '@/components/UserAvatar.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { notifyWindowResize } from '@/utils/window-events'
+import { avatarFrames, avatarFrameName,loadAvatarFrames } from '@/utils/avatar-frames'
+import {fetchOwnedFrames} from '@/utils/checkin-api'
+import type {OwnedFrame} from '@/types/checkin'
+import { DEFAULT_AVATAR, getUserInfo, isLoggedIn, saveUserInfo, getSessionGeneration } from '@/utils/auth'
+import { fetchMe, updateAvatarFrame } from '@/utils/auth-api'
+const { statusBarHeight, bottomInset, viewportWidth } = useWindowInsets()
+onResize(notifyWindowResize)
+const displayFrames = computed(() => [...avatarFrames.value.filter(frame => frame.id !== ''), ...avatarFrames.value.filter(frame => frame.id === '')])
+const tileSize = computed(() => (viewportWidth.value - 104 * viewportWidth.value / 750) / 3)
+const thumbnailSize = computed(() => (750 - 104) / 3 * 0.8 / 1.36)
+const user = ref(getUserInfo())
+const owned=ref<OwnedFrame[]>([])
+function canUse(id:string):boolean{return id===''||id==='star-sea'||id==='sakura-mist'||owned.value.some(f=>f.frameId===id&&(f.expiresAt==null||f.expiresAt>Date.now()))}
+function entitlement(id:string):string{if(id===''||id==='star-sea'||id==='sakura-mist')return avatarFrames.value.find(f=>f.id===id)?.description||'';const f=owned.value.find(f=>f.frameId===id);return !f?(id.startsWith('mem-')?'开通对应会员后解锁':id.startsWith('shop-')?'商铺购买后解锁':'签到领取后解锁'):f.expiresAt==null?'永久拥有':f.expiresAt<=Date.now()?(id.startsWith('mem-')?'会员已到期':'已到期，签到可续期'):'有效至 '+new Date(f.expiresAt).toLocaleDateString()}
+const selected = ref(user.value?.avatarFrame || '')
+const loading = ref(true), saving = ref(false), loadFailed = ref(false), error = ref('')
+const changed = computed(() => selected.value !== (user.value?.avatarFrame || ''))
+const selectedDescription = computed(() => selected.value ? entitlement(selected.value) : '快来装备头像挂件吧')
+function sameSession(id: string, generation: number): boolean { return isLoggedIn() && getUserInfo()?.userId === id && getSessionGeneration() === generation }
+async function load() {
+  if (!isLoggedIn()) { uni.redirectTo({ url: '/pages/login/index' }); return }
+  const id = getUserInfo()!.userId, generation = getSessionGeneration()
+  loading.value = true; loadFailed.value = false; error.value = ''
+  try {
+    const values = await Promise.all([fetchMe(),fetchOwnedFrames(),loadAvatarFrames(true)])
+    const result=values[0]
+    if (!sameSession(id, generation)) return
+    owned.value=values[1];user.value = result; selected.value = canUse(result.avatarFrame||'')?result.avatarFrame||'':''; saveUserInfo(result)
+  } catch { loadFailed.value = true; error.value = '头像框信息加载失败，请重试' }
+  finally { loading.value = false }
+}
+onShow(() => { uni.setNavigationBarColor({ frontColor: '#000000', backgroundColor: '#f6f7f9' }); if (!saving.value) void load() })
+async function save() {
+  if (saving.value || loading.value || loadFailed.value || !user.value) return
+  const id = user.value.userId, generation = getSessionGeneration()
+  if (!sameSession(id, generation)) { uni.redirectTo({ url: '/pages/login/index' }); return }
+  if (!changed.value) { uni.showToast({ title: '头像挂件已保存', icon: 'success' }); return }
+  if (!canUse(selected.value)) { error.value = '头像挂件已到期，请重新领取'; return }
+  saving.value = true; error.value = ''
+  try {
+    const result = await updateAvatarFrame(selected.value)
+    if (!sameSession(id, generation)) return
+    saveUserInfo(result); user.value = result; selected.value = result.avatarFrame || ''
+    uni.showToast({ title: '头像挂件已保存', icon: 'success' })
+  } catch { error.value = '保存失败，请重试'; }
+  finally { saving.value = false }
+}
+function back() { getCurrentPages().length > 1 ? uni.navigateBack() : uni.reLaunch({ url: '/pages/settings/index' }) }
+</script>
+<style scoped>
+.frame-page { position: fixed; left: 0; right: 0; top: 0; bottom: 0; display: flex; flex-direction: column; background-color: #f6f7f9; }
+.frame-pattern { position: absolute; left: 0; top: 0; width: 750rpx; height: 660rpx; pointer-events: none; }
+.frame-nav { position: relative; height: 88rpx; display: flex; flex-direction: row; align-items: center; flex-shrink: 0; padding: 0 26rpx; }
+.frame-back { width: 48rpx; height: 64rpx; margin: 0; padding: 0; border-width: 0; background-color: transparent; display: flex; flex-direction: row; align-items: center; justify-content: center; }
+.frame-tabs { flex: 1; display: flex; flex-direction: row; align-items: center; justify-content: center; }
+.frame-tab { position: relative; width: 154rpx; height: 64rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.frame-tab-text { font-size: 28rpx; line-height: 42rpx; color: #333638; }
+.frame-tab-pending { color: #999b9d; }
+.frame-tab-indicator { position: absolute; width: 34rpx; height: 8rpx; bottom: 4rpx; border-radius: 8rpx; background-color: #00b4f5; }
+.frame-nav-space { width: 48rpx; }
+.frame-preview { position: relative; height: 488rpx; padding-top: 24rpx; display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+.frame-preview-name { margin: 24rpx 34rpx 0; max-width: 682rpx; height: 36rpx; line-height: 36rpx; color: #292d2e; font-size: 26rpx; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frame-description { margin: 10rpx 34rpx 0; max-width: 682rpx; height: 32rpx; line-height: 32rpx; font-size: 21rpx; color: #969a9d; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frame-save { position: absolute; right: 34rpx; bottom: 24rpx; width: 166rpx; height: 66rpx; margin: 0; padding: 0; border-radius: 17rpx; border-width: 0; background-color: #00b4f5; display: flex; flex-direction: row; align-items: center; justify-content: center; }
+.frame-save-text { font-size: 23rpx; color: #ffffff; }
+.frame-catalog { position: relative; flex: 1; min-height: 0; border-radius: 42rpx 42rpx 0 0; background-color: #ffffff; overflow: hidden; display: flex; flex-direction: column; }
+.frame-scroll { flex: 1; height: 0; min-height: 0; }
+.frame-options { padding: 34rpx 34rpx 0; display: flex; flex-direction: row; flex-wrap: wrap; justify-content: space-between; }
+.frame-option { width: 31.57%; display: flex; flex-direction: column; align-items: center; margin: 0 0 32rpx; padding: 0; border-width: 0; background-color: transparent; text-align: center; }
+.frame-option-art { width: 100%; display: flex; align-items: center; justify-content: center; border: 2rpx solid transparent; border-radius: 20rpx; background-color: #fafcfc; }
+.frame-option-selected { border-color: #00b4f5; background-color: #f0fbff; }
+.frame-option-locked { opacity: 0.38; }
+.frame-option-label { width: 100%; height: 36rpx; margin-top: 12rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; }
+.frame-option-name { max-width: 215rpx; height: 36rpx; line-height: 36rpx; font-size: 22rpx; color: #898e92; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frame-option-none { font-size: 36rpx; color: #adb4b8; }
+.frame-error { display: flex; margin: 10rpx 36rpx; font-size: 24rpx; color: #cf6973; }
+.frame-retry { margin: 12rpx 34rpx; padding: 16rpx; border-width: 0; border-radius: 16rpx; background-color: #eaf4fc; }
+.frame-retry-text { font-size: 24rpx; color: #4798c7; }
+/* #ifndef APP */
+.frame-back::after,.frame-option::after,.frame-save::after,.frame-retry::after { border: 0; }
+.frame-save[disabled] { background-color: #00b4f5; }
+.frame-option[disabled] { background-color: transparent; }
+/* #endif */
+</style>

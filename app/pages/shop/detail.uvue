@@ -1,0 +1,302 @@
+<template>
+  <view class="detail-screen">
+    <view class="detail-header" :style="{paddingTop:statusBarHeight+'px'}">
+      <ActionButton class="detail-icon" aria-label="返回" @tap="back"><AppIcon name="back" :size="40" /></ActionButton>
+      <ActionButton v-if="product && shownProduct.enabled" class="detail-icon" aria-label="分享商品" @tap="sharing=true"><AppIcon name="share" :size="42" /></ActionButton>
+    </view>
+    <scroll-view v-if="product" class="detail-scroll" direction="vertical" :show-scrollbar="false">
+      <view class="detail-gallery" :style="{height:width+'px'}">
+        <swiper class="detail-swiper" :current="slide" @change="slideChanged">
+          <swiper-item v-for="(url,index) in shownProduct.images" :key="index">
+            <image class="detail-image" :src="mediaUrl(url)" mode="aspectFill" />
+          </swiper-item>
+        </swiper>
+        <view class="detail-counter"><text class="counter-text">{{slide+1}}/{{shownProduct.images.length}}</text></view>
+      </view>
+      <view class="detail-summary">
+        <text class="detail-title">【头像框】{{shownProduct.name}}</text>
+        <view class="detail-prices">
+          <text class="detail-yen">¥</text>
+          <text class="detail-yuan">{{shopYuan(shownProduct.price.amountFen)}}</text>
+          <text class="detail-coins">或 {{shopCoins(shownProduct.price.coins)}} 次元币</text>
+        </view>
+        <view v-if="shownProduct.enabled" class="offer-row">
+          <text class="offer-key">优惠</text>
+          <view v-if="shownProduct.price.discount<100" class="offer-tag"><text class="offer-text">会员 {{shownProduct.price.discount/10}} 折</text></view>
+          <text v-else class="offer-copy">有效会员享对应档位优惠</text>
+          <text v-if="shownProduct.price.discount<100" class="original-price">¥{{shopYuan(shownProduct.priceFen)}}</text>
+        </view>
+      </view>
+      <view v-if="shownProduct.description" class="detail-description">
+        <text class="description-label">商品详情</text>
+        <text class="description-copy">{{shownProduct.description}}</text>
+      </view>
+      <view v-if="error" class="detail-description"><text class="description-copy">{{error}}</text></view>
+    </scroll-view>
+    <view v-else class="detail-placeholder">
+      <ActionButton v-if="error" @tap="load"><text class="description-copy">{{error}}，点击重试</text></ActionButton>
+      <text v-else class="description-copy">商品加载中…</text>
+    </view>
+    <view v-if="product" class="purchase-bar" :style="{paddingBottom:Math.max(bottomInset,14)+'px'}">
+      <ActionButton class="purchase-button" :class="purchaseDisabled?'purchase-muted':''" :disabled="purchaseDisabled" @tap="openCheckout">
+        <text class="purchase-label">{{purchaseLabel}}</text>
+      </ActionButton>
+    </view>
+    <view v-if="checkout && product" class="payment-layer">
+      <view class="payment-mask" @tap="closeCheckout" />
+      <view class="payment-panel" :style="{paddingBottom:Math.max(bottomInset,18)+'px'}">
+        <text class="payment-heading">{{pending ? '订单状态' : '选择支付方式'}}</text>
+        <text class="payment-subheading">{{shownProduct.name}} · 永久拥有</text>
+        <view v-if="pending" class="pending-content">
+          <text class="pending-price">¥{{shopYuan(shownOrder.amountFen)}}</text>
+          <text class="pending-text">{{shownOrder.status==='PAID' ? '已付款，正在发放头像框' : '订单待付款或待确认'}}</text>
+          <text v-if="shownOrder.errorMessage" class="pending-text">{{shownOrder.errorMessage}}</text>
+          <ActionButton v-if="shownOrder.status==='PENDING'" class="payment-option" :disabled="busy" @tap="resume"><text class="payment-choice">继续支付宝支付</text></ActionButton>
+          <ActionButton class="payment-option" :disabled="busy" @tap="checkPending"><text class="payment-choice">{{busy?'正在确认…':'刷新支付状态'}}</text></ActionButton>
+        </view>
+        <view v-else class="payment-options">
+          <ActionButton class="payment-option" :disabled="busy" @tap="selectCoins">
+            <text class="payment-choice">次元币</text><text class="payment-value">{{shopCoins(shownProduct.price.coins)}} 币</text>
+          </ActionButton>
+          <ActionButton class="payment-option" :disabled="busy || !alipayAvailable" @tap="buyAlipay">
+            <text class="payment-choice" :class="alipayAvailable?'':'payment-unavailable'">支付宝</text>
+            <text class="payment-value" :class="alipayAvailable?'':'payment-unavailable'">{{alipayAvailable?'¥'+shopYuan(shownProduct.price.amountFen):'暂不可用'}}</text>
+          </ActionButton>
+        </view>
+        <ActionButton class="payment-cancel" :disabled="busy" @tap="closeCheckout"><text class="payment-cancel-text">取消</text></ActionButton>
+      </view>
+    </view>
+    <SettingsConfirmDialog :visible="minimum" title="温馨提示" message="折后金额不足 0.1 次元币。继续将支付 0.1 次元币。" confirm-text="继续支付" @cancel="minimum=false" @confirm="confirmMinimum" />
+    <PostShareSheet v-if="shareCard" :visible="sharing" :product="shareCard ?? undefined" @close="sharing=false" />
+  </view>
+</template>
+
+<script setup lang="uts">
+import { computed, ref } from 'vue'
+import ActionButton from '@/components/ActionButton.uvue'
+import AppIcon from '@/components/AppIcon.uvue'
+import { mediaUrl } from '@/utils/media-cache'
+import PostShareSheet from '@/components/PostShareSheet.uvue'
+import SettingsConfirmDialog from '@/components/SettingsConfirmDialog.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { setStatusBar } from '@/utils/platform'
+import { getSessionGeneration, getUserInfo, isLoggedIn, saveUserInfo } from '@/utils/auth'
+import { fetchMe } from '@/utils/auth-api'
+import { loadAvatarFrames } from '@/utils/avatar-frames'
+import { launchAlipay, memberChannel } from '@/utils/membership-api'
+import { shopCoins, shopCreate, shopDetail, shopPay, shopRefresh, shopYuan } from '@/utils/shop-api'
+import type { ShopCheckout, ShopOrder, ShopProduct } from '@/utils/shop-api'
+import type { ChatProductCard } from '@/types/chat'
+
+const {statusBarHeight,bottomInset}=useWindowInsets()
+const width=ref(uni.getWindowInfo().windowWidth)
+const product=ref<ShopProduct|null>(null)
+const pending=ref<ShopOrder|null>(null)
+const shownProduct=computed(():ShopProduct=>product.value??{
+  id:'',version:0,name:'',description:'',images:[],priceFen:0,enabled:false,
+  price:{amountFen:0,coins:0,discount:100,minimumCoinConfirmation:false},owned:false,soldCount:0
+})
+const shownOrder=computed(():ShopOrder=>pending.value??{
+  id:'',productId:'',productName:'',method:'',channel:null,amountFen:0,coins:0,status:'',errorMessage:''
+})
+const alipayAvailable=ref(false)
+const slide=ref(0)
+const error=ref('')
+const sharing=ref(false)
+const checkout=ref(false)
+const minimum=ref(false)
+const busy=ref(false)
+const purchaseDisabled=computed(()=>product.value?.owned===true || (product.value?.enabled!==true && pending.value==null))
+const purchaseLabel=computed(()=>product.value?.owned ? '已拥有' : pending.value!=null ? '查看订单' : product.value?.enabled ? '立即购买' : '商品已下架')
+const shareCard=computed(():ChatProductCard|null=>{
+  const item=product.value
+  return item==null ? null : {id:item.id,name:item.name,coverUrl:item.images[0]||'',priceFen:item.priceFen,soldCount:item.soldCount}
+})
+let id=''
+let revision=0
+let requestKey=''
+let requestMethod=''
+let disposed=false
+function toast(title:string) { uni.showToast({title,icon:'none'}) }
+function orderStorageKey():string { return 'ct.shop.pending.'+(getUserInfo()?.userId||'')+'.'+id }
+function canApply(session:number):boolean { return !disposed&&session===getSessionGeneration() }
+function slideChanged(event:UniSwiperChangeEvent) { slide.value=event.detail.current }
+function back() {
+  if (getCurrentPages().length>1) uni.navigateBack()
+  else uni.redirectTo({url:'/pages/shop/index'})
+}
+async function load() {
+  if (!id) { error.value='商品标识无效'; return }
+  const current=++revision,session=getSessionGeneration()
+  error.value=''
+  try {
+    const view=await shopDetail(id)
+    if (current!==revision||!canApply(session)) return
+    if (view.product.images.length<=slide.value) slide.value=0
+    product.value=view.product
+    pending.value=view.pending
+    alipayAvailable.value=view.alipayAvailable
+  } catch (e) {
+    if (current===revision&&canApply(session)) error.value=e instanceof Error ? e.message : '商品加载失败'
+  }
+}
+function openCheckout() {
+  if (purchaseDisabled.value) return
+  if (!isLoggedIn()) {
+    uni.navigateTo({url:'/pages/login/index?shopProductId='+id})
+    return
+  }
+  checkout.value=true
+}
+function closeCheckout() { if (!busy.value) checkout.value=false }
+function selectCoins() {
+  if (product.value?.price.minimumCoinConfirmation) {
+    minimum.value=true
+    return
+  }
+  void purchase('COIN',false)
+}
+function confirmMinimum() { minimum.value=false; void purchase('COIN',true) }
+function buyAlipay() { void purchase('ALIPAY',false) }
+async function purchase(method:string,confirmed:boolean) {
+  const item=product.value,session=getSessionGeneration()
+  if (busy.value||item==null||item.owned||!item.enabled||pending.value!=null) return
+  if (requestKey===''||requestMethod!==method) {
+    requestKey='shop-'+Date.now()+'-'+Math.random().toString(36).slice(2)
+    requestMethod=method
+  }
+  busy.value=true
+  try {
+    await finishCheckout(await shopCreate(item,method,requestKey,confirmed),session)
+  } catch {
+    if (canApply(session)) await load()
+  } finally {
+    if (canApply(session)) busy.value=false
+  }
+}
+async function finishCheckout(result:ShopCheckout,session:number) {
+  if (!canApply(session)) return
+  if (result.order.status==='FULFILLED') { await completed(session); return }
+  if (result.order.status==='CLOSED') { await load(); return }
+  pending.value=result.order
+  uni.setStorageSync(orderStorageKey(),result.order.id)
+  if (result.payment==null) return
+  await launchAlipay(result.payment)
+  if (canApply(session)) await refresh(result.order.id,session)
+}
+async function completed(session:number) {
+  if (!canApply(session)) return
+  uni.removeStorageSync(orderStorageKey())
+  checkout.value=false
+  pending.value=null
+  requestKey=''
+  await load()
+  const [profile]=await Promise.all([fetchMe().catch(()=>null),loadAvatarFrames(true).catch(()=>{})])
+  if (!canApply(session)) return
+  if (profile!=null) saveUserInfo(profile)
+  toast('购买成功，头像框已佩戴')
+}
+async function refresh(orderId:string,session:number) {
+  const result=await shopRefresh(orderId)
+  if (!canApply(session)) return
+  if (result.status==='FULFILLED') { await completed(session); return }
+  if (result.status==='CLOSED') {
+    uni.removeStorageSync(orderStorageKey())
+    requestKey=''
+    await load()
+    toast('该订单已关闭，可重新购买')
+    return
+  }
+  pending.value=result
+}
+async function checkPending() {
+  const order=pending.value,session=getSessionGeneration()
+  if (busy.value||order==null) return
+  busy.value=true
+  try { await refresh(order.id,session) }
+  catch { if (canApply(session)) toast('暂时无法查询，请稍后重试') }
+  finally { if (canApply(session)) busy.value=false }
+}
+async function resume() {
+  const order=pending.value,session=getSessionGeneration()
+  if (busy.value||order==null) return
+  if (order.channel!==memberChannel()) { toast('请在原支付渠道继续付款'); return }
+  busy.value=true
+  try { await finishCheckout(await shopPay(order.id),session) }
+  catch { if (canApply(session)) await load() }
+  finally { if (canApply(session)) busy.value=false }
+}
+async function show() {
+  setStatusBar('dark')
+  await load()
+  if (busy.value||disposed||!isLoggedIn()) return
+  const orderId=String(uni.getStorageSync(orderStorageKey())||'')
+  if (!orderId) return
+  const session=getSessionGeneration()
+  try { await refresh(orderId,session) } catch { /* order can still be opened from the product */ }
+}
+onLoad(query=>{
+  const value=query?.id||''
+  if (/^[1-9][0-9]{0,18}$/.test(value)) id=value
+})
+onShow(()=>{void show()})
+onResize(()=>{width.value=uni.getWindowInfo().windowWidth})
+onBackPress(()=>{
+  if (minimum.value) { minimum.value=false; return true }
+  if (sharing.value) { sharing.value=false; return true }
+  if (checkout.value) { closeCheckout(); return true }
+  return false
+})
+onUnload(()=>{disposed=true;revision++})
+</script>
+
+<style scoped>
+.detail-screen { flex:1; display:flex; flex-direction:column; background-color:#f0f1f2; }
+.detail-header { display:flex; flex-direction:row; justify-content:space-between; align-items:center; background-color:#fff; padding-left:23rpx; padding-right:23rpx; }
+.detail-icon { background-color:transparent; padding:0; width:60rpx; height:94rpx; display:flex; align-items:center; justify-content:center; }
+.detail-scroll { flex:1; min-height:0; }
+.detail-gallery { width:100%; position:relative; background-color:#ebedef; }
+.detail-swiper,.detail-image { width:100%; height:100%; }
+.detail-counter { position:absolute; bottom:32rpx; right:32rpx; background-color:#17243066; border-radius:26rpx; padding:5rpx 12rpx; }
+.counter-text { color:#fff; font-size:24rpx; font-weight:700; }
+.detail-summary { display:flex; flex-direction:column; padding:24rpx 30rpx 24rpx; background-color:#fff; }
+.detail-title { color:#222628; font-size:34rpx; line-height:48rpx; font-weight:600; }
+.detail-prices { display:flex; flex-direction:row; align-items:flex-end; margin-top:28rpx; }
+.detail-yen { color:#212426; font-size:35rpx; font-weight:800; line-height:54rpx; }
+.detail-yuan { color:#212426; font-size:57rpx; line-height:62rpx; font-weight:800; font-style:italic; }
+.detail-coins { color:#62696d; font-size:24rpx; margin-left:16rpx; line-height:42rpx; }
+.offer-row { display:flex; flex-direction:row; align-items:center; min-height:58rpx; margin-top:25rpx; }
+.offer-key,.offer-copy { color:#8f9598; font-size:23rpx; }
+.offer-key { margin-right:32rpx; }
+.offer-tag { border-radius:16rpx; background-color:#ffe4e4; padding:8rpx 15rpx; }
+.offer-text { color:#e86670; font-size:23rpx; }
+.original-price { color:#9b9fa3; margin-left:15rpx; font-size:22rpx; }
+.detail-description { display:flex; flex-direction:column; background-color:#fff; margin-top:14rpx; padding:24rpx 30rpx 34rpx; }
+.description-label { color:#222; font-weight:600; font-size:28rpx; margin-bottom:12rpx; }
+.description-copy { color:#777e83; font-size:24rpx; line-height:36rpx; }
+.detail-placeholder { flex:1; display:flex; align-items:center; justify-content:center; }
+.purchase-bar { background-color:#fff; padding:16rpx 28rpx 0; }
+.purchase-button { height:89rpx; border-radius:46rpx; background-color:#ff656a; display:flex; align-items:center; justify-content:center; }
+.purchase-muted { background-color:#a4a8aa; }
+.purchase-label { color:#fff; font-size:29rpx; font-weight:600; }
+.payment-layer { position:fixed; top:0; left:0; right:0; bottom:0; z-index:600; display:flex; flex-direction:column; justify-content:flex-end; }
+.payment-mask { position:absolute; top:0; left:0; right:0; bottom:0; background-color:#0006; }
+.payment-panel { display:flex; flex-direction:column; background-color:#fff; border-top-left-radius:34rpx; border-top-right-radius:34rpx; padding:26rpx 30rpx 0; }
+.payment-heading { text-align:center; color:#202326; font-size:31rpx; font-weight:600; }
+.payment-subheading { color:#737a7e; font-size:24rpx; text-align:center; margin-top:11rpx; }
+.payment-options,.pending-content { display:flex; flex-direction:column; margin-top:23rpx; }
+.payment-option { display:flex; flex-direction:row; align-items:center; justify-content:space-between; background-color:#f5f6f7; padding:0 22rpx; height:78rpx; border-radius:15rpx; margin-bottom:12rpx; }
+.payment-choice,.payment-value { font-size:26rpx; color:#292d30; }
+.payment-value { color:#e66067; font-weight:600; }
+.payment-unavailable,.payment-cancel-text,.pending-text { color:#7f868a; }
+.pending-text,.payment-cancel-text { font-size:24rpx; text-align:center; }
+.pending-text { margin-bottom:12rpx; }
+.pending-price { font-size:38rpx; color:#262a2d; text-align:center; font-weight:700; margin-bottom:9rpx; }
+.payment-cancel { background-color:transparent; display:flex; justify-content:center; align-items:center; height:65rpx; }
+/* #ifdef WEB */
+.detail-screen { height:100vh; }
+.detail-icon,.purchase-button,.payment-option,.payment-cancel { border:0; box-shadow:none; }
+.detail-icon::after,.purchase-button::after,.payment-option::after,.payment-cancel::after { border:0; }
+.original-price { text-decoration:line-through; }
+/* #endif */
+</style>

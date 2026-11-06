@@ -1,0 +1,47 @@
+<template>
+  <!-- #ifdef APP -->
+  <scroll-view direction="vertical"  :show-scrollbar="false" :bounces="false" class="intrinsic-scroll" :style="{height: height + 'px'}">
+    <view :id="contentId" class="intrinsic-content"><slot /></view>
+  </scroll-view>
+  <!-- #endif -->
+  <!-- #ifndef APP -->
+  <slot />
+  <!-- #endif -->
+</template>
+<script setup lang="uts">
+import { getCurrentInstance, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue'
+import { nativeLength } from '@/utils/native-length'
+import { rectById } from '@/utils/element-geometry'
+import { observeWindowResize } from '@/utils/window-events'
+const props = withDefaults(defineProps<{ maxHeight: string; limitId?: string; inset?: string }>(), { limitId: '', inset: '0px' })
+const contentId = 'ct-intrinsic-scroll-' + getCurrentInstance()!.uid
+const height = ref(1)
+let disposed = false, scheduled = false, frame = 0
+async function measure(): Promise<void> {
+  // #ifdef APP
+  await nextTick()
+  if (disposed) return
+  const info = uni.getWindowInfo(), content = await rectById(contentId)
+  const limit = props.limitId ? await rectById(props.limitId) : null
+  if (disposed || !content || content.height <= 0) return
+  const context = {width: limit?.width ?? info.windowWidth, height: limit?.height ?? info.windowHeight, viewportWidth: info.windowWidth, viewportHeight: info.windowHeight, safeBottom: info.safeAreaInsets?.bottom ?? 0}
+  const maximum = Math.max(1, nativeLength(props.maxHeight, 'height', context) - nativeLength(props.inset, 'height', context))
+  const next = Math.max(1, Math.min(content.height, maximum))
+  if (Math.abs(next - height.value) > .25) height.value = next
+  // #endif
+}
+function schedule() {
+  if (disposed || scheduled) return
+  scheduled = true
+  frame = requestAnimationFrame(() => { scheduled = false; void measure() })
+}
+const unobserve = observeWindowResize(schedule)
+watch(() => [props.maxHeight,props.limitId,props.inset], schedule)
+onMounted(schedule)
+onUpdated(schedule)
+onBeforeUnmount(() => { disposed = true; cancelAnimationFrame(frame); unobserve() })
+</script>
+<style>
+.intrinsic-scroll{width:100%;min-height:0;}
+.intrinsic-content{width:100%;flex-shrink:0;}
+</style>

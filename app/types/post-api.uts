@@ -1,0 +1,33 @@
+import type { MediaSkeletonSpec } from './home'
+export interface Page<T> { records: T[]; total: number; current: number; size: number; pages: number }
+export interface CommentFocus { commentId:string;rootId:string;rootPage:number;replyPage:number;roots:Page<CommentResponse>;replies:Page<CommentResponse>|null }
+export interface PostResponse {
+  repostOfPostId?:string|null; repost?:import('./home').RepostSummary|null;
+  following?: boolean; followedBy?: boolean; liked?: boolean; favorited?: boolean;
+  pinned?: boolean
+  status?: number;
+  id: string; authorId: string | null; authorNickname: string; authorLevel: number;
+  authorAvatar?: string; authorAvatarFrame?: string; authorAvatarFrameExpiresAt?:number|null; authorPublicUid?: string; mode?: 'image' | 'video' | 'post'; channelId?: number; channelName?: string;
+  title: string; content: string; date: string; createTime: string;
+  media: MediaSkeletonSpec[]; tags: string[]; likeCount: number; commentCount: number;
+  authorBio?: string; favoriteCount?: number; shareCount?: number; collection?: string; permission?: string;
+  contentBlocks?: unknown[]; allowDownload?: boolean; downloadWatermark?: boolean; original?: boolean;
+  poll?: import('./home').PollView | null;
+}
+export interface CommentResponse {
+  id: string; postId: string; parentId: string | null; replyToId?: string | null; replyToNickname?: string;
+  authorId?: string | null; authorNickname: string; authorLevel: number; authorAvatar?: string; authorAvatarFrame?: string; authorAvatarFrameExpiresAt?:number|null;
+  region: string; content: string; contentType: 'text' | 'image' | 'sticker'; stickerId?: number | null; stickerUrl: string;
+  pinned: boolean; deleted: boolean; contextOnly?: boolean; canDelete: boolean;
+  likeCount: number; viewerReaction?: 'like' | null;
+  createTime: string; replyCount: number; media: CommentMedia[]; replies: CommentResponse[];
+}
+export interface CommentMedia { id: number; assetId: number; url: string; width?: number; height?: number; sortOrder: number }
+export interface CommentConfig {
+  imageMax: number; contentMax: number;
+  emojiGroups: { id: number; name: string; sortOrder: number; enabled: boolean }[];
+  emojis: { id: number; groupId: number; name: string; imageUrl: string; sortOrder: number; enabled: boolean }[];
+}
+export interface MineCommentResponse extends CommentResponse { postTitle: string; postMode: string; postAvailable: boolean }
+export interface CommentReactionResult { reaction: 'like' | null; likeCount: number }
+export interface CommentDeleteResult { deletedCount: number; tombstone: boolean }

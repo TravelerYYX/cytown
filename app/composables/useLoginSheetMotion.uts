@@ -1,0 +1,79 @@
+import { getCurrentInstance, onBeforeUnmount, ref } from 'vue'
+import { uxMedia } from '@/utils/native-styles'
+import { paintLoginBackground } from '@/utils/login-navigation'
+
+const OPEN_DURATION = 820
+const CLOSE_DURATION = 560
+const CORNER = 34
+const clamp = (value: number) => Math.max(0, Math.min(1, value))
+const smooth = (value: number) => { const t = clamp(value); return t * t * (3 - 2 * t) }
+// A critically damped response: one quick lift followed by a long, quiet settle.
+const settle = (time: number) => (1 - (1 + 8 * time) * Math.exp(-8 * time)) / (1 - 9 * Math.exp(-8))
+
+export function useLoginSheetMotion(prefix: string) {
+  const page = getCurrentInstance()?.proxy?.$page
+  const cardStyle = ref<Record<string, string>>({})
+  const shadeStyle = ref<Record<string, string>>({ opacity: '0' })
+  let frame = 0, progress = 0, radius = CORNER, height = 0, disposed = false, closing = false
+  function reduced(): boolean {
+    // #ifdef APP
+    return uxMedia('(prefers-reduced-motion: reduce)')
+    // #endif
+    // #ifdef WEB
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // #endif
+    // #ifdef MP-WEIXIN
+    return true
+    // #endif
+  }
+  function paint(value: number, corner: number): void {
+    progress = value; radius = corner
+    // #ifdef APP || WEB
+    const card = page?.getElementById(prefix + '-card'), shade = page?.getElementById(prefix + '-shade')
+    card?.style.setProperty('transform', 'translateY(' + (height * (1 - value)) + 'px)')
+    card?.style.setProperty('border-top-left-radius', corner + 'px')
+    card?.style.setProperty('border-top-right-radius', corner + 'px')
+    shade?.style.setProperty('opacity', String(value))
+    // #endif
+    paintLoginBackground(value)
+  }
+  function prepare(): void {
+    height = uni.getWindowInfo().windowHeight
+    cardStyle.value = { transform: 'translateY(' + height + 'px)', borderTopLeftRadius: CORNER + 'px', borderTopRightRadius: CORNER + 'px' }
+  }
+  function run(out: boolean, complete: () => void): void {
+    if (disposed || (out && closing)) return
+    closing = out
+    cancelAnimationFrame(frame)
+    // #ifdef APP || WEB
+    height = page?.getElementById(prefix + '-card')?.getBoundingClientRect().height || height
+    // #endif
+    if (reduced()) {
+      paint(out ? 0 : 1, 0)
+      cardStyle.value = { transform: 'translateY(' + (out ? height : 0) + 'px)', borderTopLeftRadius: '0px', borderTopRightRadius: '0px' }
+      shadeStyle.value = { opacity: out ? '0' : '1' }
+      complete(); return
+    }
+    const from = progress, initialRadius = radius, started = Date.now()
+    const duration = out ? Math.max(240, CLOSE_DURATION * from) : OPEN_DURATION
+    function tick(): void {
+      if (disposed) return
+      const time = clamp((Date.now() - started) / duration)
+      const eased = settle(time)
+      const value = out ? from * (1 - eased) : from + (1 - from) * eased
+      // Keep the corners round during the lift; unfold them only as the card settles.
+      const corner = out ? initialRadius + (CORNER - initialRadius) * smooth(time / .28) : CORNER * (1 - smooth((time - .42) / .58))
+      paint(value, corner)
+      if (time < 1) frame = requestAnimationFrame(tick)
+      else {
+        cardStyle.value = { transform: 'translateY(' + (out ? height : 0) + 'px)', borderTopLeftRadius: corner + 'px', borderTopRightRadius: corner + 'px' }
+        shadeStyle.value = { opacity: out ? '0' : '1' }
+        complete()
+      }
+    }
+    paint(from, initialRadius)
+    frame = requestAnimationFrame(tick)
+  }
+  onBeforeUnmount(() => { disposed = true; cancelAnimationFrame(frame); paintLoginBackground(0) })
+  return { cardStyle, shadeStyle, prepare, open: (complete: () => void) => run(false, complete), close: (complete: () => void) => run(true, complete) }
+}

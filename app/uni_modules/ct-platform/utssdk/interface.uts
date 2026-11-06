@@ -1,0 +1,5 @@
+export type OpenExternalURL = (url: string) => void
+export type GetReduceMotion = () => boolean
+export type NativeSemantics = {label:string;role:string;hidden:boolean;disabled:boolean;selected:boolean;checked:boolean|null;focusable:boolean;modal:boolean}
+export type ApplyNativeSemantics = (id:string,spec:NativeSemantics) => Promise<boolean>
+export type ReleaseNativeSemantics = (id:string) => void

@@ -1,0 +1,66 @@
+<template>
+  <view :id="hostId" class="feed-video-layer" @tap.stop="$emit('open')">
+    <view v-if="selected &amp;&amp; !failed" class="feed-video-stage" :style="{opacity:started?1:0}">
+      <!-- #ifdef WEB -->
+      <WebVideoSurface :options="options" @event="onEvent" />
+      <!-- #endif -->
+      <!-- #ifdef APP || MP-WEIXIN -->
+      <NativeVideoSurface :options="options" @event="onEvent">
+        <!-- #ifdef MP-WEIXIN -->
+        <cover-view class="feed-video-touch" @tap.stop="$emit('open')" />
+        <!-- #endif -->
+      </NativeVideoSurface>
+      <!-- #endif -->
+    </view>
+    <!-- #ifndef MP-WEIXIN -->
+    <view class="feed-video-touch" @tap.stop="$emit('open')" />
+    <!-- #endif -->
+  </view>
+</template>
+<script setup lang="uts">
+import { computed, getCurrentInstance, inject, onBeforeUnmount, ref, watch } from 'vue'
+import { feedAutoplayKey } from '@/composables/useFeedAutoplay'
+import { mediaUrl } from '@/utils/media-cache'
+import type { MediaSkeletonSpec } from '@/types/home'
+import type { PlaybackEvent } from '@/types/playback'
+// #ifdef WEB
+import WebVideoSurface from './WebVideoSurface.uvue'
+// #endif
+// #ifdef APP || MP-WEIXIN
+import NativeVideoSurface from './NativeVideoSurface.uvue'
+// #endif
+const props = defineProps<{ media: MediaSkeletonSpec; identity: string; visible: boolean }>()
+const emit = defineEmits<{ open: []; playing: [value: boolean] }>()
+const instance = getCurrentInstance()!
+const hostId = 'feed-video-' + instance.uid
+const coordinator = inject(feedAutoplayKey)
+const key = computed(() => hostId + ':' + props.identity + ':' + [props.media.assetId, props.media.url, props.media.hlsUrl, props.media.resourceVersion, props.media.status].join(':'))
+const selected = computed(() => props.visible && coordinator?.selected.value === key.value)
+const started = ref(false), failed = ref(false)
+const options = computed(() => ({
+  source: mediaUrl(props.media.hlsUrl || props.media.url), poster: mediaUrl(props.media.coverUrl),
+  qualities: (props.media.qualities || []).map(item => ({ ...item, url: mediaUrl(item.url) })),
+  quality: 'auto', rate: 1, command: { id: 0, type: '' }, active: selected.value,
+  suspendId: 0, autoplay: true, muted: true, loop: true, objectFit: 'cover' as const
+}))
+let unregister: (() => void) | undefined
+watch(() => [key.value, props.visible], () => {
+  unregister?.(); unregister = undefined
+  failed.value = false; started.value = false; emit('playing', false)
+  if (props.visible && props.media.status !== 'processing' && props.media.status !== 'failed' && (props.media.hlsUrl || props.media.url)) {
+    unregister = coordinator?.register(key.value, hostId, instance.proxy)
+  }
+}, { immediate: true, flush: 'post' })
+watch(selected, () => { failed.value = false; started.value = false; emit('playing', false) }, { flush: 'sync' })
+function onEvent(event: PlaybackEvent) {
+  if (!selected.value || failed.value) return
+  if (event.error || event.blocked) { failed.value = true; started.value = false; emit('playing', false); return }
+  if (event.playing && !event.waiting) { started.value = true; emit('playing', true) }
+}
+onBeforeUnmount(() => { unregister?.(); emit('playing', false) })
+</script>
+<style scoped>
+.feed-video-layer,.feed-video-stage,.feed-video-touch { position:absolute;top:0;left:0;width:100%;height:100%; }
+.feed-video-layer { overflow:hidden; }
+.feed-video-touch { background-color:transparent; }
+</style>

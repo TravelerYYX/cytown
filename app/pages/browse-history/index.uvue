@@ -1,0 +1,118 @@
+<template>
+  <view class="history-page">
+    <view :style="{paddingTop: statusBarHeight + 'px'}">
+      <view class="history-nav">
+        <ActionButton class="history-nav-side" aria-label="返回" @tap="back">
+          <image class="history-back" src="/static/images/coin/back.svg" />
+        </ActionButton>
+        <text class="history-title">浏览历史</text>
+        <view class="history-nav-side" />
+      </view>
+    </view>
+    <PaneScroll class="history-list" :post-items="posts" post-variant="mine" :viewport-width="viewportWidth" :active="visible" @scrolltolower="loadMore">
+      <view :style="{paddingBottom: bottomInset + 'px'}">
+        <text v-if="loading" class="history-hint">浏览历史加载中…</text>
+        <view v-else-if="failed" class="history-error">
+          <text class="history-hint">浏览历史加载失败</text>
+          <ActionButton class="history-retry" aria-label="重试" @tap="loadMore"><text class="history-retry-label">重试</text></ActionButton>
+        </view>
+        <EmptyState v-else-if="!posts.length" />
+        <text v-else-if="hasMore" class="history-hint" @tap="loadMore">上拉加载更多</text>
+        <text v-else class="history-hint">已经到底了</text>
+      </view>
+    </PaneScroll>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { ref, watch } from 'vue'
+import ActionButton from '@/components/ActionButton.uvue'
+import EmptyState from '@/components/EmptyState.uvue'
+import PaneScroll from '@/components/PaneScroll.uvue'
+import { usePostOwnership } from '@/composables/usePostOwnership'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import type { Post } from '@/types/home'
+import { authRevision, getSessionGeneration, isLoggedIn } from '@/utils/auth'
+import { setStatusBar } from '@/utils/platform'
+import { fetchPostHistory, postHistoryRevision, toPost } from '@/utils/post-api'
+
+const { statusBarHeight, bottomInset, viewportWidth } = useWindowInsets()
+const posts = ref<Post[]>([])
+usePostOwnership(() => posts.value)
+const visible = ref(false), loading = ref(false), failed = ref(false), hasMore = ref(true)
+let pageNum = 1, revision = 0, session = -1
+
+function syncSession() {
+  const next = getSessionGeneration()
+  if (session === next) return
+  session = next
+  revision++
+  posts.value = []
+  pageNum = 1
+  hasMore.value = true
+  loading.value = false
+  failed.value = false
+}
+
+async function loadMore() {
+  if (!visible.value || loading.value || !hasMore.value || !isLoggedIn()) return
+  const current = revision
+  loading.value = true
+  failed.value = false
+  try {
+    const page = await fetchPostHistory(pageNum)
+    if (current !== revision || session !== getSessionGeneration()) return
+    if (pageNum === 1) {
+      posts.value = page.records.map(post => toPost(post))
+    } else {
+      const ids = new Set(posts.value.map(post => post.id))
+      const nextPosts = page.records.filter(post => !ids.has(post.id)).map(post => toPost(post))
+      posts.value = [...posts.value, ...nextPosts]
+    }
+    hasMore.value = pageNum < page.pages && page.records.length > 0
+    pageNum++
+  } catch {
+    if (current === revision) failed.value = true
+  } finally {
+    if (current === revision) loading.value = false
+  }
+}
+
+function refresh() {
+  revision++
+  pageNum = 1
+  hasMore.value = true
+  loading.value = false
+  void loadMore()
+}
+
+function back() { uni.navigateBack({ fail: () => { uni.reLaunch({ url: '/pages/index/index?tab=mine' }) } }) }
+watch(authRevision, () => {
+  if (session === getSessionGeneration()) return
+  syncSession()
+  if (visible.value) void loadMore()
+}, { flush: 'sync' })
+watch(postHistoryRevision, () => { if (visible.value) refresh() })
+onShow(() => {
+  setStatusBar('dark')
+  syncSession()
+  if (!isLoggedIn()) { uni.redirectTo({ url: '/pages/login/index' }); return }
+  visible.value = true
+  refresh()
+})
+onHide(() => { visible.value = false })
+onUnload(() => { visible.value = false; revision++ })
+</script>
+
+<style scoped>
+.history-page { display: flex; flex-direction: column; position: fixed; top: 0; bottom: 0; left: 0; right: 0; background-color: #fff; }
+.history-nav { height: 80rpx; padding: 0 30rpx; display: flex; flex-direction: row; align-items: center; justify-content: space-between; border-bottom: 1px solid #f2f2f2; }
+.history-nav-side { width: 48rpx; height: 48rpx; margin: 0; padding: 0; border-width: 0; background-color: transparent; display: flex; align-items: center; justify-content: center; }
+.history-back { width: 39rpx; height: 39rpx; }
+.history-title { color: #232d40; font-size: 34rpx; font-weight: 600; }
+.history-list { flex: 1; min-height: 0; }
+.history-hint { display: flex; justify-content: center; text-align: center; padding: 30rpx 0; color: #858b97; font-size: 26rpx; }
+.history-error { display: flex; flex-direction: column; align-items: center; }
+.history-retry { margin: 0; padding: 12rpx 28rpx; border-width: 0; border-radius: 12rpx; background-color: #f5f6f7; }
+.history-retry-label { font-size: 26rpx; color: #232d40; }
+</style>

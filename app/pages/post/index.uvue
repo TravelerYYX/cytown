@@ -1,0 +1,428 @@
+<template>
+ <view class="post-detail" :class="[{'video-detail':isVideo,'image-detail':isImageDetail,'post-preview-mode':postPreviewMode},uxNative?'ux1':'',uxNative?'ux8':'',uxNative&amp;&amp;!!isImageDetail?'ux36':'']">
+  <view v-if="!isImageDetail" class="detail-status" :style="{height:statusBarHeight+'px'}"  :class="[uxNative?'ux1':'',uxNative?'ux9':'']"/>
+  <view v-if="loading" class="detail-loading" :class="[uxNative?'ux1':'',uxNative?'ux34':'']"><MediaSkeleton :media="{type:'image',layout:'wide',aspectRatio:4/3}" /><text :class="[uxNative?'ux46':'',uxNative?'ux59':'',uxNative?'ux60':'']">帖子加载中…</text></view>
+  <template v-else-if="!!post">
+   <ImagePostViewer ref="imageViewer" v-if="isImageDetail||imageOverlay" :key="post!.id+'-'+imageStart" :post="post" :status-bar-height="statusBarHeight" :bottom-inset="bottomInset" :initial-index="imageStart" @back="closeViewer" @comments="showComments" @compose="openComposer()" @interaction="updateInteraction" @follow="updateFollow" />
+   <template v-if="!isImageDetail">
+    <PostDetailAuthor :post="post" header @back="goBack" @follow="updateFollow" @more="openShare(true)" />
+    <scroll-view class="detail-scroll" :scroll-with-animation="scrollAnimated" @touchstart="cancelAutoLocate" @wheel="cancelAutoLocate" direction="vertical" :lower-threshold="120" @scrolltolower="detailComments?.loadMoreOnReachBottom()" :scroll-into-view="scrollTarget" :show-scrollbar="false" :class="[uxNative?'ux61':'',uxNative?'ux12':'']">
+     <PostVideoPlayer ref="videoPlayer" v-if="isVideo&&!!firstMedia" :media="firstMedia" :title="post!.title" :can-retry="!postPreviewMode &amp;&amp; post!.author.id===getUserInfo()?.userId" @back="goBack" @more="downloadCurrent" :reportable="!postPreviewMode&amp;&amp;post!.author.id!==getUserInfo()?.userId" @report="openReport('post',post!.id)" @retry="retryVideo" />
+     <view v-if="isImagePost && galleryImages.length > 0" class="detail-gallery">
+      <view class="gallery-frame" :style="{height:displayedGalleryHeight+'px'}">
+       <swiper class="image-swiper" :style="{height:displayedGalleryHeight+'px'}" :current="galleryIndex" @change="changeMedia">
+        <swiper-item v-for="(image,index) in galleryImages" :key="image.id||index">
+         <view class="gallery-slide" @tap="openGalleryImage(Number(index))">
+          <CachedImage v-if="!!(image.previewUrl||image.url)" class="gallery-image" :src="mediaUrl(image.previewUrl||image.url)" :version="image.resourceVersion" variant="preview" mode="aspectFit" />
+          <MediaSkeleton v-else :media="image" />
+         </view>
+        </swiper-item>
+       </swiper>
+       <view v-if="galleryImages.length > 1" class="gallery-counter"><text class="gallery-counter-text">{{galleryIndex+1}}/{{galleryImages.length}}</text></view>
+      </view>
+      <view v-if="galleryImages.length > 1" class="gallery-dots">
+       <ActionButton v-for="(_,index) in galleryImages" :key="index" class="gallery-dot-button" :aria-label="'第'+(Number(index)+1)+'张图片'" @tap="galleryIndex=Number(index)"><view class="gallery-dot" :class="{selected:index===galleryIndex}" /></ActionButton>
+      </view>
+     </view>
+     <view class="detail-copy" :class="[uxNative?'ux1':'',uxNative?'ux17':'',uxNative&amp;&amp;!!isVideo?'ux62':'',uxNative&amp;&amp;!!isVideo?'ux63':'']">
+      <text class="detail-title" :class="[uxNative?'ux46':'',uxNative?'ux60':'',uxNative?'ux18':'',uxNative&amp;&amp;!!isVideo?'ux64':'']">{{post!.title}}</text>
+      <RepostReference v-if="!!post!.repost" :source="post!.repost" :readonly="postPreviewMode"/>
+      <RichPostContent ref="richContent" :can-retry="!postPreviewMode &amp;&amp; post!.author.id===getUserInfo()?.userId" @back="goBack" @retry="retryRichVideo" @save="saveRichVideo" v-if="isRichPost" :blocks="post!.contentBlocks as any" :media="post!.media" :poll="post!.detail?.poll" :post-id="post!.id" @poll="updatePoll" @image="openImage" />
+      <template v-else><text class="detail-body" :class="[{collapsed:!bodyExpanded},uxNative?'ux46':'',uxNative?'ux60':'',uxNative?'ux19':'',uxNative&amp;&amp;!!isVideo?'ux65':'',uxNative&amp;&amp;!!!bodyExpanded?'ux43':'']" :max-lines="(uxNative &amp;&amp; !!!bodyExpanded) ? 2 : (undefined)">{{post!.content}}</text><ActionButton :aria-label="String(bodyExpanded?'收起':'展开') + ' ' + &quot;⌄&quot;" v-if="!!post!.content&&post!.content.length>80" class="expand-copy" @tap="bodyExpanded=!bodyExpanded" :class="[uxNative?'ct-native-button':'',uxNative?'ux67':'',uxNative?'ux35':'',uxNative?'ux70':'']"><text :class="[uxNative?'ux46':'',uxNative?'ux75':'',uxNative?'ux78':'',uxNative?'ux60':'']">{{bodyExpanded?'收起':'展开'}}⌄</text></ActionButton></template>
+      <view v-if="!isRichPost && !isImagePost" class="detail-media-list" :class="[uxNative?'ux1':'',uxNative?'ux20':'']">
+       <template v-for="(media,index) in post!.media" :key="media.id||index" :style="uxLayout(uxNodePrefix+'-g1000'+'-'+[index].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0+index)}}],{})" :id="uxNodePrefix+'-g1000'+'-'+[index].join('-')">
+        <view v-if="media.type==='image'" class="detail-image" @tap="openGallery(index)" :class="[uxNative?'ux1':'',uxNative?'ux21':'']" :style="uxLayout(uxNodePrefix+'-g1001'+'-'+[index].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;16rpx&quot;,&quot;__direction&quot;:&quot;column&quot;}},{on:true,declarations:{__index:String(0)}}],uxNative?{marginTop:(index>0?32:16)+'rpx'}:{})" :id="uxNodePrefix+'-g1001'+'-'+[index].join('-')">
+         <CachedImage v-if="!!(media.previewUrl||media.url)" class="detail-image-content" :src="mediaUrl(media.previewUrl||media.url)" :version="media.resourceVersion" variant="preview" mode="widthFix"  :class="[uxNative?'ux22':'']"/>
+         <MediaSkeleton v-else :media="media" />
+        </view>
+       </template>
+      </view>
+      <view v-if="!!post!.tags?.length" class="detail-topics" :class="[uxNative?'ux1':'',uxNative?'ux24':'']"><view v-for="(tag, __uxIndex0) in post!.tags" :key="tag" class="detail-topic" :class="[uxNative?'ux1':'',uxNative?'ux25':'']" :style="uxLayout(uxNodePrefix+'-g1002'+'-'+[__uxIndex0].join('-'),[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;20rpx&quot;,&quot;__direction&quot;:&quot;row&quot;,&quot;__wrap&quot;:&quot;wrap&quot;}},{on:true,declarations:{__index:String(0+__uxIndex0)}}],{})" :id="uxNodePrefix+'-g1002'+'-'+[__uxIndex0].join('-')"><text :class="[uxNative?'ux46':'',uxNative?'ux82':'',uxNative?'ux60':'']">{{tag}}</text></view></view>
+      <text class="detail-date" :class="[uxNative?'ux46':'',uxNative?'ux60':'',uxNative?'ux26':'']">{{post!.date}} · {{post!.detail?.permission||'允许规范转载'}}</text>
+     </view>
+     <RemotePostComments ref="detailComments" :active="!(imageOverlay || commentsVisible)" :post-id="post!.id" :count="post!.commentCount" :refresh-revision="commentRevision" @reply="openComposer" @count-change="changeCommentCount" />
+    </scroll-view>
+    <PostActionBar :active="!(imageOverlay || commentsVisible)" :demo="postPreviewMode" :post="post" :bottom-inset="bottomInset" @comments="showComments" @compose="openComposer()" @interaction="updateInteraction" @share="openShare" />
+   </template>
+   <view v-if="commentsVisible" class="comments-layer" :class="[uxNative?'ux1':'',uxNative?'ux37':'']"><view class="comments-mask" @tap="commentsVisible=false" :class="[uxNative?'ux1':'',uxNative?'ux38':'']"/><view class="comments-panel" :class="[uxNative?'ux1':'',uxNative?'ux39':'']"><view class="comments-panel-heading" :class="[uxNative?'ux1':'',uxNative?'ux40':'']"><text :class="[uxNative?'ux46':'',uxNative?'ux84':'',uxNative?'ux60':'']">评论</text><ActionButton :aria-label="&quot;关闭&quot;" @tap="commentsVisible=false" :class="[uxNative?'ct-native-button':'',uxNative?'ux67':'',uxNative?'ux70':'',uxNative?'ux74':'']"><text :class="[uxNative?'ux46':'',uxNative?'ux84':'',uxNative?'ux87':'',uxNative?'ux90':'',uxNative?'ux60':'']">关闭</text></ActionButton></view><scroll-view direction="vertical" class="comments-scroll" :lower-threshold="120" @scrolltolower="panelComments?.loadMoreOnReachBottom()" :class="[uxNative?'ux61':'',uxNative?'ux41':'']"><RemotePostComments ref="panelComments" :active="commentsVisible" :post-id="post!.id" :count="post!.commentCount" :refresh-revision="commentRevision" @reply="openComposer" @count-change="changeCommentCount" /></scroll-view><PostActionBar :active="commentsVisible" :post="post" :bottom-inset="bottomInset" @comments="commentsVisible=true" @compose="openComposer()" @interaction="updateInteraction" @share="openShare" /></view></view>
+   <PostShareSheet v-if="shareMounted" :visible="shareVisible" :post="post!" :management="shareManagement" :save-enabled="isVideo&amp;&amp;!!post!.allowDownload" @close="shareVisible=false" @save="downloadCurrent" />
+   <CommentComposer :visible="composerVisible" :post-id="post!.id" :reply-target="replyTarget" :bottom-inset="bottomInset" @close="closeComposer" @submitted="commentSubmitted" />
+  </template>
+  <view v-else class="missing-post" :class="[uxNative?'ux1':'',uxNative?'ux33':'']"><text :class="[uxNative?'ux46':'',uxNative?'ux60':'']" :style="uxLayout(uxNodePrefix+'-g1003',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;30rpx&quot;,&quot;__direction&quot;:&quot;column&quot;,&quot;__padding&quot;:&quot;120rpx&quot;}},{on:true,declarations:{__index:String(0)}}],{})" :id="uxNodePrefix+'-g1003'">{{error||'帖子不存在或已下架'}}</text><ActionButton :aria-label="&quot;重试&quot;" @tap="loadPost" :class="[uxNative?'ct-native-button':'',uxNative?'ux67':'',uxNative?'ux70':'']" :style="uxLayout(uxNodePrefix+'-g1004',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;30rpx&quot;,&quot;__direction&quot;:&quot;column&quot;,&quot;__padding&quot;:&quot;120rpx&quot;}},{on:true,declarations:{__index:String(0+1)}}],{})" :id="uxNodePrefix+'-g1004'"><text :class="[uxNative?'ux46':'',uxNative?'ux93':'',uxNative?'ux60':'']">重试</text></ActionButton><ActionButton :aria-label="&quot;返回&quot;" @tap="goBack" :class="[uxNative?'ct-native-button':'',uxNative?'ux67':'',uxNative?'ux70':'']" :style="uxLayout(uxNodePrefix+'-g1005',[{on:uxNative,declarations:{&quot;__gap&quot;:&quot;30rpx&quot;,&quot;__direction&quot;:&quot;column&quot;,&quot;__padding&quot;:&quot;120rpx&quot;}},{on:true,declarations:{__index:String(0+1+1)}}],{})" :id="uxNodePrefix+'-g1005'"><text :class="[uxNative?'ux46':'',uxNative?'ux93':'',uxNative?'ux60':'']">返回</text></ActionButton></view>
+  <EyeCareOverlay />
+ </view>
+</template>
+<script setup lang="uts">
+import PostShareSheet from '@/components/PostShareSheet.uvue'
+import { openReport } from '@/utils/report-api'
+import RepostReference from '@/components/RepostReference.uvue'
+import { recordPostView, toPost } from '@/utils/post-api'
+import { postPreviewMode,onPreviewRefresh,previewRead,capturePreviewScroll,restorePreviewScroll } from '@/utils/post-preview'
+import ActionButton from '@/components/ActionButton.uvue'
+
+import { notifyWindowResize } from '@/utils/window-events'
+onResize(notifyWindowResize)
+
+import { useNativeLayout } from '@/composables/useNativeLayout'
+const { prefix: uxNodePrefix, style: uxLayout } = useNativeLayout();
+
+import { uxNative, uxClass, uxMedia } from '@/utils/native-styles';
+
+import { computed, nextTick, ref, watch } from 'vue'
+import { usePostOwnership } from '@/composables/usePostOwnership'
+
+import AppIcon from '@/components/AppIcon.uvue'
+import CommentComposer from '@/components/CommentComposer.uvue'
+import MediaSkeleton from '@/components/MediaSkeleton.uvue'
+import CachedImage from '@/components/CachedImage.uvue'
+import PostDetailAuthor from '@/components/PostDetailAuthor.uvue'
+import RemotePostComments from '@/components/RemotePostComments.uvue'
+import PostActionBar from '@/components/PostActionBar.uvue'
+import PostVideoPlayer from '@/components/PostVideoPlayer.uvue'
+import ImagePostViewer from '@/components/ImagePostViewer.uvue'
+import { savePostMedia } from '@/utils/media-download'
+import { POST } from '@/utils/request'
+import RichPostContent from '@/components/RichPostContent.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { findPost } from '@/utils/post-detail'
+import { mediaUrl } from '@/utils/media-cache'
+import type { Post } from '@/types/home'
+import type { InteractionResult } from '@/types/auth'
+import type { CommentResponse } from '@/types/post-api'
+import { authRevision, getSessionGeneration, getToken, getUserInfo, isLoggedIn } from '@/utils/auth'
+import { refreshPostInteraction } from '@/utils/interactions'
+import { API_BASE_URL } from '@/config/env'
+
+const { statusBarHeight, bottomInset, viewportWidth } = useWindowInsets()
+type PlayerController={handleBack:()=>boolean;pause:()=>void;resume:()=>void;suspend:()=>Promise<unknown>}
+const videoPlayer=ref<PlayerController>(),richContent=ref<PlayerController>()
+const imageViewer=ref<{handleBack:()=>boolean}>()
+const shareVisible=ref(false),shareMounted=ref(false),shareManagement=ref(false)
+function openShare(management:boolean=false){if(postPreviewMode.value)return;shareManagement.value=management;shareMounted.value=true;shareVisible.value=true}
+type CommentsController = { loadMoreOnReachBottom: () => void;locate:(id:string)=>Promise<string>;highlight:(id:string)=>void;refreshLoaded:()=>Promise<void> }
+const detailComments = ref<CommentsController>(), panelComments = ref<CommentsController>()
+const post = ref<Post>()
+usePostOwnership(() => post.value ? [post.value] : [])
+const loading = ref(true)
+const error = ref('')
+let postId = ''
+let ready = false
+let generation = 0
+let viewSession = -1
+let viewRecorded = false
+function recordVisiblePost() {
+  if (viewRecorded || !ready || !pageVisible || loading.value || !post.value || postPreviewMode.value ||
+      !isLoggedIn() || viewSession !== getSessionGeneration()) return
+  viewRecorded = true
+  void recordPostView(post.value.id)
+}
+const composerVisible = ref(false)
+const replyTarget = ref<CommentResponse | null>(null)
+const commentRevision = ref(0)
+function updateInteraction(kind: 'like' | 'favorite', result: InteractionResult) {
+  if (!post.value) return
+  post.value.detail ??= {}
+  if (kind === 'like') { post.value.detail.liked = result.active; post.value.likeCount = result.count }
+  else { post.value.detail.favorited = result.active; post.value.detail.favoriteCount = result.count }
+}
+const mediaIndex = ref(0)
+const mediaRequested = ref(false)
+let requestedMediaIndex = 0
+const scrollTarget = ref('')
+const scrollAnimated=ref(true)
+let targetComment='',autoLocateGeneration=0,focusStarted=false
+const locateTimers:ReturnType<typeof setTimeout>[]=[]
+function cancelAutoLocate(){autoLocateGeneration++;for(const timer of locateTimers)clearTimeout(timer);locateTimers.length=0}
+async function locateNotification(){
+ if(!targetComment||!post.value||!ready||focusStarted||!detailComments.value)return
+ focusStarted=true;const current=autoLocateGeneration
+ const target=await detailComments.value.locate(targetComment)
+ if(!target||current!==autoLocateGeneration)return
+ await nextTick()
+ locateTimers.push(setTimeout(async()=>{
+  if(current!==autoLocateGeneration)return
+  scrollAnimated.value=true;scrollTarget.value='';await nextTick();scrollTarget.value=target
+  detailComments.value?.highlight(targetComment)
+  for(const delay of [500,1100,1700])locateTimers.push(setTimeout(async()=>{if(current!==autoLocateGeneration)return;scrollAnimated.value=false;scrollTarget.value='';await nextTick();scrollTarget.value=target},delay))
+ },180))
+}
+const stopPreviewRefresh=onPreviewRefresh(()=>void refreshPreview())
+let previewBusy=false
+async function refreshPreview(){if(!postPreviewMode.value||previewBusy||!post.value)return;previewBusy=true;const current=generation;try{const response=await previewRead<import('@/types/post-api').PostResponse>('detail',postId);if(current===generation&&post.value){const position=capturePreviewScroll();Object.assign(post.value,toPost(response));await nextTick();restorePreviewScroll(position)}}catch(e){if(current===generation)error.value=e instanceof Error?e.message:'预览同步失败'}finally{previewBusy=false}}
+let commentsRequested = false
+const firstMedia = computed(() => post.value?.media[mediaRequested.value ? mediaIndex.value : 0])
+const isVideo = computed(() => !!(mediaRequested.value ? firstMedia.value?.type==='video' : post.value?.mode==='video'||(!post.value?.mode&&firstMedia.value?.type==='video')))
+const isRichPost = computed(() => !mediaRequested.value && post.value?.mode === 'post' && Array.isArray(post.value.contentBlocks))
+const isImagePost = computed(() => post.value?.mode === 'image')
+const isImageDetail = computed(() => !isImagePost.value && mediaRequested.value && firstMedia.value?.type === 'image')
+const imageOverlay=ref(false),imageStart=ref(0),commentsVisible=ref(false),bodyExpanded=ref(false)
+function openGalleryImage(index: number) {
+ imageStart.value = index
+ imageOverlay.value = true
+}
+function openGallery(index:number){openGalleryImage(post.value?.media.slice(0,index).filter(m=>m.type==='image').length||0)}
+function openImage(assetId:number){const index=post.value?.media.findIndex(m=>m.assetId===assetId)??-1;if(index>=0)openGallery(index)}
+function closeViewer(){if(imageOverlay.value)imageOverlay.value=false;else goBack()}
+function updateFollow(active:boolean){if(post.value){post.value.detail??={};post.value.detail.following=active}}
+const currentMedia = computed(() => post.value?.media[mediaIndex.value])
+const galleryImages = computed(() => post.value?.media.filter(media => media.type === 'image') ?? [])
+const galleryIndex = ref(0)
+const galleryHeight = computed(() => {
+ if (galleryImages.value.length === 0) return 0
+ const ratio = galleryImages.value[galleryIndex.value]?.aspectRatio || 4 / 3
+ return viewportWidth.value / ratio
+})
+const animatedGalleryHeight = ref<number | null>(null)
+const displayedGalleryHeight = computed(() => animatedGalleryHeight.value ?? galleryHeight.value)
+let galleryHeightTimer: ReturnType<typeof setInterval> | undefined
+function stopGalleryHeightAnimation() {
+ if (galleryHeightTimer !== undefined) clearInterval(galleryHeightTimer)
+ galleryHeightTimer = undefined
+}
+watch(galleryHeight, (target, previous) => {
+ stopGalleryHeightAnimation()
+ if (target <= 0 || previous <= 0) {
+  animatedGalleryHeight.value = null
+  return
+ }
+ const start = animatedGalleryHeight.value ?? previous
+ animatedGalleryHeight.value = start
+ const startedAt = Date.now()
+ galleryHeightTimer = setInterval(() => {
+  const progress = Math.min((Date.now() - startedAt) / 300, 1)
+  if (progress >= 1) {
+   stopGalleryHeightAnimation()
+   animatedGalleryHeight.value = null
+   return
+  }
+  const remaining = 1 - progress
+  animatedGalleryHeight.value = target + (start - target) * remaining * remaining * remaining
+ }, 16)
+})
+function changeMedia(event: { detail: { current: number } }) {
+ galleryIndex.value = event.detail.current
+}
+function updatePoll(value: import('@/types/home').PollView) { if (post.value?.detail) post.value.detail.poll = value }
+function downloadCurrent(){if(postPreviewMode.value)return;const media=currentMedia.value;if(post.value&&media?.id&&post.value.allowDownload)void savePostMedia(post.value.id,media.id,media.type)}
+const showComments=async()=>{if(isImageDetail.value||imageOverlay.value){commentsVisible.value=true;return}scrollTarget.value='';await nextTick();scrollTarget.value='post-comments'}
+async function retryRichVideo(assetId:number){await POST('/app/publish/assets/'+assetId+'/retry');await refreshProcessing()}
+function saveRichVideo(assetId:number){const media=post.value?.media.find(item=>item.assetId===assetId);if(post.value?.allowDownload&&media?.id)void savePostMedia(post.value.id,media.id,'video')}
+async function retryVideo(){if(firstMedia.value?.assetId){await POST('/app/publish/assets/'+firstMedia.value.assetId+'/retry');await refreshProcessing()}}
+let processingTimer:ReturnType<typeof setInterval>|undefined
+let polling=false,pageVisible=true
+async function refreshProcessing(){if(polling||!pageVisible||!postId)return;polling=true;try{const loaded=await findPost(postId);if(pageVisible&&loaded&&post.value)post.value=loaded}catch{}finally{polling=false}}
+function startProcessingPoll(){stopProcessingPoll();if(postPreviewMode.value)return;if(post.value?.media.some(m=>m.status==='processing'))processingTimer=setInterval(()=>void refreshProcessing(),3000)}
+function stopProcessingPoll(){clearInterval(processingTimer);processingTimer=undefined}
+watch(()=>post.value?.media.some(m=>m.status==='processing'),startProcessingPoll)
+function openComposer(target?: CommentResponse) {
+  if(postPreviewMode.value)return
+  if (!isLoggedIn()) { uni.showToast({ title: '请先登录', icon: 'none' }); uni.navigateTo({ url: '/pages/login/index' }); return }
+  replyTarget.value = target || null
+  composerVisible.value = true
+}
+function closeComposer() { composerVisible.value = false; replyTarget.value = null }
+function changeCommentCount(delta: number) { if (post.value) post.value.commentCount = Math.max(0, post.value.commentCount + delta) }
+function commentSubmitted() { changeCommentCount(1); commentRevision.value++; void showComments() }
+let leaving=false,backReady=false
+async function goBack(){
+ if(postPreviewMode.value)return
+ if(leaving)return
+ leaving=true
+ try{
+  await Promise.all([videoPlayer.value?.suspend(),richContent.value?.suspend()])
+  backReady=true
+  if(getCurrentPages().length>1)await uni.navigateBack()
+  else await uni.reLaunch({url:'/pages/index/index'})
+ }finally{backReady=false;leaving=false}
+}
+async function loadPost() {
+  const current = ++generation
+  loading.value = true; error.value = ''; post.value = undefined; mediaIndex.value = 0; galleryIndex.value = 0
+  try {
+    const loaded = await findPost(postId)
+    if (current !== generation) return
+    post.value = loaded
+    mediaIndex.value = Math.min(requestedMediaIndex, Math.max(0, loaded.media.length - 1))
+    imageStart.value = loaded.media.slice(0,mediaIndex.value).filter(m=>m.type==='image').length
+    if (isImagePost.value && firstMedia.value?.type === 'image') galleryIndex.value = imageStart.value
+  } catch (e) {
+    if (current === generation) error.value = e instanceof Error ? e.message : '帖子加载失败'
+  } finally {
+    if (current === generation) {
+      loading.value = false
+      await nextTick()
+      if (current === generation) recordVisiblePost()
+      if (ready && commentsRequested && post.value) await showComments()
+      if(ready&&targetComment)await locateNotification()
+    }
+  }
+}
+const updateNavigation = () => {
+ const viewingImage = isImageDetail.value || imageOverlay.value
+ uni.setNavigationBarColor({ frontColor: viewingImage ? '#ffffff' : '#000000', backgroundColor: viewingImage ? '#000000' : '#ffffff' })
+}
+watch([isImageDetail, imageOverlay], updateNavigation)
+const identity = computed(() => { void authRevision.value; return isLoggedIn() ? getUserInfo()?.userId : null })
+watch(identity, () => { if (postId) void loadPost() })
+onLoad(query => { viewSession = isLoggedIn() ? getSessionGeneration() : -1; postId = query?.id || ''; targetComment=String(query?.commentId||'');commentsRequested = query?.anchor === 'comments'; mediaRequested.value = !targetComment&&query?.view === 'media'; const index=Number(query?.mediaIndex); requestedMediaIndex=Number.isInteger(index)&&index>=0?index:0; void loadPost() })
+onReady(() => { ready = true; recordVisiblePost(); if (commentsRequested && post.value) void showComments();if(targetComment)void locateNotification() })
+onShow(()=>{videoPlayer.value?.resume();richContent.value?.resume();pageVisible=true;recordVisiblePost();updateNavigation();startProcessingPoll();if(post.value&&!postPreviewMode.value)void refreshPostInteraction(post.value).catch(()=>{})})
+onHide(()=>{videoPlayer.value?.pause();richContent.value?.pause();pageVisible=false;stopProcessingPoll()})
+onUnload(()=>{pageVisible=false;generation++;cancelAutoLocate();stopPreviewRefresh();stopProcessingPoll();stopGalleryHeightAnimation()})
+onBackPress(()=>{if(shareVisible.value){shareVisible.value=false;return true}if(imageViewer.value?.handleBack()||videoPlayer.value?.handleBack()||richContent.value?.handleBack())return true;if(commentsVisible.value){commentsVisible.value=false;return true}if(imageOverlay.value){imageOverlay.value=false;return true}if(!backReady&&(videoPlayer.value||richContent.value)){void goBack();return true}return false})
+</script>
+<style scoped>
+/* #ifdef WEB */
+.post-preview-mode .detail-author,.post-preview-mode .comment-author,.post-preview-mode .comment-actions,.post-preview-mode .poll button,.post-preview-mode .reply-button{pointer-events:none;}
+/* #endif */
+</style>
+<style scoped>
+/* #ifndef APP */
+@import '@/styles/legacy-layout-base.css';
+/* #endif */
+
+/* #ifndef APP */
+
+.post-detail { position: fixed; inset: 0; display: flex; flex-direction: column; background: #fff; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); overflow: hidden; }
+.detail-status { flex-shrink: 0; background: #fff; }
+.video-navigation { display: flex; align-items: center; justify-content: space-between; padding: 0 22rpx; min-height: 88rpx; flex-shrink: 0; flex-direction: row; }
+.detail-scroll { height: 0; flex: 1; min-height: 0; width: 100%; }
+.detail-copy { padding: 26rpx 34rpx 32rpx; }
+.video-detail .detail-copy { margin: 0 34rpx; border-top: 2rpx solid #f5f5f5; padding: 30rpx 0 32rpx; }
+.detail-title { display: block; font-size: 28rpx; font-weight: 600; line-height: 1.6; }
+.detail-body { display: block; margin-top: 10rpx; font-size: 26rpx; line-height: 1.85; color: #555b5e; white-space: pre-line; overflow-wrap: anywhere; }
+.detail-media-list { display: flex; flex-direction: column; gap: 16rpx; }
+.detail-image { margin-top: 16rpx; border-radius: 16rpx; overflow: hidden; }
+.detail-image-content { display: block; width: 100%; }
+.download { margin: 24rpx 0 0; padding: 14rpx 22rpx; border-radius: 12rpx; background: #effaff; color: #0aaee5; font-size: 20rpx; }
+.detail-topics { display: flex; flex-wrap: wrap; gap: 20rpx; margin-top: 16rpx; flex-direction: row; }
+.detail-topic { border: 2rpx solid #f1f2f3; border-radius: 16rpx; padding: 18rpx 20rpx; font-size: 20rpx; color: #646a6d; }
+.detail-date { display: block; color: #bec2c4; margin-top: 26rpx; font-size: 19rpx; }
+.collection-pager { display: flex; align-items: stretch; gap: 18rpx; margin-top: 24rpx; flex-direction: row; }
+.collection-arrow, .collection-title { display: flex; align-items: center; justify-content: center; border: 2rpx solid #f2f3f4; border-radius: 16rpx; min-height: 66rpx; flex-direction: row; }
+.collection-arrow { width: 66rpx; flex-shrink: 0; }
+.collection-title { flex: 1; min-width: 0; padding: 8rpx; font-size: 21rpx; text-align: center; }
+.detail-end { padding: 32rpx; color: #b4b8ba; text-align: center; font-size: 19rpx; }
+.missing-post { padding: 60rpx; display: flex; flex-direction: column; align-items: center; gap: 30rpx; }
+.detail-loading { width: 100%; text-align: center; color: #aaa; font-size: 24rpx; }
+.video-detail .detail-copy{border-top:none;margin:0;padding:32rpx 34rpx}.video-detail .detail-title{font-size:28rpx}.video-detail .detail-body{font-size:24rpx;color:#333;line-height:1.8}.detail-body.collapsed{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.expand-copy{float:right;color:#22476a;font-size:23rpx;padding:0;background:none}.video-detail .detail-author{border-bottom:1rpx solid #f4f4f4}.image-detail{background:#000}.comments-layer{position:fixed;inset:0;z-index:40}.comments-mask{position:absolute;inset:0;background:#0006}.comments-panel{position:absolute;bottom:0;left:0;right:0;height:72%;border-radius:32rpx 32rpx 0 0;background:white;display:flex;flex-direction:column;overflow:hidden}.comments-panel-heading{display:flex;align-items:center;justify-content:space-between;padding:24rpx 32rpx;font-size:26rpx;border-bottom:1rpx solid #eee;flex-direction: row}.comments-panel-heading button{font-size:22rpx;color:#888;background:none;padding:0;margin:0}.comments-scroll{flex:1;height:0;min-height:0}
+
+/* #endif */
+</style>
+
+<style>
+/* ct-native-cascade: generated from the original selectors */
+/* #ifdef APP */
+.ct-native-button{margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent;overflow:visible;}
+.ux46{color:var(--text-main);font-size:26rpx;}
+
+
+
+
+
+
+
+
+
+
+
+
+.ux59{text-align:center;color:#aaa;font-size:24rpx;}
+.ux75{color:#22476a;font-size:23rpx;}
+
+
+.ux78{line-height:normal;}
+
+
+
+.ux82{font-size:20rpx;color:#646a6d;}
+.ux83{color:#b4b8ba;text-align:center;font-size:19rpx;}
+.ux84{font-size:26rpx;}
+
+
+.ux87{line-height:normal;}
+
+
+.ux90{font-size:22rpx;color:#888;}
+
+
+.ux93{line-height:normal;}
+
+
+
+.ux1{}
+.ux61{}
+.ux60{}
+.ux67{}
+
+
+
+
+
+
+.ux8{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;background-color:#fff;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);overflow:hidden;}
+.ux9{flex-shrink:0;background-color:#fff;}
+
+
+.ux12{height:0;flex:1;min-height:0;width:100%;}
+
+
+
+
+.ux17{padding:26rpx 34rpx 32rpx;}
+.ux18{display:flex;flex-direction:column;font-size:28rpx;font-weight:600;line-height:44.800000000000004rpx;}
+.ux19{display:flex;flex-direction:column;margin-top:10rpx;font-size:26rpx;line-height:48.1rpx;color:#555b5e;white-space:pre-line;}
+.ux20{display:flex;flex-direction:column;}
+.ux21{margin-top:16rpx;border-radius:16rpx;overflow:hidden;}
+.ux22{display:flex;flex-direction:column;width:100%;}
+
+.ux24{display:flex;flex-direction:row;flex-wrap:wrap;margin-top:16rpx;}
+.ux25{border:2rpx solid #f1f2f3;border-radius:16rpx;padding:18rpx 20rpx;font-size:20rpx;color:#646a6d;}
+.ux26{display:flex;flex-direction:column;color:#bec2c4;margin-top:26rpx;font-size:19rpx;}
+
+
+
+
+
+.ux32{padding:32rpx;color:#b4b8ba;text-align:center;font-size:19rpx;}
+.ux33{padding:60rpx;display:flex;flex-direction:column;align-items:center;}
+.ux34{width:100%;text-align:center;color:#aaa;font-size:24rpx;}
+.ux35{align-self:flex-end;color:#22476a;font-size:23rpx;padding:0;background-color:transparent;}
+.ux36{background-color:#000;}
+.ux37{position:fixed;top:0;right:0;bottom:0;left:0;z-index:40;}
+.ux38{position:absolute;top:0;right:0;bottom:0;left:0;background-color:#0006;}
+.ux39{position:absolute;bottom:0;left:0;right:0;height:72%;border-radius:32rpx 32rpx 0 0;background-color:white;display:flex;flex-direction:column;overflow:hidden;}
+.ux40{display:flex;flex-direction:row;align-items:center;justify-content:space-between;padding:24rpx 32rpx;font-size:26rpx;border-bottom:1rpx solid #eee;}
+.ux41{flex:1;height:0;min-height:0;}
+
+
+.ux70{margin:0;padding:0;border:0px;border-radius:0;background-color:transparent;line-height:normal;overflow:visible;}
+
+
+
+.ux74{font-size:22rpx;color:#888;background-color:transparent;padding:0;margin:0;}
+
+.ux62{margin:0 34rpx;border-top:2rpx solid #f5f5f5;padding:30rpx 0 32rpx;}
+.ux63{border-top:none;margin:0;padding:32rpx 34rpx;}
+.ux64{font-size:28rpx;}
+.ux65{font-size:24rpx;color:#333;line-height:43.2rpx;}
+.ux43{display:flex;flex-direction:column;overflow:hidden;}
+
+/* #endif */
+</style>
+
+<style scoped>
+.detail-gallery, .gallery-frame, .image-swiper { width: 100%; }
+.gallery-frame { position: relative; flex-shrink: 0; }
+.gallery-slide, .gallery-image { width: 100%; height: 100%; }
+.gallery-slide { background-color: #f6f7f8; }
+.gallery-counter { position: absolute; right: 12rpx; top: 10rpx; border-radius: 24rpx; padding: 5rpx 14rpx; background-color: rgba(0, 0, 0, .7); }
+.gallery-counter-text { color: #fff; font-size: 19rpx; }
+.gallery-dots { height: 40rpx; flex-direction: row; align-items: center; justify-content: center; }
+.gallery-dot-button { width: 18rpx; height: 40rpx; margin: 0; padding: 0; background-color: transparent; align-items: center; justify-content: center; }
+/* #ifndef APP */
+.gallery-dot-button::after { border: 0; }
+/* #endif */
+.gallery-dot { width: 10rpx; height: 10rpx; border-radius: 5rpx; background-color: #eef0f1; }
+.gallery-dot.selected { background-color: #0da8fa; }
+</style>

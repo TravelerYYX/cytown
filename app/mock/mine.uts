@@ -1,0 +1,36 @@
+import type { Channel, GameRoleCard, MineProfile, Post } from '@/types/home'
+export const mineProfile: MineProfile = {
+  nickname: '丨幻海落梦丨', uid: '438599494', ip: '山东',
+  signature: '掌管枫丹三恶霸，我是水神芙宁娜。百年扮演结局刀，我的最爱小蛋糕。',
+  fans: 0, following: 45, likes: 12
+}
+export const gameRoleCards: GameRoleCard[] = [
+  { id: 'ys', roleName: '月雅汝', server: '次元町57级', stats: [
+    { label: '活跃天数', value: '528' }, { label: '成就达成数', value: '470' },
+    { label: '次元币', value: '—' }, { label: '足迹', value: '—' }
+  ] }
+]
+export const mineChannels: Channel[] = [
+  { id: 'publish', name: '发布' }, { id: 'like', name: '赞过' },
+  { id: 'comment', name: '评论' }, { id: 'favorite', name: '收藏' }
+]
+export const minePosts: Post[] = [
+  {
+    id: 'mine-1', author: { id: 'me', nickname: mineProfile.nickname },
+    date: '2025年9月17日', game: '原神', gameId: 'ys', title: '求助力',
+    content: '接受命运的邀约，一起探索「月之一」新版本，参与活动必得原石，还可翻牌获取海量好礼！邀请码：CA8HAZK4IN，https:…',
+    media: [], commentCount: 0, likeCount: 1, detail: { liked: true }
+  },
+  {
+    id: 'mine-2', author: { id: 'me', nickname: mineProfile.nickname },
+    date: '2025年8月27日', game: '原神', gameId: 'ys', title: '今年七夕不陪男神女神，只陪原神！',
+    media: [{ type: 'image', layout: 'wide', aspectRatio: 1.78 }],
+    tags: ['游戏心得'], commentCount: 0, likeCount: 1, detail: { liked: true }
+  },
+  {
+    id: 'mine-3', author: { id: 'me', nickname: mineProfile.nickname },
+    date: '2025年8月1日', game: '原神', gameId: 'ys', title: '我这丝柯克还有救吗？',
+    media: [{ type: 'image', layout: 'wide', aspectRatio: 1.78 }],
+    commentCount: 0, likeCount: 0
+  }
+]

@@ -1,0 +1,55 @@
+import {GET,POST} from './request'
+import {getUserInfo,saveUserInfo,isLoggedIn,getSessionGeneration} from './auth'
+import {fetchMe} from './auth-api'
+import {API_BASE_URL} from '@/config/env'
+export interface MemberPlan {id:string;name:string;description:string;priceFen:number;experience:number;coins:number;badgeUrl:string;frameUrl:string;selling:boolean;archived:boolean;benefits:string[]}
+export interface MemberConfig {version:number;selling:boolean;notice:string;contact:string;agreement:string;plans:MemberPlan[]}
+export interface MemberState {active:boolean;planId:string;plan:MemberPlan|null;expiresAt:number|null}
+export interface MemberOrder {id:string;planId:string;plan:MemberPlan;channel:string;amountFen:number;status:string;errorMessage:string;createdAt:string;expiresAt:string;grantEnd:string|null}
+export interface PayData {orderId:string;channel:string;orderInfo:string;paymentUrl:string}
+export const fetchMemberConfig=()=>GET<MemberConfig>('/app/membership/plans')
+export const fetchMembership=()=>GET<MemberState>('/app/membership/me')
+export const fetchMemberOrders=(pageNum=1)=>GET<{records:MemberOrder[];total:number}>('/app/membership/orders',{pageNum,pageSize:20})
+export const refreshMemberOrder=(id:string)=>POST<MemberOrder>('/app/membership/orders/'+id+'/refresh')
+export const createMemberOrder=(planId:string,version:number,channel:string,requestKey:string)=>sessionPay('/app/membership/orders',{planId,version,channel,requestKey,agreed:true})
+export const payMemberOrder=(id:string)=>sessionPay('/app/membership/orders/'+id+'/pay')
+async function sessionPay(url:string,data?:Record<string,unknown>):Promise<PayData>{const generation=getSessionGeneration();const result=await POST<PayData>(url,data);if(generation!==getSessionGeneration())throw new Error('账号已切换，请重新进入会员页面');return result}
+export const memberMedia=(url?:string|null):string=>url?.startsWith('/uploads/')?API_BASE_URL+url:(url||'')
+export const memberOrderLabel=(s:string):string=>s==='ACTIVE'?'已开通':s==='PAID'?'已付款，权益确认中':s==='CLOSED'?'已关闭':'待付款 / 确认中'
+export function memberChannel():string {
+ // #ifdef APP-ANDROID
+ return 'APP'
+ // #endif
+ // #ifndef APP-ANDROID
+ return 'H5'
+ // #endif
+}
+export async function launchAlipay(p:PayData):Promise<void>{
+ // #ifdef APP-ANDROID
+ await new Promise<void>((resolve)=>{uni.requestPayment({provider:'alipay',orderInfo:p.orderInfo,success:()=>resolve(),fail:()=>resolve()})})
+ // #endif
+ // #ifdef WEB
+ const target=new URL(p.paymentUrl)
+ if(target.protocol!=='https:'||!['openapi.alipay.com','openapi-sandbox.dl.alipaydev.com'].includes(target.hostname))throw new Error('支付地址无效')
+ window.location.assign(p.paymentUrl)
+ return
+ // #endif
+ }
+export async function launchMemberPayment(p:PayData):Promise<void>{
+ const viewer=getUserInfo()?.userId
+ if(!viewer||!isLoggedIn())throw new Error('请先登录')
+ uni.setStorageSync('ct.member.pending.'+viewer,p.orderId)
+ await launchAlipay(p)
+ // #ifndef WEB
+ uni.navigateTo({url:'/pages/membership/subscription'})
+ // #endif
+}
+export async function refreshMemberAccount(){const viewer=getUserInfo()?.userId;const user=await fetchMe();if(viewer===getUserInfo()?.userId){saveUserInfo(user);invalidateMemberBadges(viewer)}}
+
+// Public identity cache: batch visible users, refresh every minute, and hide expired labels locally.
+import {ref} from 'vue'
+export const memberBadges=ref<Record<string,MemberState>>({})
+const loaded:Record<string,number>={},queued=new Set<string>()
+let batchTimer=0
+export function requestMemberBadge(id?:string){if(!id||Date.now()-(loaded[id]||0)<60000)return;queued.add(id);if(batchTimer)return;batchTimer=setTimeout(()=>{batchTimer=0;const ids=[...queued].slice(0,100);for(const key of ids)queued.delete(key);GET<Record<string,MemberState>>('/app/membership/summaries',{userIds:ids.join(',')}).then(result=>{const next:Record<string,MemberState>={};for(const k of Object.keys(memberBadges.value))next[k]=memberBadges.value[k];for(const key of ids){delete next[key];if(result[key])next[key]=result[key];loaded[key]=Date.now()}memberBadges.value=next}).catch(()=>{for(const key of ids)loaded[key]=Date.now()-45000});if(queued.size)requestMemberBadge([...queued][0])},25)}
+export function invalidateMemberBadges(id?:string){if(id){delete loaded[id];requestMemberBadge(id)}}

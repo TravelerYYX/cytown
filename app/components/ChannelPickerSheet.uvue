@@ -1,0 +1,63 @@
+<template>
+  <view v-if="rendered" class="channel-mask">
+    <view class="channel-backdrop" :style="{opacity: entered ? 1 : 0}" @tap="emit('close')" />
+    <view class="channel-sheet" :style="{paddingBottom: bottomPadding + 'px', transform: entered ? 'translateY(0%)' : 'translateY(100%)'}" @tap.stop>
+      <view class="sheet-handle" />
+      <view class="channel-head">
+        <text class="channel-cancel" @tap="emit('close')">取消</text>
+        <text class="channel-title">选择版区</text>
+      </view>
+      <scroll-view class="channel-grid" direction="vertical" :show-scrollbar="false" :bounces="false" :style="{height: gridHeight + 'px'}">
+        <EmptyState v-if="!channels.length" compact />
+        <view v-for="(row, rowIndex) in channelRows" :key="row[0].id" class="channel-row" :class="{'channel-row-spaced': rowIndex > 0}">
+          <ActionButton v-for="channel in row" :key="channel.id" class="channel-card" :aria-label="channel.name" :aria-pressed="channel.id === selectedId" @tap="emit('pick', channel)">
+            <text class="channel-name" :class="{'channel-name-active': channel.id === selectedId}">{{ channel.name }}</text>
+          </ActionButton>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import EmptyState from '@/components/EmptyState.uvue'
+import { computed, onBeforeUnmount, ref } from 'vue'
+import ActionButton from '@/components/ActionButton.uvue'
+import type { PublishChannel } from '@/types/publish'
+import { observeWindowResize } from '@/utils/window-events'
+import { usePublishSheetMotion } from '@/composables/usePublishSheetMotion'
+
+const props = defineProps<{visible: boolean; channels: PublishChannel[]; selectedId: number}>()
+const emit = defineEmits<{close: []; pick: [channel: PublishChannel]}>()
+const { rendered, entered } = usePublishSheetMotion(() => props.visible)
+const viewport = ref(uni.getWindowInfo())
+const unobserve = observeWindowResize(() => { viewport.value = uni.getWindowInfo() })
+onBeforeUnmount(unobserve)
+const channelRows = computed(() => {
+  const rows: PublishChannel[][] = []
+  for (let index = 0; index < props.channels.length; index += 2) rows.push(props.channels.slice(index, index + 2))
+  return rows
+})
+// Fixed rows avoid measuring content through a collapsed native scroll-view.
+const gridHeight = computed(() => Math.min((channelRows.value.length ? channelRows.value.length * 144 - 24 : 272) * viewport.value.windowWidth / 750, viewport.value.windowHeight * .6))
+const bottomPadding = computed(() => Math.max(38 * viewport.value.windowWidth / 750, viewport.value.safeAreaInsets?.bottom ?? 0))
+</script>
+
+<style scoped>
+.channel-mask{position:fixed;top:0;right:0;bottom:0;left:0;z-index:20;display:flex;flex-direction:column;justify-content:flex-end;}
+.channel-backdrop{position:absolute;top:0;right:0;bottom:0;left:0;background-color:rgba(0,0,0,.45);transition-property:opacity;transition-duration:320ms;transition-timing-function:cubic-bezier(.16,1,.3,1);}
+.channel-sheet{position:relative;display:flex;flex-direction:column;width:100%;box-sizing:border-box;padding:22rpx 34rpx 0;border-radius:28rpx 28rpx 0 0;background-color:#fff;transition-property:transform;transition-duration:320ms;transition-timing-function:cubic-bezier(.16,1,.3,1);}
+.sheet-handle{align-self:center;width:72rpx;height:8rpx;flex-shrink:0;margin-bottom:8rpx;border-radius:8rpx;background-color:#dcdcdc;}
+.channel-head{display:flex;flex-direction:row;align-items:center;height:84rpx;flex-shrink:0;}
+.channel-cancel{width:110rpx;color:#94999c;font-size:27rpx;}
+.channel-title{flex:1;text-align:center;padding-right:110rpx;font-size:31rpx;font-weight:600;color:#242729;}
+.channel-grid{width:100%;flex-shrink:0;margin-top:22rpx;margin-bottom:6rpx;}
+.channel-row{display:flex;flex-direction:row;width:100%;height:120rpx;flex-shrink:0;}
+.channel-row-spaced{margin-top:24rpx;}
+.channel-card{display:flex;flex-direction:row;align-items:center;justify-content:center;width:50%;height:120rpx;flex-shrink:0;box-sizing:border-box;padding:0;margin:0;border-width:0;border-radius:0;background-color:transparent;}
+.channel-name{color:#2a2d2f;font-size:28rpx;}
+.channel-name-active{color:#10b9ef;}
+/* #ifndef APP */
+.channel-card::after{border:0;pointer-events:none;}
+/* #endif */
+</style>

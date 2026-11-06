@@ -1,0 +1,18 @@
+// Platform boundaries for uni-app x. Browser code is removed from native builds.
+// #ifdef APP
+import { openExternalURL } from '@/uni_modules/ct-platform'
+// #endif
+export function setStatusBar(style: 'light' | 'dark') {
+  uni.setNavigationBarColor({ frontColor: style === 'light' ? '#ffffff' : '#000000', backgroundColor: 'transparent' })
+}
+export function openExternalBrowser(url: string): void {
+  // #ifdef APP
+  openExternalURL(url)
+  // #endif
+  // #ifdef WEB
+  window.open(url, '_blank', 'noopener,noreferrer')
+  // #endif
+  // #ifdef MP-WEIXIN
+  uni.showToast({ title: '当前平台不支持外部浏览器打开', icon: 'none' })
+  // #endif
+}

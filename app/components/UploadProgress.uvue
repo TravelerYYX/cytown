@@ -1,0 +1,55 @@
+<template>
+  <view class="upload-progress">
+    <view class="upload-ring" :class="{'upload-ring-compact':compact}">
+      <canvas :id="canvasId" class="upload-ring-canvas" :class="{'upload-ring-compact':compact}" />
+      <text :id="canvasId+'-number'" class="upload-ring-number" :class="{'upload-ring-number-compact':compact}">{{ number }}</text>
+    </view>
+    <view class="upload-progress-copy" :class="{'upload-progress-copy-compact':compact}">
+      <text :id="canvasId+'-speed'" class="upload-speed" :class="{'upload-speed-compact':compact}">{{ label }} {{ speed }}</text>
+      <ActionButton v-if="failed" class="upload-retry" :class="{'upload-retry-compact':compact}" aria-label="重试上传" @tap="$emit('retry')"><text class="upload-retry-text" :class="{'upload-speed-compact':compact}">重试</text></ActionButton>
+    </view>
+  </view>
+</template>
+<script setup lang="uts">
+import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
+import ActionButton from './ActionButton.uvue'
+const props=withDefaults(defineProps<{progress:number;speed:string;label?:string;failed?:boolean;compact?:boolean}>(),{label:'上传',failed:false,compact:false})
+defineEmits<{retry:[]}>()
+const number=computed(()=>Math.max(0,Math.min(100,props.progress)).toFixed(1))
+const instance=getCurrentInstance()!.proxy,canvasId='ct-upload-ring-'+getCurrentInstance()!.uid
+let context:CanvasContext|null=null,disposed=false,attempts=0,retry:ReturnType<typeof setTimeout>|undefined
+function draw(){
+  if(!context||disposed)return
+  const size=(props.compact?36:72)*uni.getWindowInfo().windowWidth/750,ratio=uni.getWindowInfo().pixelRatio||1
+  const ctx=context.getContext('2d')!
+  ctx.canvas.width=Math.round(size*ratio);ctx.canvas.height=Math.round(size*ratio)
+  // Native resizing does not reset the drawing transform as browser canvas does.
+  ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,Math.round(size*ratio),Math.round(size*ratio));ctx.scale(ratio,ratio)
+  const c=size/2,r=size*.44,w=size/12
+  const groove=ctx.createLinearGradient(0,0,0,size)
+  groove.addColorStop(0,'#cfd3d6');groove.addColorStop(.36,'#e4e6e8');groove.addColorStop(1,'#f3f4f5')
+  ctx.beginPath();ctx.arc(c,c,r,0,Math.PI*2);ctx.lineWidth=w+size*.035;ctx.strokeStyle=groove;ctx.stroke()
+  ctx.beginPath();ctx.arc(c,c,r,0,Math.PI*2);ctx.lineWidth=w;ctx.strokeStyle='#e7e9eb';ctx.stroke()
+  const progress=Math.max(0,Math.min(100,props.progress))
+  if(progress>0){ctx.beginPath();ctx.arc(c,c,r,-Math.PI/2,-Math.PI/2+Math.PI*2*progress/100);ctx.lineWidth=w;ctx.lineCap='round';ctx.strokeStyle='#10b9ef';ctx.stroke()}
+}
+async function initialize(){await nextTick();if(disposed)return;uni.createCanvasContextAsync({id:canvasId,component:instance,success(value){if(disposed)return;context=value;draw()},fail(){if(!disposed&&++attempts<3)retry=setTimeout(()=>{void initialize()},100)}})}
+watch(()=>props.progress,draw)
+onMounted(()=>{void initialize()})
+onBeforeUnmount(()=>{disposed=true;clearTimeout(retry);context=null})
+</script>
+<style>
+.upload-progress{display:flex;flex-direction:row;align-items:center;flex-shrink:1;min-width:0;}
+.upload-ring{position:relative;width:72rpx;height:72rpx;flex-shrink:0;display:flex;flex-direction:row;align-items:center;justify-content:center;}
+.upload-ring-canvas{position:absolute;left:0;top:0;width:72rpx;height:72rpx;}
+.upload-ring-number{position:relative;color:#515960;font-size:18rpx;line-height:26rpx;text-align:center;}
+.upload-progress-copy{display:flex;flex-direction:column;margin-left:12rpx;flex-shrink:1;min-width:0;}
+.upload-speed{font-size:20rpx;line-height:28rpx;color:#899198;white-space:nowrap;}
+.upload-retry{height:30rpx;min-height:0;padding:0;margin:0;background-color:transparent;display:flex;flex-direction:row;}
+.upload-retry-text{color:#10b9ef;font-size:20rpx;line-height:28rpx;}
+.upload-ring-compact{width:36rpx;height:36rpx;}
+.upload-ring-number-compact{font-size:12rpx;line-height:18rpx;}
+.upload-progress-copy-compact{margin-left:8rpx;}
+.upload-speed-compact{font-size:18rpx;line-height:24rpx;}
+.upload-retry-compact{height:24rpx;}
+</style>

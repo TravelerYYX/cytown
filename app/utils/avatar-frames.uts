@@ -1,0 +1,36 @@
+import { computed,ref } from 'vue'
+import { authRevision, getUserInfo, isLoggedIn } from './auth'
+import {GET} from './request'
+import {API_BASE_URL} from '@/config/env'
+import type {CheckinFrame} from '@/types/checkin'
+export interface AvatarFrameOption {id:string;name:string;description:string;url?:string}
+
+export const avatarFrames = ref<AvatarFrameOption[]>([
+  { id: '', name: '不显示头像框', description: '保留头像原本的样子' },
+  { id: 'star-sea', name: '星海巡游', description: '星光、流云与澄蓝的轨迹' },
+  { id: 'sakura-mist', name: '樱雾星环', description: '把温柔的粉紫星光戴在身边' }
+])
+let loadedAt=0,pending:Promise<void>|null=null
+export function loadAvatarFrames(force=false):Promise<void>{
+ if(!force&&Date.now()-loadedAt<60000)return Promise.resolve()
+ if(pending!=null)return pending
+ pending=Promise.all([GET<CheckinFrame[]>('/app/checkin/frames'),GET<CheckinFrame[]>('/app/membership/frames'),GET<CheckinFrame[]>('/app/shop/frames',undefined,true).catch(()=>[] as CheckinFrame[])]).then(results=>[...results[0],...results[1],...results[2]]).then(frames=>{avatarFrames.value=[...avatarFrames.value.slice(0,3),...frames.map(f=>({id:f.id,name:f.name,description:f.id.startsWith('mem-')?'会员专属头像框':f.id.startsWith('shop-')?'商铺头像框':'签到奖励头像框',url:f.image.url}))];loadedAt=Date.now()}).finally(()=>{pending=null})
+ return pending
+}
+export function avatarFrameUrl(id?: string | null): string {
+  if(id==='star-sea'||id==='sakura-mist')return '/static/images/avatar-frames/'+id+'.png'
+  const url=avatarFrames.value.find(f=>f.id===id)?.url||''
+  return url.startsWith('/uploads/')?API_BASE_URL+url:url
+}
+export function avatarFrameName(id?: string | null): string {
+  return avatarFrames.value.find(frame => frame.id === id)?.name || '不显示头像框'
+}
+// The signed-in user's latest saved selection wins over an older feed/comment response.
+// Other users always use their server-provided frame; switching accounts never shares a preference.
+export function useAvatarFrame(userId: () => string | undefined, frameId: () => string | undefined) {
+  return computed(() => {
+    authRevision.value
+    const user = isLoggedIn() ? getUserInfo() : null
+    return user != null && userId() === user.userId ? user.avatarFrame || '' : frameId() || ''
+  })
+}

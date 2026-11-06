@@ -1,0 +1,75 @@
+import { reactive, ref, watch } from 'vue'
+import { authRevision, getSessionGeneration, getUserInfo, isLoggedIn } from './auth'
+import { GET, POST } from './request'
+import { postPreviewMode } from './post-preview'
+import type { CommentFocus, CommentReactionResult, CommentResponse, Page } from '@/types/post-api'
+
+interface LikeState { likeCount: number; reaction: 'like' | null; revision: number; busy: boolean }
+const states = reactive<Record<string, LikeState>>({})
+let revision = 0, session = getSessionGeneration()
+export const commentHistoryRevision = ref(0)
+watch(authRevision, () => {
+  if (session === getSessionGeneration()) return
+  session = getSessionGeneration(); revision++
+  for (const id of Object.keys(states)) delete states[id]
+  commentHistoryRevision.value++
+})
+export function commentLikeState(row: CommentResponse): LikeState {
+  return states[row.id] ||= { likeCount: row.likeCount || 0, reaction: row.viewerReaction === 'like' ? 'like' : null, revision: 0, busy: false }
+}
+function accept(row: CommentResponse, started: number) {
+  const state = commentLikeState(row)
+  if (state.revision <= started && !state.busy) {
+    state.likeCount = row.likeCount || 0
+    state.reaction = row.viewerReaction === 'like' ? 'like' : null
+  }
+  row.likeCount = state.likeCount; row.viewerReaction = state.reaction
+  for (const reply of row.replies || []) accept(reply, started)
+}
+export async function readCommentPage<T extends CommentResponse>(read: () => Promise<Page<T>>): Promise<Page<T>> {
+  const started = revision, viewer = getSessionGeneration()
+  const page = await read()
+  if (viewer === getSessionGeneration() && !postPreviewMode.value) for (const row of page.records) accept(row, started)
+  return page
+}
+export async function readCommentFocus(read: () => Promise<CommentFocus>): Promise<CommentFocus> {
+  const started = revision, viewer = getSessionGeneration()
+  const focus = await read()
+  if (viewer === getSessionGeneration()) {
+    for (const row of focus.roots.records) accept(row, started)
+    for (const row of focus.replies?.records || []) accept(row, started)
+  }
+  return focus
+}
+export function invalidateCommentHistory() { commentHistoryRevision.value++ }
+
+/** Like state is shared by ID; only the button initiating a successful like plays. */
+export async function performCommentLike(row: CommentResponse): Promise<CommentReactionResult | null> {
+  if (row.deleted || postPreviewMode.value) return null
+  if (!isLoggedIn()) {
+    uni.showToast({ title: '请先登录', icon: 'none' }); uni.navigateTo({ url: '/pages/login/index' }); return null
+  }
+  const state = commentLikeState(row)
+  if (state.busy) return null
+  state.busy = true
+  const viewer = getSessionGeneration(), userId = getUserInfo()?.userId
+  const sameViewer = () => viewer === getSessionGeneration() && userId === getUserInfo()?.userId
+  try {
+    const result = await POST<CommentReactionResult>(`/app/post/${encodeURIComponent(row.postId)}/comments/${encodeURIComponent(row.id)}/reaction`, { reaction: 'like' })
+    if (!sameViewer()) return null
+    state.likeCount = result.likeCount; state.reaction = result.reaction; state.revision = ++revision
+    row.likeCount = result.likeCount; row.viewerReaction = result.reaction
+    return result
+  } catch {
+    // A timed out toggle may have committed. Read the target; never replay it.
+    if (sameViewer()) try {
+      const focus = await GET<CommentFocus>(`/app/post/${encodeURIComponent(row.postId)}/comments/${encodeURIComponent(row.id)}/locate`, { pageSize: 20 }, true)
+      const target = [...focus.roots.records, ...(focus.replies?.records || [])].find(item => item.id === row.id)
+      if (target && sameViewer()) {
+        state.likeCount = target.likeCount; state.reaction = target.viewerReaction === 'like' ? 'like' : null; state.revision = ++revision
+        row.likeCount = state.likeCount; row.viewerReaction = state.reaction
+      }
+    } catch { /* The request layer already reported the original failure. */ }
+    return null
+  } finally { state.busy = false }
+}

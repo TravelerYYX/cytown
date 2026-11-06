@@ -1,0 +1,276 @@
+<template>
+  <view class="scan-page">
+    <view class="scan-header" :style="{paddingTop: statusBarHeight + 'px'}">
+      <view class="scan-nav">
+        <ActionButton id="scan-back" class="scan-back" aria-label="返回" @tap="back"><AppIcon name="back" :size="43" /></ActionButton>
+        <text class="scan-title">扫码</text>
+        <ActionButton id="scan-album" class="scan-album" aria-label="相册" :disabled="selecting" @tap="chooseAlbum"><text class="scan-album-text">相册</text></ActionButton>
+      </view>
+    </view>
+    <view id="scan-viewport" class="scan-viewport">
+      <!-- #ifdef APP -->
+      <camera v-if="scanning" id="scan-camera" class="scan-camera" resolution="high" frame-size="large" device-position="back" flash="off" @initdone="cameraReady" @error="cameraFailed" @stop="cameraStopped" />
+      <!-- #endif -->
+      <!-- #ifdef MP-WEIXIN -->
+      <camera v-if="scanning" id="scan-camera" class="scan-camera" mode="scanCode" resolution="high" frame-size="large" device-position="back" flash="off" @scancode="cameraResult" @error="cameraFailed" @stop="cameraStopped" />
+      <!-- #endif -->
+      <!-- #ifdef WEB -->
+      <view id="scan-browser-camera" class="scan-camera" />
+      <!-- #endif -->
+      <view class="scan-mask" :style="{left:'0px',top:'0px',right:'0px',height:holeTop+'px'}" />
+      <view class="scan-mask" :style="{left:'0px',top:holeTop+'px',width:holeLeft+'px',height:holeSize+'px'}" />
+      <view class="scan-mask" :style="{right:'0px',top:holeTop+'px',width:holeLeft+'px',height:holeSize+'px'}" />
+      <view class="scan-mask" :style="{left:'0px',top:(holeTop+holeSize)+'px',right:'0px',bottom:'0px'}" />
+      <image id="scan-corners" class="scan-corners" src="/static/images/scan/frame.png" mode="scaleToFill" :style="{left:(holeLeft-cornerGap)+'px',top:(holeTop-cornerGap)+'px',width:(holeSize+cornerGap*2)+'px',height:(holeSize+cornerGap*2)+'px'}" />
+      <view class="scan-line-track" :style="{left:holeLeft+'px',top:holeTop+'px',width:holeSize+'px',height:holeSize+'px'}">
+        <image v-show="scanning && !cameraError && !selecting" id="scan-line" class="scan-line" src="/static/images/scan/line.png" mode="scaleToFill" />
+      </view>
+      <view v-if="cameraError" class="scan-error" :style="{top:(holeTop+holeSize/2-50)+'px',left:holeLeft+'px',width:holeSize+'px'}">
+        <text class="scan-error-text">{{ cameraError }}</text>
+        <ActionButton id="scan-retry" class="scan-retry" aria-label="重试相机" @tap="resume"><text class="scan-retry-text">重试</text></ActionButton>
+      </view>
+      <view v-if="selecting" class="scan-progress"><text class="scan-progress-text">正在识别图片…</text></view>
+    </view>
+    <view v-if="result.length > 0" class="scan-result-overlay">
+      <view class="scan-result-card">
+        <text class="scan-result-title">识别结果</text>
+        <scroll-view class="scan-result-scroll" direction="vertical"><text class="scan-result-text" :selectable="true">{{ result }}</text></scroll-view>
+        <ActionButton v-if="resultIsLink" id="scan-open-link" class="scan-result-primary" aria-label="打开链接" @tap="openResult"><text class="scan-primary-text">打开链接</text></ActionButton>
+        <ActionButton id="scan-copy" class="scan-result-secondary" aria-label="复制内容" @tap="copyResult"><text class="scan-secondary-text">复制内容</text></ActionButton>
+        <ActionButton id="scan-again" class="scan-result-secondary" aria-label="继续扫码" @tap="resume"><text class="scan-secondary-text">继续扫码</text></ActionButton>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { chooseAlbumImages } from '@/utils/media-picker'
+import { computed, nextTick, ref, watch } from 'vue'
+import ActionButton from '@/components/ActionButton.uvue'
+import AppIcon from '@/components/AppIcon.uvue'
+import { useWindowInsets } from '@/composables/useWindowInsets'
+import { notifyWindowResize } from '@/utils/window-events'
+import { setStatusBar } from '@/utils/platform'
+import { openWebLink } from '@/utils/navigation'
+// #ifdef APP
+import { decodeQrImage, startQrCamera, stopQrCamera } from '@/uni_modules/ct-platform'
+// #endif
+// #ifdef WEB
+import { createBrowserQrReader } from '@/utils/qr-browser'
+// #endif
+
+const { statusBarHeight, viewportWidth } = useWindowInsets()
+const viewportHeight = ref(uni.getWindowInfo().windowHeight)
+const holeSize = computed(() => viewportWidth.value * 7 / 9)
+const holeLeft = computed(() => viewportWidth.value / 9)
+const cornerGap = computed(() => viewportWidth.value * 24 / 1080)
+// Reference: camera starts at y=282; clear square is (120,732)-(960,1572).
+const holeTop = computed(() => {
+  const available = Math.max(0, viewportHeight.value-statusBarHeight.value-viewportWidth.value*170/1080)
+  const preferred = available * (1152-282)/(2376-282)-holeSize.value/2
+  return Math.max(cornerGap.value, Math.min(preferred, available-holeSize.value-cornerGap.value))
+})
+const scanning = ref(false)
+const selecting = ref(false)
+const cameraError = ref('')
+const result = ref('')
+const resultIsLink = computed(() => /^https?:\/\/[^\s]+$/i.test(result.value.trim()))
+let visible = false
+let ready = false
+let disposed = false
+let revision = 0
+let leaving = false
+// #ifdef APP
+let laser: UniAnimation | null = null
+// #endif
+// #ifdef WEB
+const browser = createBrowserQrReader('scan-browser-camera', accept, message => { cameraError.value = message })
+// #endif
+
+function stopMotion() {
+  // #ifdef APP
+  laser?.cancel(); laser = null
+  // #endif
+}
+async function startMotion() {
+  stopMotion()
+  // #ifdef APP
+  await nextTick()
+  if (!visible || !scanning.value || disposed || selecting.value || cameraError.value.length>0) return
+  const distance = Math.max(0, holeSize.value-uni.rpx2px(4.167))
+  laser = uni.getElementById('scan-line')?.animate([
+    {transform:'translateY(0px)'},
+    {transform:'translateY('+distance+'px)'},
+    {transform:'translateY(0px)'}
+  ], {duration:4800,iterations:Infinity,easing:'linear'}) ?? null
+  // #endif
+}
+function stopCamera() {
+  // #ifdef APP
+  if (scanning.value) stopQrCamera()
+  // #endif
+  scanning.value = false
+  stopMotion()
+  // #ifdef WEB
+  browser.stop()
+  // #endif
+}
+async function resume() {
+  if (!visible || disposed || selecting.value) return
+  result.value = ''; cameraError.value = ''
+  stopCamera()
+  const token = ++revision
+  await nextTick()
+  if (disposed || !visible || token!==revision) return
+  scanning.value = true
+  void startMotion()
+  // #ifdef WEB
+  await nextTick()
+  if (visible && token===revision) void browser.start()
+  // #endif
+}
+function accept(value: string) {
+  if (!visible || !scanning.value || selecting.value) return
+  saveResult(value)
+}
+function saveResult(value: string) {
+  if (disposed || result.value.length>0 || value.length===0) return
+  revision++
+  result.value = value
+  stopCamera()
+}
+// #ifdef APP
+function cameraReady(_event: UniCameraInitDoneEvent) {
+  if(visible && scanning.value && !selecting.value) startQrCamera(accept)
+}
+// #endif
+// #ifdef MP-WEIXIN
+function cameraResult(event: UniCustomEvent<{type?:string;result?:string}>) {
+  if (scanning.value && !selecting.value && (event.detail.type ?? '').toUpperCase().replace(/_/g,'') === 'QRCODE') accept(event.detail.result ?? '')
+}
+// #endif
+// #ifndef WEB
+function cameraFailed(_event: UniCameraErrorEvent) {
+  if (!visible || selecting.value) return
+  cameraError.value = '相机无法使用，请检查相机权限，或从相册选择二维码'
+  stopCamera()
+}
+function cameraStopped(_event: UniCameraStopEvent) {
+  if (visible && scanning.value && !selecting.value) {
+    cameraError.value = '相机已暂停，点击重试继续扫码'
+    stopCamera()
+  }
+}
+// #endif
+function finishAlbum() {
+  selecting.value = false
+  if (visible && result.value.length===0) void resume()
+}
+async function readAlbum(path: string) {
+  try {
+    let value = ''
+    // #ifdef APP
+    value = await decodeQrImage(path)
+    // #endif
+    // #ifdef WEB
+    value = await browser.image(path)
+    // #endif
+    if (disposed) return
+    // Native pickers may deliver their success callback before the page's onShow.
+    // Retain that result so foreground restoration does not start a new scan.
+    if (value.length>0) saveResult(value)
+    else uni.showToast({title:'未识别到二维码，请选择清晰的二维码图片',icon:'none'})
+  } catch (error) {
+    console.warn('[scan] Image recognition failed', error)
+    if (!disposed) uni.showToast({title:'图片识别失败，请重新选择',icon:'none'})
+  } finally { if (!disposed) finishAlbum() }
+}
+function chooseAlbum() {
+  if (selecting.value || disposed) return
+  // #ifdef MP-WEIXIN
+  selecting.value = true
+  stopCamera()
+  uni.scanCode({onlyFromCamera:false,scanType:['qrCode'],success:res=>saveResult(res.result),complete:()=>finishAlbum()})
+  return
+  // #endif
+  // #ifndef MP-WEIXIN
+  selecting.value = true
+  revision++
+  stopCamera()
+  chooseAlbumImages({count:1,sourceType:['album'],sizeType:['original'],success:res=>{
+    const path=res.tempFilePaths[0]
+    if (path==null || path.length===0) {finishAlbum();return}
+    void readAlbum(path)
+  },fail:()=>{finishAlbum()}})
+  // #endif
+}
+async function back() {
+  if(leaving) return
+  leaving=true
+  revision++
+  stopCamera()
+  // Unmount the native camera while its page is still alive.
+  await nextTick()
+  if(getCurrentPages().length<=1) {uni.reLaunch({url:'/pages/index/index?tab=mine'});return}
+  uni.navigateBack({fail:()=>{uni.reLaunch({url:'/pages/index/index?tab=mine'})}})
+}
+function copyResult() { uni.setClipboardData({data:result.value}) }
+function openResult() { if (resultIsLink.value) openWebLink(result.value.trim(),'扫码结果','inapp') }
+function resize() {
+  notifyWindowResize()
+  viewportHeight.value=uni.getWindowInfo().windowHeight
+  if (scanning.value) void startMotion()
+}
+watch(holeSize,()=>{if(scanning.value)void startMotion()})
+onResize(resize)
+onBackPress(event=>{
+  if(event.from==='navigateBack') return false
+  void back()
+  return true
+})
+onShow(()=>{
+  visible=true
+  setStatusBar('dark')
+  if(ready && !selecting.value && result.value.length===0) void resume()
+})
+onReady(()=>{ready=true;viewportHeight.value=uni.getWindowInfo().windowHeight;if(visible)void resume()})
+onHide(()=>{visible=false;revision++;stopCamera()})
+onUnload(()=>{disposed=true;visible=false;revision++;stopCamera()})
+</script>
+
+<style scoped>
+.scan-page { position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;background-color:#000000;overflow:hidden; }
+.scan-header { flex-shrink:0;background-color:#ffffff; }
+.scan-nav { position:relative;display:flex;flex-direction:row;align-items:center;justify-content:center;height:118.056rpx; }
+.scan-back { position:absolute;left:29.167rpx;top:0;width:55.556rpx;height:118.056rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent; }
+.scan-title { color:#29303e;font-size:29.167rpx;font-weight:600; }
+.scan-album { position:absolute;right:25rpx;top:0;height:118.056rpx;width:72.222rpx;display:flex;flex-direction:row;align-items:center;justify-content:center;margin:0;padding:0;border-width:0;border-radius:0;background-color:transparent; }
+.scan-album-text { color:#29303e;font-size:25rpx; }
+.scan-viewport { position:relative;flex:1;height:0;overflow:hidden;background-color:#171717; }
+.scan-camera { position:absolute;left:0;top:0;width:100%;height:100%; }
+.scan-mask { position:absolute;background-color:rgba(0,0,0,0.68);pointer-events:none; }
+.scan-corners { position:absolute;pointer-events:none; }
+.scan-line-track { position:absolute;overflow:hidden;pointer-events:none; }
+.scan-line { position:absolute;left:7.143%;top:0;width:85.714%;height:4.167rpx; }
+.scan-error { position:absolute;display:flex;flex-direction:column;align-items:center;padding:0 24rpx; }
+.scan-error-text { color:#ffffff;font-size:25rpx;line-height:38rpx;text-align:center; }
+.scan-retry { margin:28rpx 0 0;padding:12rpx 36rpx;border-width:0;border-radius:10rpx;background-color:#69cefa; }
+.scan-retry-text { color:#183444;font-size:25rpx; }
+.scan-progress { position:absolute;left:0;right:0;top:45%;display:flex;flex-direction:row;justify-content:center; }
+.scan-progress-text { color:#ffffff;font-size:26rpx; }
+.scan-result-overlay { position:absolute;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;justify-content:center;align-items:center;background-color:rgba(0,0,0,0.65);padding:40rpx; }
+.scan-result-card { width:100%;max-width:640rpx;display:flex;flex-direction:column;padding:36rpx;border-radius:24rpx;background-color:#ffffff; }
+.scan-result-title { color:#29303e;font-size:32rpx;font-weight:600; }
+.scan-result-scroll { height:260rpx;margin-top:24rpx; }
+.scan-result-text { color:#4f5660;font-size:27rpx;line-height:42rpx; }
+.scan-result-primary { display:flex;flex-direction:row;align-items:center;justify-content:center;height:80rpx;margin:24rpx 0 0;padding:0;border-width:0;border-radius:12rpx;background-color:#69cefa; }
+.scan-primary-text { color:#183444;font-size:28rpx; }
+.scan-result-secondary { display:flex;flex-direction:row;align-items:center;justify-content:center;height:76rpx;margin:16rpx 0 0;padding:0;border-width:0;border-radius:12rpx;background-color:#f2f5f7; }
+.scan-secondary-text { color:#29303e;font-size:27rpx; }
+/* #ifndef APP */
+.scan-line { animation:scan-laser 4800ms linear infinite; }
+.scan-back::after,.scan-album::after,.scan-retry::after,.scan-result-primary::after,.scan-result-secondary::after { border:0; }
+.scan-result-text { overflow-wrap:anywhere;white-space:pre-wrap; }
+@keyframes scan-laser { 0%,100% {top:0;} 50% {top:calc(100% - 4.167rpx);} }
+/* #endif */
+</style>

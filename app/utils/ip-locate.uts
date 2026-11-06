@@ -1,0 +1,83 @@
+// IP 定位：对接 https://ip.moonya.cn/docs/api/locate/
+// - H5 端通过同源代理 /api/locate 转发（服务端未开 CORS，浏览器直连会被拦截），
+//   开发环境由 vite.config.ts 的 server.proxy 处理：密钥在代理层以 X-API-Key 注入、
+//   访客真实 IP 以 X-Forwarded-For / X-Real-IP 透传，前端代码不接触密钥；
+//   生产 H5 需在 nginx 配置同样路径的反向代理并注入密钥。
+// - App / 小程序端直连线上地址（原生网络栈不受浏览器 CORS 限制，但密钥不能放前端，
+//   如需这些端支持，应由后端服务代理本接口并注入密钥；小程序还需配置 request 合法域名）。
+
+const LOCATE_ORIGIN = 'https://ip.moonya.cn'
+const CACHE_KEY = 'ip_location_cache'
+const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 小时
+
+interface LocateResponse {
+  code: number
+  ip: string
+  country: string
+  province: string
+  city: string
+  isp: string
+  msg?: string
+}
+
+function readCache(): string {
+  try {
+    const raw = uni.getStorageSync(CACHE_KEY) as string
+    if (!raw) return ''
+    const cached = JSON.parse(raw) as { value: string; ts: number }
+    if (Date.now() - cached.ts < CACHE_TTL) return cached.value
+  } catch {
+    // 缓存损坏时忽略，重新请求
+  }
+  return ''
+}
+
+function writeCache(value: string) {
+  try {
+    uni.setStorageSync(CACHE_KEY, JSON.stringify({ value, ts: Date.now() }))
+  } catch {
+    // 存储失败不影响展示
+  }
+}
+
+function endpoint(): string {
+  // #ifdef H5
+  return '/api/locate'
+  // #endif
+  // #ifndef H5
+  return LOCATE_ORIGIN + '/api/locate'
+  // #endif
+}
+
+function normalize(data: LocateResponse | undefined): string {
+  if (!data || data.code !== 0) return '未知'
+  const province = (data.province || '').trim()
+  if (!province || province === '内网/未知' || province === '未知') return '未知'
+  return province
+}
+
+let inFlight: Promise<string> | null = null
+
+export function fetchIpLocation(): Promise<string> {
+  const cached = readCache()
+  if (cached) return Promise.resolve(cached)
+  if (!inFlight) {
+    inFlight = new Promise<string>(resolve => {
+      uni.request({
+        url: endpoint(),
+        method: 'GET',
+        timeout: 8000,
+        success(res) {
+          const display = normalize(res.data as LocateResponse | undefined)
+          // 只缓存成功定位到的省份，避免把失败结果长期固定
+          if (display !== '未知') writeCache(display)
+          resolve(display)
+        },
+        fail() {
+          resolve('未知')
+        }
+      })
+    }).finally(() => { inFlight = null })
+  }
+  return inFlight
+}
