@@ -7,7 +7,13 @@
 <p align="center">
   <img src="docs/images/app-preview.jpg" alt="次元町应用预览：私信会话、首页发现、个人主页、发现页瀑布流" width="100%">
   <br>
-  <sub>私信会话 · 首页频道 · 个人主页 · 发现页瀑布流</sub>
+  <sub>图 1 · 客户端：私信会话 / 首页频道 / 个人主页 / 发现页</sub>
+</p>
+
+<p align="center">
+  <img src="docs/images/admin-preview.png" alt="次元町管理后台：用户档案、快捷入口管理" width="100%">
+  <br>
+  <sub>图 2 · 管理后台：用户档案 · 快捷入口管理</sub>
 </p>
 
 > 本项目按「可运行的最小完整形态」整理：所有密钥、账号、服务器地址均已替换为占位符，需要你自己配置后才能跑起来。详见 [配置](#配置)。
