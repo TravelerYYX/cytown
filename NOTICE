@@ -1,0 +1,16 @@
+次元町 (cytown)
+Copyright 2026 ciyuantown contributors
+
+This product is licensed under the Apache License, Version 2.0.
+See the LICENSE file for the full license text.
+
+----------------------------------------------------------------------
+Third-party notices
+
+This product includes software developed as part of SoybeanAdmin
+(https://github.com/soybeanjs/soybean-admin), licensed under the
+MIT License, Copyright (c) 2021 Soybean.
+
+The `admin/` directory is derived from SoybeanAdmin and remains under
+the MIT License. Its original copyright and permission notices are
+retained in `admin/LICENSE` and `admin/README.md`.

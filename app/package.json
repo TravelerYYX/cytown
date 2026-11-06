@@ -2,6 +2,7 @@
   "name": "次元町",
   "version": "1.0.1",
   "description": "次元町 - uni-app x Vapor",
+  "license": "Apache-2.0",
   "scripts": {
     "check:media-picker": "node scripts/check-media-picker.cjs",
     "check:app-update": "node scripts/check-app-update.cjs",

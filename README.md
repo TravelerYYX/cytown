@@ -131,4 +131,8 @@ npm run dev:mp-weixin   # 微信小程序
 
 ## 许可证
 
-[MIT](LICENSE)。管理后台的 SoybeanAdmin 部分遵循其原始 MIT 协议，版权归原作者所有。
+本项目采用 [Apache License 2.0](LICENSE)。
+
+在保留版权声明与 [NOTICE](NOTICE) 的前提下，你可以自由使用、修改、商用与再分发；协议同时包含明确的专利授权条款。
+
+`admin/` 目录派生自 [SoybeanAdmin](https://github.com/soybeanjs/soybean-admin)，继续遵循其原始 MIT 协议，版权归原作者所有。
