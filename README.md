@@ -18,6 +18,12 @@
 
 ---
 
+## 下载
+
+你可以从 [GitHub Releases](https://github.com/TravelerYYX/cytown/releases/latest) 获取最新版本，或者打开[网站](https://cyt.moonya.cn/)，它会为你的设备选择合适的文件。
+
+当前版本 **1.0.2**（Android）：`ciyuantown-1.0.2.apk`，约 105 MB，安装前需允许「未知来源」。
+
 ## 功能概览
 
 | 模块 | 内容 |
